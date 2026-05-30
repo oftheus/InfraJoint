@@ -1,0 +1,115 @@
+<app-navbar />
+
+<main class="min-h-screen text-[#1B3A57]">
+  <section class="mx-auto max-w-[1320px] px-4 pb-16 pt-8 sm:px-6 sm:pb-20 sm:pt-6 lg:px-8">
+    <div
+      #heroSection
+      class="relative isolate flex min-h-[calc(100vh-10rem)] overflow-hidden rounded-[2rem] px-6 py-16 shadow-[0_28px_80px_rgba(27,58,87,0.16)] sm:min-h-[calc(100vh-11rem)] sm:px-12 sm:py-20 lg:px-20"
+    >
+      <img
+        #heroBackground
+        src="assets/images/backgroundhome.png"
+        alt=""
+        aria-hidden="true"
+        class="absolute inset-0 -z-20 h-full w-full object-cover [transform-origin:center_center] will-change-transform"
+      />
+
+      <div class="absolute inset-0 -z-10 bg-[#081827]/60"></div>
+      <div
+        class="absolute inset-0 -z-10 bg-gradient-to-r from-[#061B2E]/80 via-[#061B2E]/48 to-[#061B2E]/10"
+      ></div>
+
+      <div #heroContent class="flex max-w-3xl flex-col justify-center text-white">
+        <p
+          class="inline-flex w-fit items-center rounded-full bg-gradient-to-r from-[#32B5FE] via-[#32B5FE]/30 to-transparent px-3 py-1 text-[12px] tracking-[0.16em] text-white shadow-[0_14px_35px_rgba(50, 181, 254, 0.15)] sm:text-xs"
+        >
+          Pesquisa e inovação em reumatologia
+        </p>
+
+        <h1 class="mt-7 max-w-4xl text-4xl font-semibold leading-[1.08] sm:text-6xl lg:text-5xl">
+          Plataforma de Análise Termográfica para Pesquisa em Reumatologia
+        </h1>
+
+        <p class="mt-6 max-w-[460px] text-base leading-8 text-white/85 sm:text-base">
+          Conectando imagens termográficas, métodos computacionais e dados clínicos em um único ambiente de pesquisa.
+        </p>
+
+        <div class="mt-10 flex flex-wrap items-center gap-4">
+          <a
+            routerLink="/"
+            fragment="sobre"
+            class="inline-flex h-12 items-center justify-center rounded-full border border-white/55 px-7 text-sm font-semibold text-white transition-all duration-300 hover:-translate-y-0.5 hover:border-white hover:bg-white/15 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-white active:translate-y-0 sm:text-base"
+          >
+            Conhecer a plataforma
+          </a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="recursos" aria-labelledby="recursos-title" class="scroll-mt-24 py-15 sm:py-15">
+    <div class="mx-auto max-w-[1480px] px-4 sm:px-6 lg:px-8">
+      <div class="mx-auto max-w-3xl text-center">
+        <h2
+          id="recursos-title"
+          class="text-3xl font-semibold leading-tight text-[#1B3A57] sm:text-4xl lg:text-5xl"
+        >
+          <span style="color: #32B5FE">Recursos</span> da Plataforma
+        </h2>
+      </div>
+
+      <div class="mt-14 grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+        @for (feature of platformFeatures; track feature.title) {
+          <app-platform-feature-card [feature]="feature" />
+        }
+      </div>
+    </div>
+  </section>
+
+  <section id="sobre" class="scroll-mt-28 bg-white py-30 sm:py-30">
+    <div
+      class="mx-auto grid max-w-7xl grid-cols-1 items-center gap-12 px-4 sm:px-6 lg:grid-cols-[0.9fr_1.1fr] lg:px-8"
+    >
+      <div class="order-2 lg:order-1">
+        <img
+          src="assets/images/diagnosis.png"
+          alt="Visualizacao de diagnostico e dados clinicos"
+          class="w-full max-w-lg object-contain"
+        />
+      </div>
+
+      <div class="order-1 lg:order-2">
+        <p class="text-sm font-semibold text-[#32B5FE] sm:text-base">Sobre a plataforma</p>
+
+        <h2 class="mt-4 text-3xl font-semibold leading-tight text-[#1B3A57] sm:text-4xl">
+          Organizacao, clareza e tecnologia para operacoes clinicas.
+        </h2>
+
+        <p class="mt-6 max-w-2xl text-base leading-8 text-[#5C6673] sm:text-lg">
+          A estrutura inicial do InfraJoint separa responsabilidades desde o primeiro dia:
+          componentes compartilhados ficam reutilizaveis, features crescem isoladas e as rotas
+          mantem a aplicacao pronta para novos modulos.
+        </p>
+
+        <div class="mt-8 grid gap-4 sm:grid-cols-3">
+          <div class="border-l border-[#BFD7F5] pl-4">
+            <strong class="block text-2xl font-semibold text-[#1B3A57]">01</strong>
+            <span class="mt-2 block text-sm leading-6 text-[#5C6673]">Base standalone</span>
+          </div>
+
+          <div class="border-l border-[#BFD7F5] pl-4">
+            <strong class="block text-2xl font-semibold text-[#1B3A57]">02</strong>
+            <span class="mt-2 block text-sm leading-6 text-[#5C6673]"
+              >Componentes reutilizaveis</span
+            >
+          </div>
+
+          <div class="border-l border-[#BFD7F5] pl-4">
+            <strong class="block text-2xl font-semibold text-[#1B3A57]">03</strong>
+            <span class="mt-2 block text-sm leading-6 text-[#5C6673]">Rotas escalaveis</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+</main>

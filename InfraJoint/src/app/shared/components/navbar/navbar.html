@@ -1,0 +1,65 @@
+<nav
+  #navbar
+  aria-label="Navegacao principal"
+  class="mx-auto w-full max-w-[1320px] px-4 py-5 sm:px-6 lg:px-8"
+>
+  <div class="flex h-16 items-center justify-between">
+
+    <div class="flex flex-1 items-center justify-start">
+      <a
+        routerLink="/"
+        aria-label="Ir para a pagina inicial da InfraJoint"
+        class="flex items-center"
+      >
+        <img
+          src="assets/images/logo.png"
+          alt="InfraJoint"
+          class="h-6 w-auto object-contain sm:h-10 lg:h-11"
+        />
+      </a>
+    </div>
+
+    <div class="flex flex-1 items-center justify-center gap-4 sm:gap-9">
+      <a
+        routerLink="/"
+        class="text-xs font-semibold text-[#1B3A57] transition-colors duration-300 hover:text-[#32B5FE] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#32B5FE] sm:text-base"
+      >
+        Home
+      </a>
+
+      <a
+        routerLink="/"
+        fragment="recursos"
+        class="text-xs font-semibold text-[#1B3A57] transition-colors duration-300 hover:text-[#32B5FE] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#32B5FE] sm:text-base"
+      >
+        Recursos
+      </a>
+
+      <a
+        routerLink="/"
+        fragment="fluxo"
+        class="text-xs font-semibold text-[#1B3A57] transition-colors duration-300 hover:text-[#32B5FE] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#32B5FE] sm:text-base"
+      >
+        Fluxo de Análise
+      </a>
+
+      <a
+        routerLink="/"
+        fragment="sobre"
+        class="text-xs font-semibold text-[#1B3A57] transition-colors duration-300 hover:text-[#32B5FE] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#32B5FE] sm:text-base"
+      >
+        Sobre
+      </a>
+    </div>
+
+    <div class="flex flex-1 items-center justify-end">
+      <a
+        routerLink="/login"
+        class="inline-flex h-10 items-center justify-center rounded-full bg-[#32B5FE] px-4 text-xs font-semibold text-white shadow-[0_12px_30px_rgba(50,181,254,0.24)] transition-all duration-300 hover:-translate-y-0.5 hover:bg-[#1B3A57] hover:shadow-[0_16px_38px_rgba(27,58,87,0.2)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#32B5FE] active:translate-y-0 sm:h-11 sm:px-7 sm:text-base"
+      >
+        Entrar
+      </a>
+    </div>
+
+  </div>
+</nav>
