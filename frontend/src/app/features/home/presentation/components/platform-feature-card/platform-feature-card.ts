@@ -1,23 +1,55 @@
-import { Component, Input } from '@angular/core';
+import { CommonModule } from '@angular/common';
+import { ChangeDetectionStrategy, Component, input } from '@angular/core';
+import { LucideDynamicIcon } from '@lucide/angular';
 
-export type PlatformFeatureIcon = 'workflow' | 'layers' | 'target' | 'timeline' | 'chart';
+export type PlatformFeatureIcon =
+  | 'chart-no-axes-combined'
+  | 'layers'
+  | 'target'
+  | 'timeline'
+  | 'workflow';
+export type PlatformFeatureVariant = 'architecture' | 'visualization' | 'roi' | 'timeline' | 'metrics';
 
 export interface PlatformFeature {
   readonly title: string;
   readonly description: string;
   readonly icon: PlatformFeatureIcon;
-  readonly cardColor: string;
-  readonly iconBackgroundColor: string;
-  readonly iconColor: string;
+  readonly variant: PlatformFeatureVariant;
 }
 
 @Component({
   selector: 'app-platform-feature-card',
+  imports: [CommonModule, LucideDynamicIcon],
   templateUrl: './platform-feature-card.html',
+  changeDetection: ChangeDetectionStrategy.OnPush,
   host: {
     class: 'block h-full min-w-0',
   },
 })
 export class PlatformFeatureCard {
-  @Input({ required: true }) feature!: PlatformFeature;
+  readonly feature = input.required<PlatformFeature>();
+
+  cardClasses(variant: PlatformFeatureVariant): string {
+    const map: Record<PlatformFeatureVariant, string> = {
+      architecture: 'bg-white ring-1 ring-brand-100',
+      visualization: 'bg-white ring-1 ring-brand-100',
+      roi: 'bg-white ring-1 ring-brand-100',
+      timeline: 'bg-white ring-1 ring-brand-100',
+      metrics: 'bg-white ring-1 ring-brand-100',
+    };
+
+    return `platform-feature-card ${map[variant]}`;
+  }
+
+  iconShellClasses(variant: PlatformFeatureVariant): string {
+    const map: Record<PlatformFeatureVariant, string> = {
+      architecture: 'bg-[#EAF2F8] text-[#1B3A57]',
+      visualization: 'bg-[#E5F1FA] text-[#246BA8]',
+      roi: 'bg-[#E5F8FF] text-[#32B5FE]',
+      timeline: 'bg-[#E8F4FB] text-[#4A91C7]',
+      metrics: 'bg-[#EDF7FC] text-[#68A9D6]',
+    };
+
+    return `platform-feature-icon ${map[variant]}`;
+  }
 }

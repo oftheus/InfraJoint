@@ -1,24 +1,25 @@
 <section id="hero" class="mx-auto max-w-[1320px] px-4 pb-16 pt-8 sm:px-6 sm:pb-20 sm:pt-6 lg:px-8">
   <div
     #heroSection
-    class="relative isolate flex min-h-[calc(100vh-10rem)] overflow-hidden rounded-[2rem] px-6 py-16 shadow-[0_28px_80px_rgba(27,58,87,0.16)] sm:min-h-[calc(100vh-11rem)] sm:px-12 sm:py-20 lg:px-20"
+    class="hero-shell"
   >
     <img
       #heroBackground
-      src="assets/images/backgroundhome.png"
+      ngSrc="assets/images/backgroundhome.png"
       alt=""
       aria-hidden="true"
-      class="absolute inset-0 -z-20 h-full w-full object-cover [transform-origin:center_center] will-change-transform"
+      fill
+      priority
+      sizes="100vw"
+      class="hero-background"
     />
 
-    <div class="absolute inset-0 -z-10 bg-[#081827]/60"></div>
-    <div
-      class="absolute inset-0 -z-10 bg-gradient-to-r from-[#061B2E]/80 via-[#061B2E]/48 to-[#061B2E]/10"
-    ></div>
+    <div class="absolute inset-0 -z-10 bg-hero-overlay/60"></div>
+    <div class="absolute inset-0 -z-10 bg-gradient-to-r from-hero/80 via-hero/48 to-hero/10"></div>
 
     <div #heroContent class="flex max-w-3xl flex-col justify-center text-white">
       <p
-        class="inline-flex w-fit items-center rounded-full bg-gradient-to-r from-[#32B5FE] via-[#32B5FE]/30 to-transparent px-3 py-1 text-[12px] tracking-[0.16em] text-white shadow-[0_14px_35px_rgba(50, 181, 254, 0.15)] sm:text-xs"
+        class="hero-eyebrow"
       >
         Pesquisa e inovação em reumatologia
       </p>
@@ -36,7 +37,7 @@
         <a
           routerLink="/"
           fragment="sobre"
-          class="inline-flex h-12 items-center justify-center rounded-full border border-white/55 px-7 text-sm font-semibold text-white transition-all duration-300 hover:-translate-y-0.5 hover:border-white hover:bg-white/15 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-white active:translate-y-0 sm:text-base"
+          class="btn-secondary hero-cta"
         >
           Conhecer a plataforma
         </a>

@@ -1,22 +1,24 @@
 import {
   AfterViewInit,
+  ChangeDetectionStrategy,
   Component,
   ElementRef,
   NgZone,
   OnDestroy,
   PLATFORM_ID,
   ViewChild,
-  inject
+  inject,
 } from '@angular/core';
-import { isPlatformBrowser } from '@angular/common';
+import { isPlatformBrowser, NgOptimizedImage } from '@angular/common';
 import { RouterLink } from '@angular/router';
 
 @Component({
   selector: 'app-navbar',
-  imports: [RouterLink],
-  templateUrl: './navbar.html'
+  imports: [RouterLink, NgOptimizedImage],
+  templateUrl: './navbar.html',
+  changeDetection: ChangeDetectionStrategy.OnPush,
 })
-export class Navbar implements AfterViewInit, OnDestroy {
+export class NavbarComponent implements AfterViewInit, OnDestroy {
   @ViewChild('navbar') private navbar?: ElementRef<HTMLElement>;
 
   private readonly ngZone = inject(NgZone);
@@ -51,7 +53,7 @@ export class Navbar implements AfterViewInit, OnDestroy {
         autoAlpha: 0,
         duration: 0.7,
         ease: 'power3.out',
-        y: -12
+        y: -12,
       });
     }, this.navbar.nativeElement);
   }

@@ -1,12 +1,19 @@
 import { CommonModule } from '@angular/common';
-import { Component, Input } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, input, signal } from '@angular/core';
 import { animate, state, style, transition, trigger } from '@angular/animations';
-import { PatientGroup, ProtocolStep, StepColor, StepTag } from '../../analysis-flow.model';
+import { LucideDynamicIcon } from '@lucide/angular';
+import {
+  PatientGroupViewModel,
+  ProtocolStepViewModel,
+  StepBadgeVariant,
+  StepTone,
+} from '../../analysis-flow.presenter';
 
 @Component({
   selector: 'app-step-card',
-  imports: [CommonModule],
+  imports: [CommonModule, LucideDynamicIcon],
   templateUrl: './step-card.component.html',
+  changeDetection: ChangeDetectionStrategy.OnPush,
   animations: [
     trigger('expandCollapse', [
       state('void', style({ height: '0', overflow: 'hidden' })),
@@ -16,15 +23,14 @@ import { PatientGroup, ProtocolStep, StepColor, StepTag } from '../../analysis-f
   ],
 })
 export class StepCardComponent {
-  @Input({ required: true }) step!: ProtocolStep;
-  @Input() isLast = false;
+  readonly step = input.required<ProtocolStepViewModel>();
+  readonly isLast = input(false);
+  readonly isOpen = signal(false);
 
-  isOpen = false;
-
-  get dotClasses(): string {
+  readonly dotClasses = computed(() => {
     const base =
       'w-9 h-9 rounded-full flex items-center justify-center text-xs font-medium border z-10 shrink-0';
-    const map: Record<StepColor, string> = {
+    const map: Record<StepTone, string> = {
       info: 'bg-blue-50 text-blue-700 border-blue-200',
       success: 'bg-green-50 text-green-700 border-green-200',
       warning: 'bg-amber-50 text-amber-700 border-amber-200',
@@ -32,15 +38,15 @@ export class StepCardComponent {
       neutral: 'bg-gray-100 text-gray-700 border-gray-200',
       purple: 'bg-purple-50 text-purple-700 border-purple-200',
     };
-    return `${base} ${map[this.step.color]}`;
-  }
+    return `${base} ${map[this.step().tone]}`;
+  });
 
-  get lineClasses(): string {
-    if (this.isLast) {
+  readonly lineClasses = computed(() => {
+    if (this.isLast()) {
       return 'invisible w-px flex-1 mx-auto';
     }
 
-    const map: Record<StepColor, string> = {
+    const map: Record<StepTone, string> = {
       info: 'bg-blue-100',
       success: 'bg-green-100',
       warning: 'bg-amber-100',
@@ -48,12 +54,12 @@ export class StepCardComponent {
       neutral: 'bg-gray-200',
       purple: 'bg-purple-100',
     };
-    return `w-px flex-1 mx-auto my-0.5 ${map[this.step.color]}`;
-  }
+    return `w-px flex-1 mx-auto my-0.5 ${map[this.step().tone]}`;
+  });
 
-  get iconClasses(): string {
+  readonly iconClasses = computed(() => {
     const base = 'w-8 h-8 rounded-lg flex items-center justify-center shrink-0 text-base';
-    const map: Record<StepColor, string> = {
+    const map: Record<StepTone, string> = {
       info: 'bg-blue-50 text-blue-700',
       success: 'bg-green-50 text-green-700',
       warning: 'bg-amber-50 text-amber-700',
@@ -61,11 +67,11 @@ export class StepCardComponent {
       neutral: 'bg-gray-100 text-gray-700',
       purple: 'bg-purple-50 text-purple-700',
     };
-    return `${base} ${map[this.step.color]}`;
-  }
+    return `${base} ${map[this.step().tone]}`;
+  });
 
-  get progressBarColor(): string {
-    const map: Record<StepColor, string> = {
+  readonly progressBarColor = computed(() => {
+    const map: Record<StepTone, string> = {
       info: 'bg-blue-400',
       success: 'bg-green-400',
       warning: 'bg-amber-400',
@@ -73,10 +79,10 @@ export class StepCardComponent {
       neutral: 'bg-gray-400',
       purple: 'bg-purple-400',
     };
-    return map[this.step.color];
-  }
+    return map[this.step().tone];
+  });
 
-  tagClasses(variant: StepTag['variant']): string {
+  tagClasses(variant: StepBadgeVariant): string {
     const base = 'text-[11px] px-2 py-0.5 rounded-full border';
     const map = {
       default: 'bg-gray-50 text-gray-500 border-gray-200',
@@ -88,7 +94,7 @@ export class StepCardComponent {
     return `${base} ${map[variant]}`;
   }
 
-  groupClasses(variant: PatientGroup['variant']): string {
+  groupClasses(variant: PatientGroupViewModel['variant']): string {
     const map = {
       danger: 'bg-red-50 text-red-700',
       warning: 'bg-amber-50 text-amber-700',
@@ -99,6 +105,6 @@ export class StepCardComponent {
   }
 
   toggle(): void {
-    this.isOpen = !this.isOpen;
+    this.isOpen.update((isOpen) => !isOpen);
   }
 }

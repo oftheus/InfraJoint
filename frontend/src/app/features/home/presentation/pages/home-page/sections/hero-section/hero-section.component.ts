@@ -1,5 +1,6 @@
 import {
   AfterViewInit,
+  ChangeDetectionStrategy,
   Component,
   ElementRef,
   NgZone,
@@ -8,13 +9,14 @@ import {
   ViewChild,
   inject,
 } from '@angular/core';
-import { isPlatformBrowser } from '@angular/common';
+import { isPlatformBrowser, NgOptimizedImage } from '@angular/common';
 import { RouterLink } from '@angular/router';
 
 @Component({
   selector: 'app-hero-section',
-  imports: [RouterLink],
+  imports: [RouterLink, NgOptimizedImage],
   templateUrl: './hero-section.component.html',
+  changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class HeroSectionComponent implements AfterViewInit, OnDestroy {
   @ViewChild('heroSection') private heroSection?: ElementRef<HTMLElement>;

@@ -1,32 +1,36 @@
+@let stepVm = step();
+
 <div class="grid grid-cols-[52px_1fr] items-stretch">
   <div class="flex flex-col items-center">
-    <div [class]="dotClasses">{{ step.id }}</div>
-    <div [class]="lineClasses"></div>
+    <div [class]="dotClasses()">{{ stepVm.id }}</div>
+    <div [class]="lineClasses()"></div>
   </div>
 
   <div
     class="mb-3 rounded-xl border bg-white"
-    [class.border-gray-200]="!isOpen"
-    [class.border-gray-300]="isOpen"
+    [class.border-gray-200]="!isOpen()"
+    [class.border-gray-300]="isOpen()"
   >
     <div
       class="flex cursor-pointer items-center gap-3 p-3"
       role="button"
       tabindex="0"
-      [attr.aria-expanded]="isOpen"
+      [attr.aria-expanded]="isOpen()"
       (click)="toggle()"
       (keydown.enter)="toggle()"
       (keydown.space)="toggle()"
     >
-      <div [class]="iconClasses">{{ step.icon }}</div>
+      <div [class]="iconClasses()">
+        <svg [lucideIcon]="stepVm.icon" class="h-4 w-4" aria-hidden="true" />
+      </div>
       <div class="min-w-0 flex-1">
-        <p class="text-sm font-medium text-gray-900">{{ step.title }}</p>
-        @if (step.subtitle) {
-          <p class="mt-0.5 text-xs text-gray-500">{{ step.subtitle }}</p>
+        <p class="text-sm font-medium text-gray-900">{{ stepVm.title }}</p>
+        @if (stepVm.subtitle) {
+          <p class="mt-0.5 text-xs text-gray-500">{{ stepVm.subtitle }}</p>
         }
       </div>
       <svg
-        [class.rotate-180]="isOpen"
+        [class.rotate-180]="isOpen()"
         class="h-4 w-4 text-gray-400 transition-transform"
         viewBox="0 0 20 20"
         fill="currentColor"
@@ -40,38 +44,40 @@
       </svg>
     </div>
 
-    @if (isOpen) {
-      <div class="border-t border-gray-100 px-4 pb-4" [attr.aria-hidden]="!isOpen" @expandCollapse>
-        <div class="mt-3 grid gap-4" [class.lg:grid-cols-[1fr_220px]]="step.image">
+    @if (isOpen()) {
+      <div
+        class="border-t border-gray-100 px-4 pb-4"
+        [attr.aria-hidden]="!isOpen()"
+        @expandCollapse
+      >
+        <div class="mt-3 grid gap-4" [class.lg:grid-cols-[1fr_220px]]="stepVm.image">
           <div>
             <div class="grid grid-cols-2 gap-2">
-              @for (detail of step.details; track detail.label) {
-                <div class="rounded-lg bg-gray-50 p-2.5">
-                  <p class="mb-0.5 text-[11px] text-gray-400">{{ detail.label }}</p>
-                  <p class="text-xs font-medium text-gray-800">{{ detail.value }}</p>
+              @for (detail of stepVm.details; track detail.label) {
+                <div class="step-detail-card">
+                  <p class="step-detail-label">{{ detail.label }}</p>
+                  <p class="step-detail-value">{{ detail.value }}</p>
                 </div>
               }
             </div>
 
-            @if (step.tags.length) {
+            @if (stepVm.badges.length) {
               <div class="mt-3 flex flex-wrap gap-1.5">
-                @for (tag of step.tags; track tag.text) {
+                @for (tag of stepVm.badges; track tag.text) {
                   <span [class]="tagClasses(tag.variant)">{{ tag.text }}</span>
                 }
               </div>
             }
 
-            @if (step.note) {
-              <p
-                class="mt-3 rounded-r-lg border-l-2 border-blue-300 bg-blue-50 px-3 py-2 text-xs leading-relaxed text-blue-700"
-              >
-                {{ step.note }}
+            @if (stepVm.note) {
+              <p class="step-note">
+                {{ stepVm.note }}
               </p>
             }
 
-            @if (step.groups?.length) {
+            @if (stepVm.groups?.length) {
               <div class="mt-3 grid grid-cols-3 gap-2">
-                @for (group of step.groups; track group.letter) {
+                @for (group of stepVm.groups; track group.letter) {
                   <div
                     [class]="groupClasses(group.variant)"
                     class="rounded-lg border border-transparent p-2.5"
@@ -83,25 +89,30 @@
               </div>
             }
 
-            @if (step.cameraParams?.length) {
+            @if (stepVm.cameraParams?.length) {
               <div class="mt-3 flex flex-col gap-1.5">
-                @for (param of step.cameraParams; track param.key) {
+                @for (param of stepVm.cameraParams; track param.key) {
                   <div class="flex items-center justify-between rounded-lg bg-gray-50 px-3 py-1.5">
                     <span class="text-xs text-gray-500">{{ param.key }}</span>
-                    <span class="text-xs font-medium text-gray-800">{{ param.value }}</span>
+                    <span class="step-detail-value">{{ param.value }}</span>
                   </div>
                 }
               </div>
             }
 
-            @if (step.capturePhases?.length) {
+            @if (stepVm.capturePhases?.length) {
               <div class="mt-3 grid grid-cols-2 gap-2">
-                @for (phase of step.capturePhases; track phase.title) {
-                  <div class="rounded-lg border border-gray-100 p-2.5">
+                @for (phase of stepVm.capturePhases; track phase.title) {
+                  <div class="step-subcard">
                     <p class="mb-1 text-xs font-medium text-gray-800">
-                      {{ phase.icon }} {{ phase.title }}
+                      <svg
+                        [lucideIcon]="phase.icon"
+                        class="mr-1 inline h-3.5 w-3.5 align-[-2px]"
+                        aria-hidden="true"
+                      />
+                      {{ phase.title }}
                     </p>
-                    <p class="text-[11px] leading-relaxed text-gray-500">
+                    <p class="step-caption">
                       {{ phase.description }}
                     </p>
                   </div>
@@ -109,19 +120,19 @@
               </div>
             }
 
-            @if (step.progress) {
+            @if (stepVm.progress) {
               <div class="mt-3 flex flex-col gap-2">
-                @for (phase of step.progress.phases; track phase.label) {
+                @for (phase of stepVm.progress.phases; track phase.label) {
                   <div>
-                    <div class="mb-1 flex justify-between text-[11px] text-gray-400">
+                    <div class="step-progress-row">
                       <span>{{ phase.label }}</span>
                       <span>{{ phase.value }}%</span>
                     </div>
-                    <div class="h-1.5 rounded-full bg-gray-100 overflow-hidden">
+                    <div class="step-progress-track">
                       <div
                         class="h-full rounded-full transition-all duration-500"
                         [style.width.%]="phase.value"
-                        [class]="progressBarColor"
+                        [ngClass]="progressBarColor()"
                       ></div>
                     </div>
                   </div>
@@ -130,13 +141,14 @@
             }
           </div>
 
-          @if (step.image) {
-            <div
-              class="order-first overflow-hidden rounded-lg border border-gray-100 bg-white shadow-[0_10px_30px_rgba(27,58,87,0.12)] ring-1 ring-[#E2E8F5] lg:order-last"
-            >
+          @if (stepVm.image) {
+            <div class="step-image-frame order-first lg:order-last">
               <img
-                [src]="step.image.src"
-                [alt]="step.image.alt"
+                [src]="stepVm.image.src"
+                [alt]="stepVm.image.alt"
+                width="440"
+                height="320"
+                sizes="(min-width: 1024px) 220px, 100vw"
                 class="h-40 w-full object-cover sm:h-48 lg:h-full"
                 loading="lazy"
               />

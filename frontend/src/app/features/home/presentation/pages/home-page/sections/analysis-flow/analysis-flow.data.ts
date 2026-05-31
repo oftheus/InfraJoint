@@ -1,11 +1,9 @@
 import { ProtocolStep } from './analysis-flow.model';
 
-export const PROTOCOL_STEPS_DATA: ProtocolStep[] = [
+export const PROTOCOL_STEPS: readonly ProtocolStep[] = [
   {
     id: 1,
     phase: 'prep',
-    color: 'info',
-    icon: '🌡️',
     title: 'Preparação do ambiente',
     subtitle: 'Setup térmico e disposição do equipamento',
     details: [
@@ -14,22 +12,12 @@ export const PROTOCOL_STEPS_DATA: ProtocolStep[] = [
       { label: 'Câmera', value: 'Hickmicro SP60H L25' },
       { label: 'Distância', value: '~100 cm, 90°' },
     ],
-    tags: [
-      { text: 'Iluminação controlada', variant: 'default' },
-      { text: 'Sem correntes de ar', variant: 'warning' },
-      { text: 'EVA 463×395×5 mm', variant: 'default' },
-    ],
+    keyPoints: ['Iluminação controlada', 'Sem correntes de ar', 'EVA 463×395×5 mm'],
     note: 'A câmera é posicionada verticalmente sobre a placa de EVA. Dois ventiladores USB (255 mm, 7,5 W) são posicionados à frente, usados apenas na fase dinâmica.',
-    image: {
-      src: 'assets/images/lab.jpg',
-      alt: 'Ambiente de laboratório para preparação do exame',
-    },
   },
   {
     id: 2,
     phase: 'prep',
-    color: 'success',
-    icon: '👤',
     title: 'Aclimatação e anamnese',
     subtitle: 'Questionário e classificação do voluntário',
     details: [
@@ -38,23 +26,17 @@ export const PROTOCOL_STEPS_DATA: ProtocolStep[] = [
       { label: 'Mãos', value: 'Descobertas' },
       { label: 'Temperatura', value: 'Aferida ao final' },
     ],
-    tags: [
-      { text: 'Sem café (2h)', variant: 'warning' },
-      { text: 'Sem creme/loção', variant: 'warning' },
-      { text: 'Sem unhas postiças', variant: 'warning' },
-    ],
+    keyPoints: ['Sem café (2h)', 'Sem creme/loção', 'Sem unhas postiças'],
     note: 'Questionário coleta dados gerais e de saúde. Ao final, o voluntário é classificado em grupo A, B ou C.',
     groups: [
-      { letter: 'A', description: 'Artropatia inflamatória', variant: 'danger' },
-      { letter: 'B', description: 'Dor não articular inflamatória', variant: 'warning' },
-      { letter: 'C', description: 'Grupo controle', variant: 'success' },
+      { letter: 'A', description: 'Artropatia inflamatória' },
+      { letter: 'B', description: 'Dor não articular inflamatória' },
+      { letter: 'C', description: 'Grupo controle' },
     ],
   },
   {
     id: 3,
     phase: 'prep',
-    color: 'purple',
-    icon: '⚙️',
     title: 'Configuração da câmera',
     subtitle: 'Parâmetros e posicionamento inicial',
     details: [
@@ -63,11 +45,7 @@ export const PROTOCOL_STEPS_DATA: ProtocolStep[] = [
       { label: 'Instrumento', value: 'Termo-higrômetro' },
       { label: 'Marcadores', value: '12×12×5 mm' },
     ],
-    tags: [
-      { text: 'Temp. refletida', variant: 'info' },
-      { text: 'Temp. ambiente', variant: 'info' },
-      { text: 'Umidade relativa', variant: 'info' },
-    ],
+    keyPoints: ['Temp. refletida', 'Temp. ambiente', 'Umidade relativa'],
     note: 'Marcadores fixados 40 mm acima da prega de flexão dorsal. Voluntário posiciona as mãos sobre o desenho esquemático da placa de EVA.',
     cameraParams: [
       { key: 'Temp. refletida', value: 'Temp. refletida' },
@@ -79,8 +57,6 @@ export const PROTOCOL_STEPS_DATA: ProtocolStep[] = [
   {
     id: 4,
     phase: 'cap',
-    color: 'warning',
-    icon: '📷',
     title: 'Captura estática',
     subtitle: 'Registro único em repouso',
     details: [
@@ -89,11 +65,7 @@ export const PROTOCOL_STEPS_DATA: ProtocolStep[] = [
       { label: 'Posição', value: 'Mãos sobre EVA' },
       { label: 'Confirmação', value: 'Miniatura na tela' },
     ],
-    tags: [
-      { text: 'Fase estática', variant: 'success' },
-      { text: 'Temperatura basal', variant: 'default' },
-      { text: 'Sem ventilação', variant: 'default' },
-    ],
+    keyPoints: ['Fase estática', 'Temperatura basal', 'Sem ventilação'],
     note: 'Operador toca a tela para acionar foco automático (moldura verde retangular), depois toca ícone de câmera. Miniatura confirma o registro.',
     progress: {
       label: 'Captura estática',
@@ -103,8 +75,6 @@ export const PROTOCOL_STEPS_DATA: ProtocolStep[] = [
   {
     id: 5,
     phase: 'cap',
-    color: 'danger',
-    icon: '🌬️',
     title: 'Captura dinâmica',
     subtitle: 'Resfriamento e reaquecimento',
     details: [
@@ -113,24 +83,14 @@ export const PROTOCOL_STEPS_DATA: ProtocolStep[] = [
       { label: 'Intervalo', value: '15 segundos' },
       { label: 'Total', value: '5 minutos' },
     ],
-    tags: [
-      { text: 'Fase dinâmica', variant: 'warning' },
-      { text: 'Velocidade máxima', variant: 'default' },
-      { text: 'Captura agendada', variant: 'info' },
-    ],
+    keyPoints: ['Fase dinâmica', 'Velocidade máxima', 'Captura agendada'],
     note: 'Após 2 min de resfriamento, ventiladores desligados e inicia-se registro de reaquecimento. Contador (1/20) e cronômetro de 15s exibidos.',
-    image: {
-      src: 'assets/images/hands.png',
-      alt: 'Captura termográfica das mãos durante o protocolo',
-    },
     capturePhases: [
       {
-        icon: '🌬️',
         title: 'Resfriamento (2 min)',
         description: 'Ventiladores em velocidade máxima...',
       },
       {
-        icon: '🔥',
         title: 'Reaquecimento (5 min)',
         description: '20 capturas a cada 15 s. Contador (1/20) exibido.',
       },
@@ -146,8 +106,6 @@ export const PROTOCOL_STEPS_DATA: ProtocolStep[] = [
   {
     id: 6,
     phase: 'cli',
-    color: 'neutral',
-    icon: '🩺',
     title: 'Coleta clínica (Grupos A e B)',
     subtitle: 'Avaliação médica e registros clínicos',
     details: [
@@ -156,11 +114,7 @@ export const PROTOCOL_STEPS_DATA: ProtocolStep[] = [
       { label: 'Escalas', value: 'PGA e PhGA' },
       { label: 'Registro', value: 'Diagrama de juntas' },
     ],
-    tags: [
-      { text: 'Marcadores imunológicos', variant: 'info' },
-      { text: 'Exames laboratoriais', variant: 'info' },
-      { text: 'Ano do diagnóstico', variant: 'default' },
-    ],
+    keyPoints: ['Marcadores imunológicos', 'Exames laboratoriais', 'Ano do diagnóstico'],
     note: 'Médico palpa articulações e registra dor e edema em diagrama padronizado. Escalas numéricas PGA (paciente) e PhGA (médico) são aplicadas.',
   },
 ];
