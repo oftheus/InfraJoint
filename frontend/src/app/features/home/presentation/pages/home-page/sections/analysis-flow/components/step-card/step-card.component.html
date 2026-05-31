@@ -1,0 +1,149 @@
+<div class="grid grid-cols-[52px_1fr] items-stretch">
+  <div class="flex flex-col items-center">
+    <div [class]="dotClasses">{{ step.id }}</div>
+    <div [class]="lineClasses"></div>
+  </div>
+
+  <div
+    class="mb-3 rounded-xl border bg-white"
+    [class.border-gray-200]="!isOpen"
+    [class.border-gray-300]="isOpen"
+  >
+    <div
+      class="flex cursor-pointer items-center gap-3 p-3"
+      role="button"
+      tabindex="0"
+      [attr.aria-expanded]="isOpen"
+      (click)="toggle()"
+      (keydown.enter)="toggle()"
+      (keydown.space)="toggle()"
+    >
+      <div [class]="iconClasses">{{ step.icon }}</div>
+      <div class="min-w-0 flex-1">
+        <p class="text-sm font-medium text-gray-900">{{ step.title }}</p>
+        @if (step.subtitle) {
+          <p class="mt-0.5 text-xs text-gray-500">{{ step.subtitle }}</p>
+        }
+      </div>
+      <svg
+        [class.rotate-180]="isOpen"
+        class="h-4 w-4 text-gray-400 transition-transform"
+        viewBox="0 0 20 20"
+        fill="currentColor"
+        aria-hidden="true"
+      >
+        <path
+          fill-rule="evenodd"
+          d="M5.23 7.21a.75.75 0 0 1 1.06.02L10 11.168l3.71-3.938a.75.75 0 1 1 1.08 1.04l-4.24 4.5a.75.75 0 0 1-1.08 0l-4.24-4.5a.75.75 0 0 1 .02-1.06z"
+          clip-rule="evenodd"
+        />
+      </svg>
+    </div>
+
+    @if (isOpen) {
+      <div class="border-t border-gray-100 px-4 pb-4" [attr.aria-hidden]="!isOpen" @expandCollapse>
+        <div class="mt-3 grid gap-4" [class.lg:grid-cols-[1fr_220px]]="step.image">
+          <div>
+            <div class="grid grid-cols-2 gap-2">
+              @for (detail of step.details; track detail.label) {
+                <div class="rounded-lg bg-gray-50 p-2.5">
+                  <p class="mb-0.5 text-[11px] text-gray-400">{{ detail.label }}</p>
+                  <p class="text-xs font-medium text-gray-800">{{ detail.value }}</p>
+                </div>
+              }
+            </div>
+
+            @if (step.tags.length) {
+              <div class="mt-3 flex flex-wrap gap-1.5">
+                @for (tag of step.tags; track tag.text) {
+                  <span [class]="tagClasses(tag.variant)">{{ tag.text }}</span>
+                }
+              </div>
+            }
+
+            @if (step.note) {
+              <p
+                class="mt-3 rounded-r-lg border-l-2 border-blue-300 bg-blue-50 px-3 py-2 text-xs leading-relaxed text-blue-700"
+              >
+                {{ step.note }}
+              </p>
+            }
+
+            @if (step.groups?.length) {
+              <div class="mt-3 grid grid-cols-3 gap-2">
+                @for (group of step.groups; track group.letter) {
+                  <div
+                    [class]="groupClasses(group.variant)"
+                    class="rounded-lg border border-transparent p-2.5"
+                  >
+                    <p class="mb-1 text-lg font-medium">{{ group.letter }}</p>
+                    <p class="text-[11px] leading-relaxed">{{ group.description }}</p>
+                  </div>
+                }
+              </div>
+            }
+
+            @if (step.cameraParams?.length) {
+              <div class="mt-3 flex flex-col gap-1.5">
+                @for (param of step.cameraParams; track param.key) {
+                  <div class="flex items-center justify-between rounded-lg bg-gray-50 px-3 py-1.5">
+                    <span class="text-xs text-gray-500">{{ param.key }}</span>
+                    <span class="text-xs font-medium text-gray-800">{{ param.value }}</span>
+                  </div>
+                }
+              </div>
+            }
+
+            @if (step.capturePhases?.length) {
+              <div class="mt-3 grid grid-cols-2 gap-2">
+                @for (phase of step.capturePhases; track phase.title) {
+                  <div class="rounded-lg border border-gray-100 p-2.5">
+                    <p class="mb-1 text-xs font-medium text-gray-800">
+                      {{ phase.icon }} {{ phase.title }}
+                    </p>
+                    <p class="text-[11px] leading-relaxed text-gray-500">
+                      {{ phase.description }}
+                    </p>
+                  </div>
+                }
+              </div>
+            }
+
+            @if (step.progress) {
+              <div class="mt-3 flex flex-col gap-2">
+                @for (phase of step.progress.phases; track phase.label) {
+                  <div>
+                    <div class="mb-1 flex justify-between text-[11px] text-gray-400">
+                      <span>{{ phase.label }}</span>
+                      <span>{{ phase.value }}%</span>
+                    </div>
+                    <div class="h-1.5 rounded-full bg-gray-100 overflow-hidden">
+                      <div
+                        class="h-full rounded-full transition-all duration-500"
+                        [style.width.%]="phase.value"
+                        [class]="progressBarColor"
+                      ></div>
+                    </div>
+                  </div>
+                }
+              </div>
+            }
+          </div>
+
+          @if (step.image) {
+            <div
+              class="order-first overflow-hidden rounded-lg border border-gray-100 bg-white shadow-[0_10px_30px_rgba(27,58,87,0.12)] ring-1 ring-[#E2E8F5] lg:order-last"
+            >
+              <img
+                [src]="step.image.src"
+                [alt]="step.image.alt"
+                class="h-40 w-full object-cover sm:h-48 lg:h-full"
+                loading="lazy"
+              />
+            </div>
+          }
+        </div>
+      </div>
+    }
+  </div>
+</div>
