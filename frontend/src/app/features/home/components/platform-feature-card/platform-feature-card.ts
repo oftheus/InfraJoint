@@ -29,18 +29,6 @@ export interface PlatformFeature {
 export class PlatformFeatureCard {
   readonly feature = input.required<PlatformFeature>();
 
-  cardClasses(variant: PlatformFeatureVariant): string {
-    const map: Record<PlatformFeatureVariant, string> = {
-      architecture: 'bg-white ring-1 ring-brand-100',
-      visualization: 'bg-white ring-1 ring-brand-100',
-      roi: 'bg-white ring-1 ring-brand-100',
-      timeline: 'bg-white ring-1 ring-brand-100',
-      metrics: 'bg-white ring-1 ring-brand-100',
-    };
-
-    return `platform-feature-card ${map[variant]}`;
-  }
-
   iconShellClasses(variant: PlatformFeatureVariant): string {
     const map: Record<PlatformFeatureVariant, string> = {
       architecture: 'bg-[#EAF2F8] text-[#1B3A57]',

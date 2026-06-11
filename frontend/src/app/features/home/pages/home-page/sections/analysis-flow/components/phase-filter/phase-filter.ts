@@ -10,10 +10,10 @@ interface PhaseFilterOption {
 @Component({
   selector: 'app-phase-filter',
   imports: [CommonModule],
-  templateUrl: './phase-filter.component.html',
+  templateUrl: './phase-filter.html',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
-export class PhaseFilterComponent {
+export class PhaseFilter {
   readonly activeFilter = input<StepFilter>('all');
   readonly filterChange = output<StepFilter>();
 

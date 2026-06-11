@@ -15,10 +15,10 @@ import { RouterLink } from '@angular/router';
 @Component({
   selector: 'app-hero-section',
   imports: [RouterLink, NgOptimizedImage],
-  templateUrl: './hero-section.component.html',
+  templateUrl: './hero-section.html',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
-export class HeroSectionComponent implements AfterViewInit, OnDestroy {
+export class HeroSection implements AfterViewInit, OnDestroy {
   @ViewChild('heroSection') private heroSection?: ElementRef<HTMLElement>;
   @ViewChild('heroBackground') private heroBackground?: ElementRef<HTMLImageElement>;
   @ViewChild('heroContent') private heroContent?: ElementRef<HTMLElement>;

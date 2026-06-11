@@ -12,7 +12,7 @@ import {
 @Component({
   selector: 'app-step-card',
   imports: [CommonModule, LucideDynamicIcon],
-  templateUrl: './step-card.component.html',
+  templateUrl: './step-card.html',
   changeDetection: ChangeDetectionStrategy.OnPush,
   animations: [
     trigger('expandCollapse', [
@@ -22,7 +22,7 @@ import {
     ]),
   ],
 })
-export class StepCardComponent {
+export class StepCard {
   readonly step = input.required<ProtocolStepViewModel>();
   readonly isLast = input(false);
   readonly isOpen = signal(false);

@@ -4,7 +4,7 @@ import { NgOptimizedImage } from '@angular/common';
 @Component({
   selector: 'app-about-section',
   imports: [NgOptimizedImage],
-  templateUrl: './about-section.component.html',
+  templateUrl: './about-section.html',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
-export class AboutSectionComponent {}
+export class AboutSection {}

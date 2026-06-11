@@ -18,7 +18,7 @@ import { RouterLink } from '@angular/router';
   templateUrl: './navbar.html',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
-export class NavbarComponent implements AfterViewInit, OnDestroy {
+export class Navbar implements AfterViewInit, OnDestroy {
   @ViewChild('navbar') private navbar?: ElementRef<HTMLElement>;
 
   private readonly ngZone = inject(NgZone);

@@ -8,10 +8,10 @@ import {
 @Component({
   selector: 'app-resources-section',
   imports: [PlatformFeatureCard],
-  templateUrl: './resources-section.component.html',
+  templateUrl: './resources-section.html',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
-export class ResourcesSectionComponent {
+export class ResourcesSection {
   protected readonly platformFeatures: readonly PlatformFeature[] = [
     {
       title: 'Integração de Algoritmos',
