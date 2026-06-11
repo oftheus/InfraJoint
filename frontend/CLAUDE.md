@@ -1,0 +1,152 @@
+# Project Context: Angular PWA Application
+
+You are an Angular specialist responsible for developing this application following best practices for architecture, performance, accessibility, and maintainability.
+
+## Technology Stack
+
+* Framework: Angular (use the most modern APIs available in the project's installed version)
+* Language: TypeScript
+* Styling: Tailwind CSS and Angular Material
+* Reactivity: Angular Signals and RxJS
+* Platform: Progressive Web App (PWA)
+
+## Project Structure
+
+Prioritize the following organization:
+
+* `src/app/core/` → global services, interceptors, guards, and singleton configurations.
+* `src/app/shared/` → reusable components, pipes, directives, and utilities.
+* `src/app/features/` → domain-oriented application features and screens.
+
+Inside a feature, keep the structure flat and add folders only when they earn their place:
+
+* `features/<feature>/<feature>.routes.ts` → the feature's lazy-loaded routes.
+* `features/<feature>/pages/` → routed screen components.
+* `features/<feature>/components/` → components reused across that feature.
+* `features/<feature>/sections/` → large page sub-areas (when a page warrants splitting).
+
+Do **not** pre-create Clean Architecture layers (`presentation/`, `application/`, `domain/`, `data/`). Introduce a `data/` layer (services, DTOs, mappers) in a feature only when that feature actually integrates with an API. Favor incremental evolution over scaffolding for hypothetical needs.
+
+Whenever possible, maintain this structure when creating new files.
+
+## Architecture
+
+The application follows Clean Architecture principles adapted for Angular.
+
+Whenever appropriate:
+
+* Separate presentation, application, and data access concerns.
+* Avoid placing business rules inside components.
+* Keep business logic in services or use cases.
+* Follow SOLID principles.
+* Favor low coupling and high cohesion.
+* Dependencies should point to abstractions whenever possible.
+
+## Useful Commands
+
+* Install dependencies: `npm install`
+* Development server: `npm run start`
+* Run tests: `npm run test`
+* Production build: `npm run build`
+
+## Coding Conventions
+
+### Standalone
+
+* All new components, pipes, and directives must use `standalone: true`.
+
+### File & Class Naming
+
+* Follow the Angular 21 schematic default: **no `Component`/`.component` suffix**.
+* File: `navbar.ts`, template `navbar.html`, test `navbar.spec.ts` (not `navbar.component.ts`).
+* Class: `export class Navbar` (not `NavbarComponent`).
+* Selectors keep the `app-` prefix (e.g. `app-navbar`).
+* Non-component files keep descriptive role suffixes (e.g. `analysis-flow.presenter.ts`, `*.model.ts`, `*.data.ts`, `*.routes.ts`, `*.service.ts`).
+
+### Dependency Injection
+
+* Prefer using `inject()`.
+* Avoid using `constructor()` for dependency injection unless there is a specific need.
+
+Example:
+
+```ts
+private authService = inject(AuthService);
+```
+
+### Typing
+
+* Do not use `any`.
+* Use interfaces, types, and generics appropriately.
+* Use `unknown` when a type cannot be determined safely.
+
+### Reactivity
+
+* Use Angular Signals for local state management and derived state.
+* Use RxJS for asynchronous flows, events, and API integrations.
+* Do not convert Observables to Signals unless there is a clear benefit.
+
+### Angular Material
+
+* Prefer Angular Material components whenever they satisfy the requirements.
+* Avoid recreating components already available in the library.
+* Ensure accessibility and responsiveness.
+
+## API Integration
+
+The project currently has no backend or external API integrations.
+
+When implementing features:
+
+* Do not create fictitious HTTP calls solely for demonstration purposes.
+* Use mocks, static data, or simulated services when necessary.
+* Structure the code to support future integrations.
+
+When APIs are introduced:
+
+* Centralize HTTP calls within services.
+* Never perform HTTP requests directly inside components.
+* Create interfaces/types for requests and responses.
+* Use interceptors for authentication and global error handling.
+
+## PWA
+
+The application is a Progressive Web App via `@angular/service-worker`.
+
+* Service worker config lives in `ngsw-config.json` (caching strategy) and is enabled through `serviceWorker` in `angular.json`.
+* Registration is wired in `app.config.ts` with `provideServiceWorker('ngsw-worker.js', { enabled: !isDevMode(), ... })` — **the service worker only runs in production builds**, never in `ng serve`.
+* Installability metadata lives in `public/manifest.webmanifest`; icons live in `public/icons/`.
+* To verify PWA behavior locally, build and serve the production output (e.g. `npm run build` then serve `dist/`), not `ng serve`.
+* When adding cacheable static assets, update the `assetGroups` in `ngsw-config.json` if they fall outside the existing globs.
+
+## Code Quality
+
+When suggesting changes:
+
+* Make the smallest change necessary to solve the problem.
+* Preserve existing project patterns.
+* Do not refactor unrelated files.
+* Briefly explain important architectural decisions when necessary.
+
+## Before Creating Something New
+
+* Search for similar implementations already present in the project.
+* Reuse existing components, services, and utilities whenever possible.
+* Avoid code duplication.
+* Avoid introducing new dependencies without a clear justification.
+
+## Testing
+
+Whenever modifying critical functionality:
+
+* Suggest or implement unit tests.
+* Consider error scenarios and relevant edge cases.
+
+## Workflow Before Modifying Code
+
+1. Read the relevant files.
+2. Understand the current implementation flow.
+3. Evaluate impacts on other features or shared resources.
+4. Reuse existing solutions whenever possible.
+5. Ensure the proposed change does not introduce architectural inconsistencies.
+6. Preserve compatibility with existing builds and tests.

@@ -36,6 +36,7 @@
               }
             ],
             "styles": ["src/styles.css"],
+            "serviceWorker": "ngsw-config.json",
             "server": "src/main.server.ts",
             "outputMode": "server",
             "security": {
