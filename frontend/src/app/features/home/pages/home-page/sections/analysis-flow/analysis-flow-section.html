@@ -1,25 +1,27 @@
-<section class="analysis-section">
-  <div class="analysis-card">
-    <div class="analysis-header">
-      <div>
-        <h2 class="section-title">Fluxo de Aquisição e Análise</h2>
-        <p class="section-subtitle sm:text-base mt-5">
-          Protocolo de aquisição de imagens térmicas em 6 etapas estruturadas, desde a preparação do
-          ambiente até a coleta de dados clínicos.
-        </p>
-      </div>
+<section class="analysis-section relative isolate overflow-hidden py-24">
+  <div class="analysis-glow" aria-hidden="true"></div>
+
+  <div class="page-container relative">
+    <div class="analysis-header mx-auto text-center">
+      <h2 class="section-title">Fluxo de <span class="text-accent">Aquisição e Análise</span></h2>
+      <p class="section-subtitle mx-auto mt-5 whitespace-nowrap">
+        Protocolo de aquisição de imagens térmicas em 6 etapas estruturadas, desde a preparação do
+        ambiente até a coleta de dados clínicos.
+      </p>
     </div>
 
-    <app-phase-filter [activeFilter]="activeFilter()" (filterChange)="onFilterChange($event)" />
+    <div class="analysis-card">
+      <app-phase-filter [activeFilter]="activeFilter()" (filterChange)="onFilterChange($event)" />
 
-    @if (steps().length === 0) {
-      <p class="empty-state">Nenhuma etapa encontrada.</p>
-    } @else {
-      <div class="analysis-list">
-        @for (step of steps(); track step.id; let last = $last) {
-          <app-step-card [step]="step" [isLast]="last" />
-        }
-      </div>
-    }
+      @if (steps().length === 0) {
+        <p class="empty-state">Nenhuma etapa encontrada.</p>
+      } @else {
+        <div class="analysis-list">
+          @for (step of steps(); track step.id; let first = $first; let last = $last) {
+            <app-step-card [step]="step" [isFirst]="first" [isLast]="last" />
+          }
+        </div>
+      }
+    </div>
   </div>
 </section>

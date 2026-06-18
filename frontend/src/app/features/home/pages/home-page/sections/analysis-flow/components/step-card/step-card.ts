@@ -2,17 +2,13 @@ import { CommonModule } from '@angular/common';
 import { ChangeDetectionStrategy, Component, computed, input, signal } from '@angular/core';
 import { animate, state, style, transition, trigger } from '@angular/animations';
 import { LucideDynamicIcon } from '@lucide/angular';
-import {
-  PatientGroupViewModel,
-  ProtocolStepViewModel,
-  StepBadgeVariant,
-  StepTone,
-} from '../../analysis-flow.presenter';
+import { ProtocolStepViewModel, StepTone } from '../../analysis-flow.presenter';
 
 @Component({
   selector: 'app-step-card',
   imports: [CommonModule, LucideDynamicIcon],
   templateUrl: './step-card.html',
+  host: { class: 'block' },
   changeDetection: ChangeDetectionStrategy.OnPush,
   animations: [
     trigger('expandCollapse', [
@@ -24,12 +20,13 @@ import {
 })
 export class StepCard {
   readonly step = input.required<ProtocolStepViewModel>();
+  readonly isFirst = input(false);
   readonly isLast = input(false);
   readonly isOpen = signal(false);
 
   readonly dotClasses = computed(() => {
     const base =
-      'w-9 h-9 rounded-full flex items-center justify-center text-xs font-medium border z-10 shrink-0';
+      'absolute left-0 top-1/2 z-20 flex h-9 w-9 -translate-x-[39px] -translate-y-1/2 items-center justify-center rounded-full border text-xs font-medium';
     const map: Record<StepTone, string> = {
       info: 'bg-blue-50 text-blue-700 border-blue-200',
       success: 'bg-green-50 text-green-700 border-green-200',
@@ -41,11 +38,7 @@ export class StepCard {
     return `${base} ${map[this.step().tone]}`;
   });
 
-  readonly lineClasses = computed(() => {
-    if (this.isLast()) {
-      return 'invisible w-px flex-1 mx-auto';
-    }
-
+  readonly lineColor = computed(() => {
     const map: Record<StepTone, string> = {
       info: 'bg-blue-100',
       success: 'bg-green-100',
@@ -54,7 +47,7 @@ export class StepCard {
       neutral: 'bg-gray-200',
       purple: 'bg-purple-100',
     };
-    return `w-px flex-1 mx-auto my-0.5 ${map[this.step().tone]}`;
+    return map[this.step().tone];
   });
 
   readonly iconClasses = computed(() => {
@@ -82,29 +75,45 @@ export class StepCard {
     return map[this.step().tone];
   });
 
-  tagClasses(variant: StepBadgeVariant): string {
-    const base = 'text-[11px] px-2 py-0.5 rounded-full border';
-    const map = {
-      default: 'bg-gray-50 text-gray-500 border-gray-200',
-      warning: 'bg-amber-50 text-amber-700 border-amber-200',
+  readonly tagClasses = computed(() => {
+    const base = 'text-xs px-2 py-0.5 rounded-full border';
+    const map: Record<StepTone, string> = {
       info: 'bg-blue-50 text-blue-700 border-blue-200',
       success: 'bg-green-50 text-green-700 border-green-200',
+      warning: 'bg-amber-50 text-amber-700 border-amber-200',
+      danger: 'bg-red-50 text-red-700 border-red-200',
+      neutral: 'bg-gray-50 text-gray-600 border-gray-200',
       purple: 'bg-purple-50 text-purple-700 border-purple-200',
     };
-    return `${base} ${map[variant]}`;
-  }
+    return `${base} ${map[this.step().tone]}`;
+  });
 
-  groupClasses(variant: PatientGroupViewModel['variant']): string {
-    const map = {
-      danger: 'bg-red-50 text-red-700',
-      warning: 'bg-amber-50 text-amber-700',
+  readonly groupClasses = computed(() => {
+    const map: Record<StepTone, string> = {
+      info: 'bg-blue-50 text-blue-700',
       success: 'bg-green-50 text-green-700',
+      warning: 'bg-amber-50 text-amber-700',
+      danger: 'bg-red-50 text-red-700',
+      neutral: 'bg-gray-50 text-gray-600',
       purple: 'bg-purple-50 text-purple-700',
     };
-    return map[variant];
-  }
+    return map[this.step().tone];
+  });
+
+  readonly noteToneClasses = computed(() => {
+    const map: Record<StepTone, string> = {
+      info: 'border-blue-300 bg-blue-50 text-blue-700',
+      success: 'border-green-300 bg-green-50 text-green-700',
+      warning: 'border-amber-300 bg-amber-50 text-amber-700',
+      danger: 'border-red-300 bg-red-50 text-red-700',
+      neutral: 'border-gray-300 bg-gray-50 text-gray-600',
+      purple: 'border-purple-300 bg-purple-50 text-purple-700',
+    };
+    return map[this.step().tone];
+  });
 
   toggle(): void {
     this.isOpen.update((isOpen) => !isOpen);
   }
 }
+ 

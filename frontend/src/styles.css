@@ -2,16 +2,30 @@
 @import 'tailwindcss';
 
 @layer components {
+  .page-container {
+    @apply mx-auto w-full max-w-[1480px] px-4 sm:px-6 lg:px-8;
+  }
+
   .analysis-section {
-    @apply mx-auto max-w-[1320px] px-4 py-12 sm:px-6 lg:px-8;
+    @apply w-full bg-gradient-to-r from-[#F7FBFF] via-[#EAF3FD] to-[#DCEBFB];
+  }
+
+  .analysis-glow {
+    @apply pointer-events-none absolute inset-x-0 top-0 -z-10 mx-auto h-[420px] max-w-4xl;
+    background: radial-gradient(60% 60% at 50% 0%, rgba(50, 181, 254, 0.22) 0%, rgba(50, 181, 254, 0) 70%);
+    filter: blur(40px);
+  }
+
+  .analysis-section .section-subtitle {
+    @apply text-sm font-medium leading-relaxed text-secondary sm:text-base;
   }
 
   .analysis-card {
-    @apply rounded-[28px] bg-surface px-6 py-10 shadow-card sm:px-10;
+    @apply rounded-[28px] border border-white/70 bg-surface px-6 py-10 shadow-[0_24px_70px_rgba(27,58,87,0.12)] ring-1 ring-[#1B3A57]/5 sm:px-10;
   }
 
   .analysis-header {
-    @apply mb-8 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between;
+    @apply mb-10;
   }
 
   .section-title {
@@ -55,11 +69,11 @@
   }
 
   .filter-pill {
-    @apply px-4 py-1.5 text-xs rounded-full border border-slate-200 text-slate-500 hover:bg-slate-50 transition-colors;
+    @apply cursor-pointer rounded-full border border-slate-200 px-4 py-2 text-sm text-slate-500 transition-colors hover:border-slate-300 hover:bg-slate-50 hover:text-slate-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-500;
   }
 
   .filter-pill-active {
-    @apply bg-brand-50 text-brand-500 border-brand-500 font-medium;
+    @apply border-brand-500 bg-brand-50 font-medium text-brand-500 hover:border-brand-500 hover:bg-brand-50 hover:text-brand-500;
   }
 
   .step-image-frame {
@@ -83,7 +97,7 @@
   }
 
   .navbar-cta {
-    @apply h-10 px-4 text-xs shadow-[0_12px_30px_rgba(50,181,254,0.24)] hover:-translate-y-0.5 hover:bg-primary hover:shadow-[0_16px_38px_rgba(27,58,87,0.2)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-accent active:translate-y-0 sm:h-11 sm:px-7 sm:text-base;
+    @apply h-10 px-4 text-xs shadow-[0_4px_12px_rgba(50,181,254,0.1)] hover:-translate-y-0.5 hover:bg-primary hover:shadow-[0_6px_16px_rgba(27,58,87,0.12)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-accent active:translate-y-0 sm:h-11 sm:px-7 sm:text-base;
   }
 
   .step-detail-card {
@@ -91,15 +105,15 @@
   }
 
   .step-detail-label {
-    @apply mb-0.5 text-[11px] text-gray-400;
+    @apply mb-0.5 text-xs text-gray-400;
   }
 
   .step-detail-value {
-    @apply text-xs font-medium text-gray-800;
+    @apply text-sm font-medium text-gray-800;
   }
 
   .step-note {
-    @apply mt-3 rounded-r-lg border-l-2 border-blue-300 bg-blue-50 px-3 py-2 text-xs leading-relaxed text-blue-700;
+    @apply mt-3 rounded-r-lg border-l-2 px-3 py-2 text-[13px] leading-relaxed;
   }
 
   .step-subcard {
@@ -107,11 +121,11 @@
   }
 
   .step-caption {
-    @apply text-[11px] leading-relaxed text-gray-500;
+    @apply text-xs leading-relaxed text-gray-500;
   }
 
   .step-progress-row {
-    @apply mb-1 flex justify-between text-[11px] text-gray-400;
+    @apply mb-1 flex justify-between text-xs text-gray-400;
   }
 
   .step-progress-track {
