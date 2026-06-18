@@ -2,7 +2,21 @@
   <div
     class="grid w-full max-w-6xl overflow-hidden rounded-[24px] bg-white shadow-[0_30px_80px_rgba(27,58,87,0.12)] lg:grid-cols-2"
   >
-    <!-- Left: login form -->
+    <!-- Left: illustration panel -->
+    <aside class="hidden p-3 lg:block">
+      <div class="relative h-full w-full overflow-hidden rounded-[24px] bg-surface">
+        <img
+          ngSrc="assets/illustrations/login.png"
+          fill
+          priority
+          sizes="50vw"
+          alt="Ilustração de criação de conta na plataforma InfraJoint"
+          class="object-cover object-center"
+        />
+      </div>
+    </aside>
+
+    <!-- Right: register form -->
     <section class="flex flex-col px-6 py-10 sm:px-12 sm:py-14 lg:px-16">
       <div class="mx-auto w-full max-w-md">
         <a routerLink="/" aria-label="Ir para a pagina inicial da InfraJoint" class="inline-flex">
@@ -19,12 +33,26 @@
 
       <div class="flex flex-1 flex-col justify-center py-10">
         <div class="mx-auto w-full max-w-md">
-          <h1 class="text-3xl font-bold tracking-tight text-primary sm:text-4xl">Bem-Vindo!</h1>
+          <h1 class="text-3xl font-bold tracking-tight text-primary sm:text-4xl">Crie sua conta</h1>
           <p class="mt-3 text-base leading-7 text-muted lg:whitespace-nowrap">
-            Acesse sua conta para continuar utilizando a plataforma.
+            Cadastre-se para começar a utilizar a plataforma.
           </p>
 
           <form [formGroup]="form" (ngSubmit)="onSubmit()" class="mt-9 space-y-5" novalidate>
+            <div>
+              <label for="name" class="mb-1.5 block text-sm font-medium text-secondary">
+                Nome
+              </label>
+              <input
+                id="name"
+                type="text"
+                formControlName="name"
+                autocomplete="name"
+                placeholder="Seu nome completo"
+                class="auth-input"
+              />
+            </div>
+
             <div>
               <label for="email" class="mb-1.5 block text-sm font-medium text-secondary">
                 Email
@@ -48,7 +76,7 @@
                   id="password"
                   [type]="showPassword() ? 'text' : 'password'"
                   formControlName="password"
-                  autocomplete="current-password"
+                  autocomplete="new-password"
                   placeholder="••••••••"
                   class="auth-input pr-12"
                 />
@@ -73,49 +101,27 @@
                   }
                 </button>
               </div>
-              <div class="mt-2 flex justify-end">
-                <a
-                  routerLink="."
-                  class="text-sm font-medium text-accent transition-colors hover:text-brand-700 focus-visible:rounded-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
-                >
-                  Esqueceu a Senha?
-                </a>
-              </div>
             </div>
 
             <button
               type="submit"
               class="btn-primary h-12 w-full cursor-pointer text-base shadow-[0_10px_30px_rgba(50,181,254,0.28)] hover:-translate-y-0.5 hover:shadow-[0_14px_36px_rgba(50,181,254,0.36)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-accent active:translate-y-0"
             >
-              Entrar
+              Criar conta
             </button>
           </form>
 
           <p class="mt-8 text-center text-sm text-muted">
-            Ainda não tem uma conta?
+            Já tem uma conta?
             <a
-              routerLink="/register"
+              routerLink="/login"
               class="font-semibold text-accent transition-colors hover:text-brand-700 focus-visible:rounded-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
             >
-              Criar conta
+              Entrar
             </a>
           </p>
         </div>
       </div>
     </section>
-
-    <!-- Right: illustration panel -->
-    <aside class="hidden p-3 lg:block">
-      <div class="relative h-full w-full overflow-hidden rounded-[24px] bg-surface">
-        <img
-          ngSrc="assets/illustrations/login3.png"
-          fill
-          priority
-          sizes="50vw"
-          alt="Ilustração de acesso à plataforma InfraJoint"
-          class="object-cover object-center"
-        />
-      </div>
-    </aside>
   </div>
 </main>
