@@ -59,6 +59,10 @@ const STEP_PRESENTATION: Record<number, StepPresentationConfig> = {
   4: {
     tone: 'warning',
     icon: 'camera',
+    image: {
+      src: 'assets/images/handsThermal.jpg',
+      alt: 'Imagem térmica das mãos em repouso durante a captura estática',
+    },
   },
   5: {
     tone: 'danger',

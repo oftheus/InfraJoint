@@ -48,6 +48,10 @@
     @apply text-xs font-semibold text-primary transition-colors duration-300 hover:text-accent focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-accent sm:text-base;
   }
 
+  .footer-link {
+    @apply text-sm font-medium text-surface underline-offset-4 transition-colors duration-300 hover:underline focus-visible:rounded-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-primary;
+  }
+
   .platform-feature-card {
     @apply flex h-full min-h-[340px] min-w-0 flex-col rounded-lg p-7 shadow-[0_18px_50px_rgba(27,58,87,0.08)] transition-all duration-300 ease-out hover:-translate-y-2 hover:scale-[1.015] hover:shadow-[0_26px_70px_rgba(27,58,87,0.14)];
   }
