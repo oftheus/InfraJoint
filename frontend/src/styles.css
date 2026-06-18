@@ -48,6 +48,10 @@
     @apply text-xs font-semibold text-primary transition-colors duration-300 hover:text-accent focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-accent sm:text-base;
   }
 
+  .auth-input {
+    @apply w-full rounded-xl border border-gray-200 bg-white px-4 py-3 text-base text-ink-strong placeholder:text-gray-400 transition-all duration-200 hover:border-gray-300 focus:border-accent focus:outline-none focus:ring-4 focus:ring-accent/15;
+  }
+
   .footer-link {
     @apply text-sm font-medium text-surface underline-offset-4 transition-colors duration-300 hover:underline focus-visible:rounded-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-primary;
   }
