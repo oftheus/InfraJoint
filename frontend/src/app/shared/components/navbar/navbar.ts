@@ -25,6 +25,13 @@ export class Navbar implements AfterViewInit, OnDestroy {
   private readonly platformId = inject(PLATFORM_ID);
   private animationContext?: { revert: () => void };
   private destroyed = false;
+  private readonly topThreshold = 80;
+  private readonly scrollDelta = 8;
+  private gsap?: typeof import('gsap')['gsap'];
+  private lastScrollY = 0;
+  private hidden = false;
+  private ticking = false;
+  private onScroll?: () => void;
 
   ngAfterViewInit(): void {
     if (!isPlatformBrowser(this.platformId) || !this.navbar) {
@@ -39,6 +46,10 @@ export class Navbar implements AfterViewInit, OnDestroy {
   ngOnDestroy(): void {
     this.destroyed = true;
     this.animationContext?.revert();
+
+    if (this.onScroll && isPlatformBrowser(this.platformId)) {
+      window.removeEventListener('scroll', this.onScroll);
+    }
   }
 
   private async animateEntrance(): Promise<void> {
@@ -48,6 +59,8 @@ export class Navbar implements AfterViewInit, OnDestroy {
       return;
     }
 
+    this.gsap = gsap;
+
     this.animationContext = gsap.context(() => {
       gsap.from(this.navbar!.nativeElement, {
         autoAlpha: 0,
@@ -56,5 +69,74 @@ export class Navbar implements AfterViewInit, OnDestroy {
         y: -12,
       });
     }, this.navbar.nativeElement);
+
+    this.setupAutoHide();
+  }
+
+  private setupAutoHide(): void {
+    this.lastScrollY = window.scrollY;
+
+    this.onScroll = () => {
+      if (this.ticking) {
+        return;
+      }
+
+      this.ticking = true;
+      window.requestAnimationFrame(() => {
+        this.handleScroll();
+        this.ticking = false;
+      });
+    };
+
+    window.addEventListener('scroll', this.onScroll, { passive: true });
+  }
+
+  private handleScroll(): void {
+    const current = Math.max(window.scrollY, 0);
+
+    // Always reveal near the top so small scrolls never hide the navbar.
+    if (current <= this.topThreshold) {
+      this.reveal();
+      this.lastScrollY = current;
+      return;
+    }
+
+    if (Math.abs(current - this.lastScrollY) <= this.scrollDelta) {
+      return;
+    }
+
+    if (current > this.lastScrollY) {
+      this.conceal();
+    } else {
+      this.reveal();
+    }
+
+    this.lastScrollY = current;
+  }
+
+  private reveal(): void {
+    if (!this.hidden || !this.navbar) {
+      return;
+    }
+
+    this.hidden = false;
+    this.gsap?.to(this.navbar.nativeElement, {
+      yPercent: 0,
+      duration: 0.75,
+      ease: 'power2.out',
+    });
+  }
+
+  private conceal(): void {
+    if (this.hidden || !this.navbar) {
+      return;
+    }
+
+    this.hidden = true;
+    this.gsap?.to(this.navbar.nativeElement, {
+      yPercent: -100,
+      duration: 0.55,
+      ease: 'power2.in',
+    });
   }
 }
