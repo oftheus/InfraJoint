@@ -103,11 +103,20 @@
               </div>
             </div>
 
+            @if (errorMessage(); as message) {
+              <p class="text-sm font-medium text-red-600" role="alert">{{ message }}</p>
+            }
+
+            @if (successMessage(); as message) {
+              <p class="text-sm font-medium text-green-600" role="status">{{ message }}</p>
+            }
+
             <button
               type="submit"
-              class="btn-primary h-12 w-full cursor-pointer text-base shadow-[0_10px_30px_rgba(50,181,254,0.28)] hover:-translate-y-0.5 hover:shadow-[0_14px_36px_rgba(50,181,254,0.36)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-accent active:translate-y-0"
+              [disabled]="submitting()"
+              class="btn-primary h-12 w-full cursor-pointer text-base shadow-[0_10px_30px_rgba(50,181,254,0.28)] hover:-translate-y-0.5 hover:shadow-[0_14px_36px_rgba(50,181,254,0.36)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-accent active:translate-y-0 disabled:cursor-not-allowed disabled:opacity-60"
             >
-              Criar conta
+              {{ submitting() ? 'Criando...' : 'Criar conta' }}
             </button>
           </form>
 

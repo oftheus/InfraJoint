@@ -7,10 +7,14 @@ import {
   OnDestroy,
   PLATFORM_ID,
   ViewChild,
+  computed,
   inject,
+  input,
 } from '@angular/core';
 import { isPlatformBrowser, NgOptimizedImage } from '@angular/common';
 import { RouterLink } from '@angular/router';
+
+import { AuthService } from '../../../core/auth/auth.service';
 
 @Component({
   selector: 'app-navbar',
@@ -23,6 +27,25 @@ export class Navbar implements AfterViewInit, OnDestroy {
 
   private readonly ngZone = inject(NgZone);
   private readonly platformId = inject(PLATFORM_ID);
+  private readonly auth = inject(AuthService);
+
+  /** Whether to show the marketing site links (Home, Recursos, …). */
+  readonly showSiteLinks = input(true);
+
+  protected readonly isAuthenticated = this.auth.isAuthenticated;
+  protected readonly profile = this.auth.profile;
+
+  /** Initials fallback shown when the profile has no avatar image. */
+  protected readonly initials = computed(() => {
+    const parts = (this.profile()?.full_name ?? '').trim().split(/\s+/).filter(Boolean);
+    if (parts.length === 0) {
+      return '?';
+    }
+    const first = parts[0][0];
+    const last = parts.length > 1 ? parts[parts.length - 1][0] : '';
+    return (first + last).toUpperCase();
+  });
+
   private animationContext?: { revert: () => void };
   private destroyed = false;
   private readonly topThreshold = 80;

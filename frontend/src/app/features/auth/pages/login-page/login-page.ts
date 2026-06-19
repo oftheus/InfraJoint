@@ -1,7 +1,9 @@
 import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/core';
 import { NgOptimizedImage } from '@angular/common';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
-import { RouterLink } from '@angular/router';
+import { Router, RouterLink } from '@angular/router';
+
+import { AuthService } from '../../../../core/auth/auth.service';
 
 @Component({
   selector: 'app-login-page',
@@ -11,8 +13,12 @@ import { RouterLink } from '@angular/router';
 })
 export class LoginPage {
   private readonly fb = inject(FormBuilder);
+  private readonly auth = inject(AuthService);
+  private readonly router = inject(Router);
 
   protected readonly showPassword = signal(false);
+  protected readonly submitting = signal(false);
+  protected readonly errorMessage = signal<string | null>(null);
 
   protected readonly form = this.fb.nonNullable.group({
     email: ['', [Validators.required, Validators.email]],
@@ -23,12 +29,24 @@ export class LoginPage {
     this.showPassword.update((value) => !value);
   }
 
-  protected onSubmit(): void {
-    if (this.form.invalid) {
+  protected async onSubmit(): Promise<void> {
+    if (this.form.invalid || this.submitting()) {
       this.form.markAllAsTouched();
       return;
     }
 
-    // TODO: integrar com o servico de autenticacao quando a API estiver disponivel.
+    this.submitting.set(true);
+    this.errorMessage.set(null);
+
+    const { email, password } = this.form.getRawValue();
+    const { error } = await this.auth.signInWithPassword(email, password);
+
+    if (error) {
+      this.errorMessage.set('Email ou senha inválidos.');
+      this.submitting.set(false);
+      return;
+    }
+
+    await this.router.navigate(['/dashboard']);
   }
 }
