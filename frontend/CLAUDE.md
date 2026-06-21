@@ -109,6 +109,31 @@ When APIs are introduced:
 * Create interfaces/types for requests and responses.
 * Use interceptors for authentication and global error handling.
 
+## Authorization & Security
+
+The source of truth for authorization is the backend: **Supabase Row-Level
+Security (RLS) policies and Storage policies**, which are configured and verified
+on the database. The current rules enforce that users can only read/update their
+own profile, that the `role` field is not user-modifiable, that administrative
+resources require server-side authorization, and that storage access is scoped to
+the user's own files.
+
+Everything authorization-related on the client is **UX/navigation only**:
+
+* `roleGuard`, `authGuard`, and the sidebar's `requiredRole` filtering exist to
+  route users sensibly and declutter the UI — they grant no real access and are
+  trivially bypassable (devtools, direct anon-key calls).
+* Treat `UserProfile.role` as read-only display state, never as an access grant.
+
+When adding any protected feature:
+
+* Enforce authorization at the database/storage policy level **first**; add (or
+  reuse) an RLS/Storage policy before shipping.
+* Use Angular guards/role checks only to improve the experience on top of that
+  server-side rule — never as the only line of defense.
+* Do not introduce client-side privilege state that the backend does not also
+  enforce.
+
 ## PWA
 
 The application is a Progressive Web App via `@angular/service-worker`.

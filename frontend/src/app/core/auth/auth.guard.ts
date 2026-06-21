@@ -6,6 +6,17 @@ import { AuthService } from './auth.service';
 import { UserRole } from './profile.model';
 
 /**
+ * AUTHORIZATION NOTE — these guards are UX / navigation helpers only.
+ *
+ * They improve the experience (redirect anonymous users to login, hide screens
+ * a role can't use) but enforce nothing on their own: anyone can bypass them via
+ * devtools or by calling Supabase directly with the anon key. The source of
+ * truth for authorization is Supabase Row-Level Security (and storage policies)
+ * — every table/bucket must restrict reads/writes server-side. Never let a
+ * business-critical rule depend on a guard; back it with an RLS policy first.
+ */
+
+/**
  * Protects routes that require an authenticated user.
  * Redirects to `/login` when there is no active session.
  */
@@ -52,6 +63,10 @@ export const guestGuard: CanActivateFn = async () => {
  * which already enforces authentication).
  *
  * A route without `data.roles` is treated as unrestricted.
+ *
+ * Role gating here is cosmetic (it keeps users out of screens they can't use);
+ * the data those screens reach must still be protected by RLS — see the
+ * authorization note at the top of this file.
  */
 export const roleGuard: CanActivateFn = async (route) => {
   const auth = inject(AuthService);

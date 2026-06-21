@@ -1,25 +1,27 @@
 <section id="sobre" class="scroll-mt-28 bg-white py-[7.5rem] sm:py-[6.5rem]">
-  <div class="page-container">
+  <div class="page-container max-sm:px-6">
     <div class="grid grid-cols-1 items-center gap-8 lg:grid-cols-[0.9fr_1.1fr] lg:gap-6">
-      <div class="order-2 lg:order-1">
+      <div class="order-2 hidden md:block lg:order-1">
         <img
           ngSrc="assets/illustrations/welcome.png"
           width="1056"
           height="946"
           sizes="(min-width: 1024px) 40vw, 90vw"
           alt="Visualização de diagnóstico e dados clínicos"
-          class="w-full max-w-lg object-contain"
+          class="mx-auto w-full max-w-lg object-contain"
         />
       </div>
 
-      <div class="order-1 lg:order-2">
+      <div class="order-1 mx-auto w-full max-w-xl lg:order-2 lg:max-w-none">
         <p class="text-sm font-semibold text-accent sm:text-base">Sobre a plataforma</p>
 
-        <h2 class="section-title mt-4 max-w-3xl">
+        <h2
+          class="section-title text-[length:clamp(1.125rem,6.5vw,2rem)] leading-tight sm:text-4xl lg:text-5xl mt-4 max-w-3xl"
+        >
           Conectando termografia, análise computacional e dados clínicos
         </h2>
 
-        <div class="section-subtitle mt-6 max-w-2xl space-y-4 text-sm leading-6 sm:text-base">
+        <div class="section-subtitle mt-6 max-w-2xl space-y-6 text-sm leading-6 sm:text-base">
           <p>
             Em estudos de reumatologia baseados em termografia, imagens térmicas, algoritmos de análise e dados clínicos costumam estar distribuídos em diferentes ferramentas. O InfraJoint surgiu para centralizar essas etapas e oferecer um ambiente único para coleta, organização e análise dos dados.
           </p>
@@ -28,7 +30,7 @@
           </p>
           <p>Na prática, o InfraJoint fortalece a pesquisa científica em três pilares:</p>
 
-          <ul class="space-y-3">
+          <ul class="space-y-4">
             <li class="flex gap-3">
               <svg
                 lucideCheck

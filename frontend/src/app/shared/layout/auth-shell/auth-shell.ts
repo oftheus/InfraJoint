@@ -137,7 +137,11 @@ export class AuthShell {
     },
   ];
 
-  /** Navigation tree filtered down to what the current user is allowed to see. */
+  /**
+   * Navigation tree filtered down to what the current user is allowed to see.
+   * Role-based hiding here is purely cosmetic — it declutters the sidebar but
+   * grants no access; the real boundary is Supabase RLS (see auth.guard.ts).
+   */
   protected readonly visibleNav = computed<readonly NavEntry[]>(() => {
     const role = this.profile()?.role;
     return this.navEntries

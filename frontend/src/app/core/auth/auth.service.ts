@@ -117,8 +117,9 @@ export class AuthService {
   }
 
   private loadProfile(userId: string): Promise<UserProfile | null> {
-    // Reuse an in-flight (or completed) load for the same user so the auth
-    // effect and any awaiting caller share a single request.
+    // Reuse an in-flight (or successfully completed) load for the same user so
+    // the auth effect and any awaiting caller share a single request. Failed
+    // loads clear this memo (see below), so they are retried rather than reused.
     if (this.profileLoad?.userId === userId) {
       return this.profileLoad.promise;
     }
@@ -135,9 +136,18 @@ export class AuthService {
         return this._profile();
       }
 
-      const profile = error ? null : data;
-      this._profile.set(profile);
-      return profile;
+      // A failed load (transient network/Supabase error) must not stay cached:
+      // drop the memo and the tracked user id so the next ensureProfileLoaded()
+      // or auth event retries instead of permanently reusing the failed promise.
+      if (error) {
+        this.profileLoad = null;
+        this.profileUserId = null;
+        this._profile.set(null);
+        return null;
+      }
+
+      this._profile.set(data);
+      return data;
     })();
 
     this.profileLoad = { userId, promise };
