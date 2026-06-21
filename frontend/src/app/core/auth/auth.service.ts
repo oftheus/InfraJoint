@@ -249,10 +249,11 @@ export class AuthService {
       return { url: null, error: new Error('Nenhum usuário autenticado.') };
     }
 
-    const extension = file.name.split('.').pop()?.toLowerCase() || 'png';
-    // Stable path per user: each upload overwrites the previous avatar instead
-    // of accumulating orphaned files.
-    const path = `${userId}/avatar.${extension}`;
+    // Stable path per user, independent of the file extension: every upload
+    // overwrites the exact same object instead of creating one file per type
+    // (which would orphan the previous avatar). The image type is preserved via
+    // the `contentType` header below, so the browser still renders it correctly.
+    const path = `${userId}/avatar`;
 
     const { error: uploadError } = await this.supabase.storage
       .from('avatars')
