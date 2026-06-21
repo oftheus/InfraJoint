@@ -28,6 +28,8 @@ export interface ProtocolStepViewModel extends Omit<ProtocolStep, 'keyPoints' | 
   readonly image?: {
     readonly src: string;
     readonly alt: string;
+    readonly width: number;
+    readonly height: number;
   };
   readonly capturePhases?: readonly CapturePhaseViewModel[];
 }
@@ -46,6 +48,8 @@ const STEP_PRESENTATION: Record<number, StepPresentationConfig> = {
     image: {
       src: 'assets/images/lab.jpg',
       alt: 'Ambiente de laboratório para preparação do exame',
+      width: 486,
+      height: 647,
     },
   },
   2: {
@@ -62,6 +66,8 @@ const STEP_PRESENTATION: Record<number, StepPresentationConfig> = {
     image: {
       src: 'assets/images/handsThermal.jpg',
       alt: 'Imagem térmica das mãos em repouso durante a captura estática',
+      width: 1179,
+      height: 1739,
     },
   },
   5: {
@@ -70,6 +76,8 @@ const STEP_PRESENTATION: Record<number, StepPresentationConfig> = {
     image: {
       src: 'assets/images/hands.png',
       alt: 'Captura termográfica das mãos durante o protocolo',
+      width: 383,
+      height: 371,
     },
     capturePhaseIcons: ['wind', 'flame'],
   },

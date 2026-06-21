@@ -93,7 +93,7 @@
   }
 
   .hero-shell {
-    @apply relative isolate flex min-h-[calc(100vh-10rem)] overflow-hidden rounded-[2rem] px-6 py-16 shadow-[0_28px_80px_rgba(27,58,87,0.16)] sm:min-h-[calc(100vh-11rem)] sm:px-12 sm:py-20 lg:px-20;
+    @apply relative isolate flex min-h-[60vh] overflow-hidden rounded-[2rem] px-6 py-12 shadow-[0_28px_80px_rgba(27,58,87,0.16)] sm:min-h-[70vh] sm:px-12 sm:py-20 lg:min-h-[calc(100vh-11rem)] lg:px-20;
   }
 
   .hero-background {

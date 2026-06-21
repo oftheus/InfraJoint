@@ -155,14 +155,13 @@
           </div>
 
           @if (stepVm.image) {
-            <div class="step-image-frame order-first lg:order-last">
+            <div class="step-image-frame self-start">
               <img
                 [src]="stepVm.image.src"
                 [alt]="stepVm.image.alt"
-                width="440"
-                height="320"
-                sizes="(min-width: 1024px) 220px, 100vw"
-                class="h-40 w-full object-cover sm:h-48 lg:h-full"
+                [width]="stepVm.image.width"
+                [height]="stepVm.image.height"
+                class="h-auto w-full object-contain"
                 loading="lazy"
               />
             </div>
