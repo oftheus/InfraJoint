@@ -1,5 +1,5 @@
 import { Routes } from '@angular/router';
-import { authGuard, guestGuard } from './core/auth/auth.guard';
+import { authGuard, guestGuard, roleGuard } from './core/auth/auth.guard';
 
 export const appRoutes: Routes = [
   {
@@ -28,14 +28,33 @@ export const appRoutes: Routes = [
           import('./features/dashboard/dashboard.routes').then((m) => m.dashboardRoutes),
       },
       {
+        path: 'pacientes',
+        loadChildren: () =>
+          import('./features/patients/patients.routes').then((m) => m.patientsRoutes),
+      },
+      {
+        path: 'analise',
+        loadChildren: () =>
+          import('./features/analysis/analysis.routes').then((m) => m.analysisRoutes),
+      },
+      {
+        path: 'pesquisa',
+        loadChildren: () =>
+          import('./features/research/research.routes').then((m) => m.researchRoutes),
+      },
+      {
+        path: 'administracao',
+        canActivate: [roleGuard],
+        data: { roles: ['admin'] },
+        loadChildren: () =>
+          import('./features/administration/administration.routes').then(
+            (m) => m.administrationRoutes,
+          ),
+      },
+      {
         path: 'perfil',
         loadChildren: () =>
           import('./features/profile/profile.routes').then((m) => m.profileRoutes),
-      },
-      {
-        path: 'settings',
-        loadChildren: () =>
-          import('./features/settings/settings.routes').then((m) => m.settingsRoutes),
       },
     ],
   },

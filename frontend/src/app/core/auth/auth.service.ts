@@ -44,6 +44,12 @@ export class AuthService {
   /** Tracks which user id the current profile was loaded for. */
   private profileUserId: string | null = null;
 
+  /**
+   * In-flight (or last completed) profile load. Used both to dedupe concurrent
+   * requests and to let callers (e.g. the role guard) await profile readiness.
+   */
+  private profileLoad: { userId: string; promise: Promise<UserProfile | null> } | null = null;
+
   /** Current Supabase session, or `null` when signed out. */
   readonly session = this._session.asReadonly();
   /** `true` while the initial session is being resolved. */
@@ -90,6 +96,7 @@ export class AuthService {
       if (userId === null) {
         this._profile.set(null);
         this.profileUserId = null;
+        this.profileLoad = null;
         return;
       }
 
@@ -109,19 +116,50 @@ export class AuthService {
     this.resolveReady();
   }
 
-  private async loadProfile(userId: string): Promise<void> {
-    const { data, error } = await this.supabase
-      .from('users')
-      .select('id, full_name, avatar_url, role')
-      .eq('id', userId)
-      .single<UserProfile>();
-
-    // Ignore a result that arrived after the user changed (or signed out).
-    if (this.user()?.id !== userId) {
-      return;
+  private loadProfile(userId: string): Promise<UserProfile | null> {
+    // Reuse an in-flight (or completed) load for the same user so the auth
+    // effect and any awaiting caller share a single request.
+    if (this.profileLoad?.userId === userId) {
+      return this.profileLoad.promise;
     }
 
-    this._profile.set(error ? null : data);
+    const promise = (async (): Promise<UserProfile | null> => {
+      const { data, error } = await this.supabase
+        .from('users')
+        .select('id, full_name, avatar_url, role')
+        .eq('id', userId)
+        .single<UserProfile>();
+
+      // Ignore a result that arrived after the user changed (or signed out).
+      if (this.user()?.id !== userId) {
+        return this._profile();
+      }
+
+      const profile = error ? null : data;
+      this._profile.set(profile);
+      return profile;
+    })();
+
+    this.profileLoad = { userId, promise };
+    return promise;
+  }
+
+  /**
+   * Resolves once the authenticated user's profile has been loaded, returning
+   * it (or `null` when signed out / unavailable). Guards use this to read the
+   * user's role reliably, even on a cold direct-URL navigation where the
+   * reactive profile effect has not settled yet.
+   */
+  async ensureProfileLoaded(): Promise<UserProfile | null> {
+    await this.ready;
+
+    const userId = this.user()?.id;
+    if (!userId) {
+      return null;
+    }
+
+    await this.loadProfile(userId);
+    return this._profile();
   }
 
   signInWithPassword(email: string, password: string): Promise<AuthTokenResponsePassword> {

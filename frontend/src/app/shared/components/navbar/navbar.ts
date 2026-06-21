@@ -10,17 +10,22 @@ import {
   computed,
   inject,
   input,
+  signal,
 } from '@angular/core';
 import { isPlatformBrowser, NgOptimizedImage } from '@angular/common';
 import { RouterLink } from '@angular/router';
+import { LucideDynamicIcon } from '@lucide/angular';
 
 import { AuthService } from '../../../core/auth/auth.service';
 
 @Component({
   selector: 'app-navbar',
-  imports: [RouterLink, NgOptimizedImage],
+  imports: [RouterLink, NgOptimizedImage, LucideDynamicIcon],
   templateUrl: './navbar.html',
   changeDetection: ChangeDetectionStrategy.OnPush,
+  host: {
+    '(document:keydown.escape)': 'onEscape()',
+  },
 })
 export class Navbar implements AfterViewInit, OnDestroy {
   @ViewChild('navbar') private navbar?: ElementRef<HTMLElement>;
@@ -31,6 +36,9 @@ export class Navbar implements AfterViewInit, OnDestroy {
 
   /** Whether to show the marketing site links (Home, Recursos, …). */
   readonly showSiteLinks = input(true);
+
+  /** Whether the mobile navigation drawer is open. */
+  protected readonly drawerOpen = signal(false);
 
   protected readonly isAuthenticated = this.auth.isAuthenticated;
   protected readonly profile = this.auth.profile;
@@ -45,6 +53,38 @@ export class Navbar implements AfterViewInit, OnDestroy {
     const last = parts.length > 1 ? parts[parts.length - 1][0] : '';
     return (first + last).toUpperCase();
   });
+
+  protected toggleDrawer(): void {
+    if (this.drawerOpen()) {
+      this.closeDrawer();
+    } else {
+      this.openDrawer();
+    }
+  }
+
+  protected openDrawer(): void {
+    this.drawerOpen.set(true);
+    this.setBodyScrollLock(true);
+  }
+
+  protected closeDrawer(): void {
+    this.drawerOpen.set(false);
+    this.setBodyScrollLock(false);
+  }
+
+  protected onEscape(): void {
+    if (this.drawerOpen()) {
+      this.closeDrawer();
+    }
+  }
+
+  /** Prevents the page behind the open drawer from scrolling. */
+  private setBodyScrollLock(locked: boolean): void {
+    if (!isPlatformBrowser(this.platformId)) {
+      return;
+    }
+    document.body.style.overflow = locked ? 'hidden' : '';
+  }
 
   private animationContext?: { revert: () => void };
   private destroyed = false;
@@ -69,6 +109,7 @@ export class Navbar implements AfterViewInit, OnDestroy {
   ngOnDestroy(): void {
     this.destroyed = true;
     this.animationContext?.revert();
+    this.setBodyScrollLock(false);
 
     if (this.onScroll && isPlatformBrowser(this.platformId)) {
       window.removeEventListener('scroll', this.onScroll);

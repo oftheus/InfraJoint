@@ -3,6 +3,7 @@ import { isPlatformBrowser } from '@angular/common';
 import { CanActivateFn, Router } from '@angular/router';
 
 import { AuthService } from './auth.service';
+import { UserRole } from './profile.model';
 
 /**
  * Protects routes that require an authenticated user.
@@ -42,4 +43,41 @@ export const guestGuard: CanActivateFn = async () => {
   await auth.ready;
 
   return auth.isAuthenticated() ? router.createUrlTree(['/dashboard']) : true;
+};
+
+/**
+ * Restricts a route to users holding one of the roles declared in the route's
+ * `data.roles`. Reusable across features — attach `canActivate: [roleGuard]`
+ * and `data: { roles: ['admin'] }` to any route (run it alongside `authGuard`,
+ * which already enforces authentication).
+ *
+ * A route without `data.roles` is treated as unrestricted.
+ */
+export const roleGuard: CanActivateFn = async (route) => {
+  const auth = inject(AuthService);
+  const router = inject(Router);
+  const isBrowser = isPlatformBrowser(inject(PLATFORM_ID));
+
+  // Client-rendered area: let SSR/prerender through and decide after hydration.
+  if (!isBrowser) {
+    return true;
+  }
+
+  const requiredRoles = (route.data['roles'] as readonly UserRole[] | undefined) ?? [];
+  if (requiredRoles.length === 0) {
+    return true;
+  }
+
+  const profile = await auth.ensureProfileLoaded();
+
+  if (!auth.isAuthenticated()) {
+    return router.createUrlTree(['/login']);
+  }
+
+  if (profile && requiredRoles.includes(profile.role)) {
+    return true;
+  }
+
+  // Authenticated but unauthorized — send them back to a page they can access.
+  return router.createUrlTree(['/dashboard']);
 };

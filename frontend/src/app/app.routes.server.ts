@@ -6,8 +6,11 @@ export const serverRoutes: ServerRoute[] = [
   { path: 'login', renderMode: RenderMode.Client },
   { path: 'register', renderMode: RenderMode.Client },
   { path: 'dashboard', renderMode: RenderMode.Client },
+  { path: 'pacientes', renderMode: RenderMode.Client },
+  { path: 'analise/**', renderMode: RenderMode.Client },
+  { path: 'pesquisa/**', renderMode: RenderMode.Client },
+  { path: 'administracao/**', renderMode: RenderMode.Client },
   { path: 'perfil', renderMode: RenderMode.Client },
-  { path: 'settings', renderMode: RenderMode.Client },
   {
     path: '**',
     renderMode: RenderMode.Prerender,

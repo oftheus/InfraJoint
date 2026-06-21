@@ -91,21 +91,70 @@
       </div>
 
       <!-- Navigation -->
-      <nav class="mt-8 flex-1" aria-label="Menu principal">
+      <nav class="mt-8 flex-1 overflow-y-auto" aria-label="Menu principal">
         <p class="px-3.5 pb-2 text-[11px] font-semibold uppercase tracking-wider text-white/40">
           Menu
         </p>
 
         <ul class="space-y-1">
-          @for (item of navItems; track item.route) {
+          @for (entry of visibleNav(); track entry.label; let i = $index) {
             <li>
-              <a
-                [routerLink]="item.route"
-                class="group flex items-center gap-3 rounded-xl px-3.5 py-2.5 text-sm font-medium text-white/70 transition-colors duration-200 hover:bg-white/10 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent [&>svg]:text-white/55 [&>svg]:transition-colors hover:[&>svg]:text-white"
-              >
-                <svg [lucideIcon]="item.icon" class="h-5 w-5 shrink-0" aria-hidden="true"></svg>
-                <span>{{ item.label }}</span>
-              </a>
+              @if (entry.kind === 'group') {
+                <!-- Collapsible section -->
+                <button
+                  type="button"
+                  (click)="toggleGroup(entry.label)"
+                  [attr.aria-expanded]="isExpanded(entry.label)"
+                  [attr.aria-controls]="'nav-group-' + i"
+                  class="group flex w-full items-center gap-3 rounded-xl px-3.5 py-2.5 text-sm font-medium transition-colors duration-200 hover:bg-white/10 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent [&>svg]:transition-colors"
+                  [ngClass]="isGroupActive(entry) || isExpanded(entry.label) ? 'text-white' : 'text-white/70'"
+                >
+                  <svg
+                    [lucideIcon]="entry.icon"
+                    class="h-5 w-5 shrink-0"
+                    [ngClass]="isGroupActive(entry) ? 'text-white' : 'text-white/55'"
+                    aria-hidden="true"
+                  ></svg>
+                  <span class="flex-1 text-left">{{ entry.label }}</span>
+                  <svg
+                    [lucideIcon]="'chevron-down'"
+                    class="h-4 w-4 shrink-0 text-white/45 transition-transform duration-200"
+                    [class.-rotate-90]="!isExpanded(entry.label)"
+                    aria-hidden="true"
+                  ></svg>
+                </button>
+
+                @if (isExpanded(entry.label)) {
+                  <ul [id]="'nav-group-' + i" class="mt-1 ml-5 space-y-1 border-l border-white/10 pl-3">
+                    @for (child of entry.children; track child.route) {
+                      <li>
+                        <a
+                          [routerLink]="child.route"
+                          routerLinkActive="!bg-white/10 !text-white [&>svg]:!text-white"
+                          class="group flex items-center gap-3 rounded-xl px-3.5 py-2.5 text-sm font-medium text-white/70 transition-colors duration-200 hover:bg-white/10 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent [&>svg]:text-white/55 [&>svg]:transition-colors hover:[&>svg]:text-white"
+                        >
+                          <svg
+                            [lucideIcon]="child.icon"
+                            class="h-5 w-5 shrink-0"
+                            aria-hidden="true"
+                          ></svg>
+                          <span>{{ child.label }}</span>
+                        </a>
+                      </li>
+                    }
+                  </ul>
+                }
+              } @else {
+                <!-- Standalone link -->
+                <a
+                  [routerLink]="entry.route"
+                  routerLinkActive="!bg-white/10 !text-white [&>svg]:!text-white"
+                  class="group flex items-center gap-3 rounded-xl px-3.5 py-2.5 text-sm font-medium text-white/70 transition-colors duration-200 hover:bg-white/10 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent [&>svg]:text-white/55 [&>svg]:transition-colors hover:[&>svg]:text-white"
+                >
+                  <svg [lucideIcon]="entry.icon" class="h-5 w-5 shrink-0" aria-hidden="true"></svg>
+                  <span>{{ entry.label }}</span>
+                </a>
+              }
             </li>
           }
         </ul>
