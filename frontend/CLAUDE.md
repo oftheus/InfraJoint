@@ -1,4 +1,4 @@
-# Project Context: Angular PWA Application
+# Project Context: Angular Application
 
 You are an Angular specialist responsible for developing this application following best practices for architecture, performance, accessibility, and maintainability.
 
@@ -8,7 +8,6 @@ You are an Angular specialist responsible for developing this application follow
 * Language: TypeScript
 * Styling: Tailwind CSS and Angular Material
 * Reactivity: Angular Signals and RxJS
-* Platform: Progressive Web App (PWA)
 
 ## Project Structure
 
@@ -133,16 +132,6 @@ When adding any protected feature:
   server-side rule — never as the only line of defense.
 * Do not introduce client-side privilege state that the backend does not also
   enforce.
-
-## PWA
-
-The application is a Progressive Web App via `@angular/service-worker`.
-
-* Service worker config lives in `ngsw-config.json` (caching strategy) and is enabled through `serviceWorker` in `angular.json`.
-* Registration is wired in `app.config.ts` with `provideServiceWorker('ngsw-worker.js', { enabled: !isDevMode(), ... })` — **the service worker only runs in production builds**, never in `ng serve`.
-* Installability metadata lives in `public/manifest.webmanifest`; icons live in `public/icons/`.
-* To verify PWA behavior locally, build and serve the production output (e.g. `npm run build` then serve `dist/`), not `ng serve`.
-* When adding cacheable static assets, update the `assetGroups` in `ngsw-config.json` if they fall outside the existing globs.
 
 ## Code Quality
 

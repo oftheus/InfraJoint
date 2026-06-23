@@ -59,7 +59,7 @@ export const appRoutes: Routes = [
     ],
   },
   {
-    path: '**',
+    path: '**', // redirect any unknown URL to the home page.
     redirectTo: '',
   },
 ];
