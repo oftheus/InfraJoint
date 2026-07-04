@@ -11,6 +11,7 @@ import { isPlatformBrowser } from '@angular/common';
 import type {
   AuthResponse,
   AuthTokenResponsePassword,
+  OAuthResponse,
   Session,
   User,
 } from '@supabase/supabase-js';
@@ -183,6 +184,22 @@ export class AuthService {
       // Forwarded to `raw_user_meta_data`; the `handle_new_user` trigger reads
       // `full_name` from it to populate the profile row.
       options: { data: { full_name: fullName } },
+    });
+  }
+
+  /**
+   * Starts the Google OAuth flow. This is a full-page redirect to Google and
+   * back to `/auth/callback`, where the SDK detects the session from the URL
+   * (`detectSessionInUrl`) and `onAuthStateChange` fires `SIGNED_IN`.
+   *
+   * The same call handles both sign-in and sign-up: a first-time Google user is
+   * created automatically, and the `handle_new_user` trigger populates the
+   * profile from the metadata Google returns (`full_name`, `avatar_url`).
+   */
+  signInWithGoogle(): Promise<OAuthResponse> {
+    return this.supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: { redirectTo: `${window.location.origin}/auth/callback` },
     });
   }
 

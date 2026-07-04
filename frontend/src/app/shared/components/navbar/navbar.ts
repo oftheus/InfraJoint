@@ -7,7 +7,6 @@ import {
   OnDestroy,
   PLATFORM_ID,
   ViewChild,
-  computed,
   inject,
   input,
   signal,
@@ -17,10 +16,11 @@ import { RouterLink } from '@angular/router';
 import { LucideDynamicIcon } from '@lucide/angular';
 
 import { AuthService } from '../../../core/auth/auth.service';
+import { UserAvatar } from '../user-avatar/user-avatar';
 
 @Component({
   selector: 'app-navbar',
-  imports: [RouterLink, NgOptimizedImage, LucideDynamicIcon],
+  imports: [RouterLink, NgOptimizedImage, LucideDynamicIcon, UserAvatar],
   templateUrl: './navbar.html',
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: {
@@ -41,18 +41,6 @@ export class Navbar implements AfterViewInit, OnDestroy {
   protected readonly drawerOpen = signal(false);
 
   protected readonly isAuthenticated = this.auth.isAuthenticated;
-  protected readonly profile = this.auth.profile;
-
-  /** Initials fallback shown when the profile has no avatar image. */
-  protected readonly initials = computed(() => {
-    const parts = (this.profile()?.full_name ?? '').trim().split(/\s+/).filter(Boolean);
-    if (parts.length === 0) {
-      return '?';
-    }
-    const first = parts[0][0];
-    const last = parts.length > 1 ? parts[parts.length - 1][0] : '';
-    return (first + last).toUpperCase();
-  });
 
   protected toggleDrawer(): void {
     if (this.drawerOpen()) {

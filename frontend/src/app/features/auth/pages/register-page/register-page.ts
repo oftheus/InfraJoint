@@ -31,6 +31,24 @@ export class RegisterPage {
     this.showPassword.update((value) => !value);
   }
 
+  protected async signInWithGoogle(): Promise<void> {
+    if (this.submitting()) {
+      return;
+    }
+
+    this.submitting.set(true);
+    this.errorMessage.set(null);
+    this.successMessage.set(null);
+
+    const { error } = await this.auth.signInWithGoogle();
+
+    // On success the browser redirects to Google, so this only runs on failure.
+    if (error) {
+      this.errorMessage.set('Não foi possível conectar com o Google. Tente novamente.');
+      this.submitting.set(false);
+    }
+  }
+
   protected async onSubmit(): Promise<void> {
     if (this.form.invalid || this.submitting()) {
       this.form.markAllAsTouched();

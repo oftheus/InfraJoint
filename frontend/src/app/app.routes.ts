@@ -17,6 +17,11 @@ export const appRoutes: Routes = [
     loadChildren: () => import('./features/auth/auth.routes').then((m) => m.registerRoutes),
   },
   {
+    path: 'auth/callback',
+    loadComponent: () =>
+      import('./features/auth/pages/auth-callback/auth-callback').then((m) => m.AuthCallback),
+  },
+  {
     // Authenticated area: shares the sidebar layout shell.
     path: '',
     canActivate: [authGuard],

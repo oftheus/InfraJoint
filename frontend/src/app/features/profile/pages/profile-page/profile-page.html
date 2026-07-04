@@ -21,11 +21,11 @@
         <div
           class="flex h-24 w-24 shrink-0 items-center justify-center overflow-hidden rounded-full bg-brand-50 ring-4 ring-white shadow-[0_8px_24px_rgba(27,58,87,0.12)]"
         >
-          @if (avatarSrc(); as src) {
-            <img [src]="src" alt="Foto de perfil" class="h-full w-full object-cover" />
-          } @else {
-            <span class="text-2xl font-semibold text-accent">{{ initials() }}</span>
-          }
+          <app-user-avatar
+            [src]="previewUrl()"
+            [nameOverride]="form.controls.fullName.value"
+            textClass="text-2xl font-semibold text-accent"
+          />
         </div>
 
         <div class="flex flex-col items-center gap-2 sm:items-start">

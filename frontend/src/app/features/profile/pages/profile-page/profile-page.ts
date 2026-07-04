@@ -11,6 +11,7 @@ import { toSignal } from '@angular/core/rxjs-interop';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 
 import { AuthService } from '../../../../core/auth/auth.service';
+import { UserAvatar } from '../../../../shared/components/user-avatar/user-avatar';
 
 type SaveState = 'idle' | 'saving' | 'success' | 'error';
 
@@ -19,7 +20,7 @@ const MAX_AVATAR_BYTES = 2 * 1024 * 1024;
 
 @Component({
   selector: 'app-profile-page',
-  imports: [ReactiveFormsModule],
+  imports: [ReactiveFormsModule, UserAvatar],
   templateUrl: './profile-page.html',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
@@ -60,23 +61,6 @@ export class ProfilePage {
     const emailChanged =
       email.trim().toLowerCase() !== (this.user()?.email ?? '').toLowerCase();
     return nameChanged || emailChanged || this.selectedFile() !== null;
-  });
-
-  /** Avatar shown in the page: live preview, else the saved profile picture. */
-  protected readonly avatarSrc = computed(
-    () => this.previewUrl() ?? this.profile()?.avatar_url ?? null,
-  );
-
-  /** Initials fallback when there is no avatar image. */
-  protected readonly initials = computed(() => {
-    const name = this.form.controls.fullName.value || this.profile()?.full_name || '';
-    const parts = name.trim().split(/\s+/).filter(Boolean);
-    if (parts.length === 0) {
-      return (this.user()?.email?.[0] ?? '?').toUpperCase();
-    }
-    const first = parts[0][0];
-    const last = parts.length > 1 ? parts[parts.length - 1][0] : '';
-    return (first + last).toUpperCase();
   });
 
   constructor() {

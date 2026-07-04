@@ -13,6 +13,7 @@ import { filter } from 'rxjs';
 
 import { AuthService } from '../../../core/auth/auth.service';
 import { UserRole } from '../../../core/auth/profile.model';
+import { UserAvatar } from '../../components/user-avatar/user-avatar';
 
 /** A single clickable entry in the sidebar navigation. */
 interface NavLink {
@@ -58,6 +59,7 @@ type NavEntry = NavLink | NavGroup;
     RouterLinkActive,
     RouterOutlet,
     LucideDynamicIcon,
+    UserAvatar,
   ],
   templateUrl: './auth-shell.html',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -162,17 +164,6 @@ export class AuthShell {
     }
     const email = this.user()?.email;
     return email ? email.split('@')[0] : 'usuário';
-  });
-
-  /** Initials fallback shown when the profile has no avatar image. */
-  protected readonly initials = computed(() => {
-    const parts = (this.profile()?.full_name ?? '').trim().split(/\s+/).filter(Boolean);
-    if (parts.length === 0) {
-      return (this.user()?.email?.[0] ?? '?').toUpperCase();
-    }
-    const first = parts[0][0];
-    const last = parts.length > 1 ? parts[parts.length - 1][0] : '';
-    return (first + last).toUpperCase();
   });
 
   constructor() {
