@@ -1,6 +1,14 @@
 @config '../tailwind.config.cjs';
 @import 'tailwindcss';
 
+@layer base {
+  /* Tailwind v4 preflight leaves buttons with cursor: default. */
+  button:not(:disabled),
+  [role='button']:not(:disabled) {
+    cursor: pointer;
+  }
+}
+
 @layer components {
   .page-container {
     @apply mx-auto w-full max-w-[1480px] px-4 sm:px-6 lg:px-8;

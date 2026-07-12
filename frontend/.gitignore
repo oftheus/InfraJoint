@@ -43,5 +43,8 @@ __screenshots__/
 .DS_Store
 Thumbs.db
 
+# Local research captures (subject thermal data), reference Python & protocol — not versioned
+/scripts/
+
 **/.agents/
 **/skills-lock.json
