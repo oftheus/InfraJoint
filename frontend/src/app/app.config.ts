@@ -58,7 +58,6 @@ import {
 
 import { appRoutes } from './app.routes';
 import { AuthService } from './core/auth/auth.service';
-import { provideClientHydration, withEventReplay } from '@angular/platform-browser';
 
 export const appConfig: ApplicationConfig = {
   providers: [
@@ -75,7 +74,6 @@ export const appConfig: ApplicationConfig = {
     provideAppInitializer(() => {
       inject(AuthService);
     }),
-    provideClientHydration(withEventReplay()),
     provideLucideIcons(
       LucideArrowLeft,
       LucideArrowRight,
