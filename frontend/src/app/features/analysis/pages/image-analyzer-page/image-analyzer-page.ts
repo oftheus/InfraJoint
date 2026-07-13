@@ -20,8 +20,25 @@ import {
 } from '../../image-analyzer/alignment';
 import { MarkerPicker } from '../../image-analyzer/components/marker-picker/marker-picker';
 import { OverlayCanvas } from '../../image-analyzer/components/overlay-canvas/overlay-canvas';
+import { RewarmingChart } from '../../image-analyzer/components/rewarming-chart/rewarming-chart';
+import { SequenceImport } from '../../image-analyzer/components/sequence-import/sequence-import';
+import { Timeline } from '../../image-analyzer/components/timeline/timeline';
 import { UploadCard } from '../../image-analyzer/components/upload-card/upload-card';
+import { imageToCanvas, imageToPixels, loadImage } from '../../image-analyzer/dom-images';
 import { HandLandmarksService } from '../../image-analyzer/hand-landmarks.service';
+import {
+  CURVE_STATISTIC_LABELS,
+  CurveFrame,
+  CurveStatistic,
+  buildRewarmingSeries,
+} from '../../image-analyzer/rewarming-curve';
+import { SequenceService } from '../../image-analyzer/sequence.service';
+import {
+  SequenceCapture,
+  captureDisplayLabel,
+  formatSeconds,
+} from '../../image-analyzer/sequence.model';
+import { buildCsvSkinMask, isSkinNeighborhood } from '../../image-analyzer/skin-mask';
 import {
   AffineMatrix,
   AlignmentMode,
@@ -34,7 +51,6 @@ import {
   ThermalMatrix,
 } from '../../image-analyzer/image-analyzer.model';
 import { polishTranslation } from '../../image-analyzer/alignment-polish';
-import { isSkinRgb } from '../../image-analyzer/color-tests';
 import { refineWithFiducials } from '../../image-analyzer/fiducial-markers';
 import {
   JOINT_ROI_DEFS,
@@ -86,7 +102,7 @@ interface JointRow {
 }
 
 /** How the automatic alignment was actually solved (drives the active-method label). */
-type AutoMethod = 'fiducial' | 'silhouette';
+type AutoMethod = 'fiducial' | 'silhouette' | 'manual';
 
 /** Fitted RGB→CSV scale is ~0.5; reject fits far outside that (core.py's diagnostic). */
 const AUTO_SCALE_MIN = 0.3;
@@ -99,8 +115,6 @@ function withinAutoScale(scale: number): boolean {
 const LEFT_ROI_COLOR = '#22d3ee';
 const RIGHT_ROI_COLOR = '#f59e0b';
 
-/** Skin-test margin in RGB px: the mapped point and this neighborhood must be skin. */
-const SKIN_MARGIN_PX = 2;
 /** Below this skin coverage a joint ROI is flagged as unreliable. */
 const MIN_SKIN_COVERAGE = 0.35;
 
@@ -116,7 +130,16 @@ const MIN_SKIN_COVERAGE = 0.35;
  */
 @Component({
   selector: 'app-image-analyzer-page',
-  imports: [LucideDynamicIcon, MarkerPicker, OverlayCanvas, UploadCard],
+  imports: [
+    LucideDynamicIcon,
+    MarkerPicker,
+    OverlayCanvas,
+    RewarmingChart,
+    SequenceImport,
+    Timeline,
+    UploadCard,
+  ],
+  providers: [SequenceService],
   templateUrl: './image-analyzer-page.html',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
@@ -191,6 +214,8 @@ export class ImageAnalyzerPage {
         return 'Automático (marcadores)';
       case 'silhouette':
         return 'Automático (silhuetas)';
+      case 'manual':
+        return 'Calibração manual';
       default:
         return 'Automático';
     }
@@ -224,6 +249,65 @@ export class ImageAnalyzerPage {
   protected readonly analysisStarted = signal(false);
   /** UI-only: the help/tutorial dialog is open. */
   protected readonly helpOpen = signal(false);
+
+  // --- Temporal sequence -----------------------------------------------------
+  protected readonly sequenceService = inject(SequenceService);
+  /** Upload screen path: one capture (current flow) or a protocol sequence. */
+  protected readonly uploadMode = signal<'single' | 'sequence'>('single');
+  /** True while the viewer is showing a processed sequence. */
+  protected readonly sequenceActive = signal(false);
+  /** Index of the capture shown in the viewer (0 = baseline). */
+  protected readonly activeCaptureIndex = signal(0);
+  /** Viewer tab in sequence mode: the frame image or the rewarming curves. */
+  protected readonly viewerTab = signal<'image' | 'curves'>('image');
+  /** Joints plotted on the rewarming curve (landmark ids; default MCP 3). */
+  protected readonly curveJointIds = signal<readonly number[]>([9]);
+  protected readonly curveStatistic = signal<CurveStatistic>('mean');
+  protected readonly curveStatistics = Object.entries(CURVE_STATISTIC_LABELS) as readonly [
+    CurveStatistic,
+    string,
+  ][];
+  protected readonly jointDefs = JOINT_ROI_DEFS;
+  protected readonly captureDisplayLabel = captureDisplayLabel;
+  protected readonly formatSeconds = formatSeconds;
+
+  protected readonly activeSequenceCapture = computed<SequenceCapture | null>(() =>
+    this.sequenceActive()
+      ? (this.sequenceService.captures()[this.activeCaptureIndex()] ?? null)
+      : null,
+  );
+  /** Playhead position on the curve (the active capture's time). */
+  protected readonly activeCaptureTime = computed(
+    () => this.activeSequenceCapture()?.timeSeconds ?? null,
+  );
+
+  /** Every capture's joint ROIs, re-anchored per frame — feeds the curves. */
+  private readonly curveFrames = computed<CurveFrame[]>(() => {
+    if (!this.sequenceActive()) {
+      return [];
+    }
+    const sizeScale = this.jointSizePct() / 100;
+    const ignoreBackground = this.ignoreBackground();
+    return this.sequenceService.captures().map((capture) => ({
+      timeSeconds: capture.timeSeconds,
+      kind: capture.kind,
+      rois:
+        capture.alignment && capture.hands.length > 0 && capture.matrix.width > 0
+          ? captureJointRois(capture.hands, capture.matrix, capture.alignment, {
+              sizeScale,
+              skinTest:
+                ignoreBackground && capture.skinMask
+                  ? maskSkinTest(capture.skinMask, capture.matrix.width, capture.matrix.height)
+                  : undefined,
+              overrides: capture.jointOverrides,
+            })
+          : [],
+    }));
+  });
+
+  protected readonly rewarmingSeries = computed(() =>
+    buildRewarmingSeries(this.curveFrames(), this.curveJointIds(), this.curveStatistic()),
+  );
   protected readonly alphaPct = signal(50);
   protected readonly shape = signal<RoiShape>('circle');
   /** All user-drawn ROIs, in RGB pixel coordinates. */
@@ -300,23 +384,21 @@ export class ImageAnalyzerPage {
     // boundary) with a small margin against alignment jitter. The test is
     // color-based, not temperature-based — genuinely cold fingers still count.
     // With it off, every cell of the ROI footprint is measured (background too).
+    // In sequence mode the active capture's baked mask replaces the live
+    // sampling, so table and curve statistics agree exactly.
     let skinTest: ((csvX: number, csvY: number) => boolean) | undefined;
-    const rgb = this.rgbData();
-    const toRgb = invertAffine(alignment);
-    if (this.ignoreBackground() && rgb && toRgb) {
-      skinTest = (csvX, csvY) => {
-        const p = applyAffine(toRgb, csvX, csvY);
-        const rx = p.x | 0;
-        const ry = p.y | 0;
-        for (let dy = -SKIN_MARGIN_PX; dy <= SKIN_MARGIN_PX; dy++) {
-          for (let dx = -SKIN_MARGIN_PX; dx <= SKIN_MARGIN_PX; dx++) {
-            if (!isSkinPixel(rgb, rx + dx, ry + dy)) {
-              return false;
-            }
-          }
-        }
-        return true;
-      };
+    if (this.ignoreBackground()) {
+      const capture = this.activeSequenceCapture();
+      const rgb = this.rgbData();
+      const toRgb = invertAffine(alignment);
+      if (capture?.skinMask) {
+        skinTest = maskSkinTest(capture.skinMask, capture.matrix.width, capture.matrix.height);
+      } else if (rgb && toRgb) {
+        skinTest = (csvX, csvY) => {
+          const p = applyAffine(toRgb, csvX, csvY);
+          return isSkinNeighborhood(rgb, p.x | 0, p.y | 0);
+        };
+      }
     }
 
     return captureJointRois(hands, matrix, alignment, {
@@ -489,6 +571,12 @@ export class ImageAnalyzerPage {
    * landmarks no longer correspond to what is on screen.
    */
   private afterSourceChange(): void {
+    // Loading an individual file replaces whatever dataset was active —
+    // including a processed sequence (a new import never needs a reload).
+    if (this.sequenceActive() || this.sequenceService.status() !== 'idle') {
+      this.sequenceActive.set(false);
+      this.sequenceService.reset();
+    }
     this.error.set(null);
     this.info.set(null);
     this.rois.set([]);
@@ -526,6 +614,143 @@ export class ImageAnalyzerPage {
   /** Back to the upload screen so the user can swap the source files. */
   protected newAnalysis(): void {
     this.analysisStarted.set(false);
+    if (this.sequenceActive()) {
+      this.uploadMode.set('sequence');
+    }
+  }
+
+  // --- Temporal sequence -------------------------------------------------------
+
+  protected setUploadMode(mode: 'single' | 'sequence'): void {
+    this.uploadMode.set(mode);
+  }
+
+  /** Opens the processed sequence in the viewer, starting at the baseline. */
+  protected async enterSequenceAnalysis(): Promise<void> {
+    const captures = this.sequenceService.captures();
+    if (captures.length === 0) {
+      return;
+    }
+    if (this.sequenceActive()) {
+      // Coming back from the upload screen: keep the viewer state as-is.
+      this.analysisStarted.set(true);
+      return;
+    }
+    this.sequenceActive.set(true);
+    this.viewerTab.set('image');
+    this.rois.set([]);
+    this.calibrating.set(false);
+    await this.activateCapture(0);
+    this.analysisStarted.set(true);
+    const issues = captures.filter((c) => c.issue !== null).length;
+    this.info.set(
+      `Sequência ${this.sequenceService.sessionLabel()} carregada: ${captures.length} captura(s), ` +
+        `intervalo de ${this.sequenceService.intervalSeconds()} s. As ROIs articulares foram ` +
+        `detectadas em cada captura. Use a linha do tempo para navegar.` +
+        (issues > 0 ? ` ⚠ ${issues} captura(s) com problema.` : ''),
+    );
+  }
+
+  /** Timeline/curve navigation: shows another capture in the viewer. */
+  protected onCaptureIndexChange(index: number): void {
+    if (this.sequenceActive() && index !== this.activeCaptureIndex()) {
+      void this.activateCapture(index);
+    }
+  }
+
+  /** Curve click → jump to the capture nearest to the clicked time. */
+  protected onCurveTimeSelected(timeSeconds: number): void {
+    const captures = this.sequenceService.captures();
+    let best = 0;
+    let bestDist = Infinity;
+    captures.forEach((capture, i) => {
+      const dist = Math.abs(capture.timeSeconds - timeSeconds);
+      if (dist < bestDist) {
+        bestDist = dist;
+        best = i;
+      }
+    });
+    this.onCaptureIndexChange(best);
+  }
+
+  protected setViewerTab(tab: 'image' | 'curves'): void {
+    this.viewerTab.set(tab);
+  }
+
+  protected toggleCurveJoint(landmarkId: number): void {
+    this.curveJointIds.update((ids) =>
+      ids.includes(landmarkId) ? ids.filter((id) => id !== landmarkId) : [...ids, landmarkId],
+    );
+  }
+
+  protected setCurveStatistic(statistic: CurveStatistic): void {
+    this.curveStatistic.set(statistic);
+  }
+
+  /** Loads one capture's assets into the viewer signals (the "active frame"). */
+  private async activateCapture(index: number): Promise<void> {
+    const capture = this.sequenceService.captures()[index];
+    if (!capture) {
+      return;
+    }
+    this.activeCaptureIndex.set(index);
+    let decoded;
+    try {
+      decoded = await this.sequenceService.decode(index);
+    } catch {
+      this.error.set(`Não foi possível decodificar a captura ${captureDisplayLabel(capture)}.`);
+      return;
+    }
+    // The user may have stepped again while this frame was decoding.
+    if (this.activeCaptureIndex() !== index) {
+      return;
+    }
+    this.rgbImage.set(decoded.optical);
+    this.jpegCanvas.set(decoded.thermal);
+    this.matrix.set(capture.matrix.width > 0 ? capture.matrix : null);
+    this.autoMatrix.set(capture.alignment);
+    this.autoMethod.set(capture.autoMethod === 'manual' ? 'manual' : capture.autoMethod);
+    this.manualMatrix.set(null);
+    this.mode.set('auto');
+    this.detectedHands.set(capture.hands.length > 0 ? capture.hands : null);
+    this.jointOverrides.set(new Map(capture.jointOverrides));
+    this.selectedJointKey.set(null);
+    this.selectedRoiId.set(null);
+    this.rgbData.set(null); // the baked skin mask replaces live sampling
+    this.error.set(capture.issue);
+    this.sequenceService.prefetch(index);
+  }
+
+  /** Persists the active frame's joint adjustments into its capture record. */
+  private syncCaptureOverrides(): void {
+    if (this.sequenceActive()) {
+      this.sequenceService.updateCapture(this.activeCaptureIndex(), {
+        jointOverrides: new Map(this.jointOverrides()),
+      });
+    }
+  }
+
+  /** Persists a re-alignment of the active frame (mask rebuilt to match). */
+  private syncCaptureAlignment(
+    alignment: AffineMatrix,
+    method: AutoMethod,
+    pixels: ImageData | null,
+  ): void {
+    if (!this.sequenceActive()) {
+      return;
+    }
+    const capture = this.sequenceService.captures()[this.activeCaptureIndex()];
+    const toRgb = invertAffine(alignment);
+    const skinMask =
+      pixels && toRgb && capture
+        ? buildCsvSkinMask(pixels, capture.matrix.width, capture.matrix.height, toRgb)
+        : (capture?.skinMask ?? null);
+    this.sequenceService.updateCapture(this.activeCaptureIndex(), {
+      alignment,
+      autoMethod: method,
+      skinMask,
+      issue: null,
+    });
   }
 
   protected openHelp(): void {
@@ -614,6 +839,7 @@ export class ImageAnalyzerPage {
       );
       return next;
     });
+    this.syncCaptureOverrides();
   }
 
   /** Resets one joint ROI back to its detected landmark position and default size. */
@@ -629,11 +855,13 @@ export class ImageAnalyzerPage {
       next.delete(key);
       return next;
     });
+    this.syncCaptureOverrides();
   }
 
   /** Clears every manual joint adjustment, restoring the detected ROIs. */
   protected resetAllJoints(): void {
     this.jointOverrides.set(new Map());
+    this.syncCaptureOverrides();
   }
 
   // --- Automatic alignment ---------------------------------------------------
@@ -690,6 +918,7 @@ export class ImageAnalyzerPage {
       this.autoMatrix.set(fitted);
       this.autoMethod.set(fiducial ? 'fiducial' : 'silhouette');
       this.mode.set('auto');
+      this.syncCaptureAlignment(fitted, fiducial ? 'fiducial' : 'silhouette', pixels);
       this.info.set(
         fiducial
           ? `Alinhamento automático pelos marcadores fiduciais ` +
@@ -723,6 +952,12 @@ export class ImageAnalyzerPage {
       // New landmarks invalidate any manual adjustments to the previous ROIs.
       this.jointOverrides.set(new Map());
       this.selectedJointKey.set(null);
+      if (this.sequenceActive()) {
+        this.sequenceService.updateCapture(this.activeCaptureIndex(), {
+          hands,
+          jointOverrides: new Map(),
+        });
+      }
       if (!this.rgbData()) {
         const pixels = imageToCanvas(rgb)
           .getContext('2d')
@@ -732,7 +967,7 @@ export class ImageAnalyzerPage {
       this.detectedHands.set(hands);
       const sides = hands.map((h) => h.side.toLowerCase()).join(' e ');
       this.info.set(
-        `${hands.length === 2 ? 'Duas mãos' : 'Uma mão'} detectada(s) (${sides}) — ` +
+        `${hands.length === 2 ? 'Duas mãos' : 'Uma mão'} detectada(s) (${sides}): ` +
           `${hands.length * JOINT_ROI_DEFS.length} ROIs articulares capturadas. As temperaturas ` +
           'seguem o alinhamento ativo e recalculam se ele mudar.',
       );
@@ -805,6 +1040,12 @@ export class ImageAnalyzerPage {
     this.manualMatrix.set(matrix);
     this.mode.set('manual');
     this.calibrating.set(false);
+    if (this.sequenceActive()) {
+      // The frame's record (and its skin mask) must follow the new alignment
+      // so the rewarming curve reads this capture with the corrected mapping.
+      const rgb = this.rgbImage();
+      this.syncCaptureAlignment(matrix, 'manual', rgb ? imageToPixels(rgb) : null);
+    }
     this.info.set(
       `Calibração manual aplicada com ${this.pairedCount()} pares de pontos. ` +
         'As temperaturas passam a usar este alinhamento.',
@@ -836,37 +1077,17 @@ function formatFileSize(bytes: number): string {
   return `${(kb / 1024).toFixed(1).replace('.', ',')} MB`;
 }
 
-function loadImage(file: File): Promise<HTMLImageElement> {
-  return new Promise((resolve, reject) => {
-    const url = URL.createObjectURL(file);
-    const img = new Image();
-    img.onload = () => {
-      URL.revokeObjectURL(url);
-      resolve(img);
-    };
-    img.onerror = () => {
-      URL.revokeObjectURL(url);
-      reject(new Error(`Falha ao decodificar ${file.name}`));
-    };
-    img.src = url;
-  });
-}
-
-/** Whether an RGB pixel looks like skin (any tone; see `isSkinRgb`). */
-function isSkinPixel(image: ImageData, x: number, y: number): boolean {
-  if (x < 0 || y < 0 || x >= image.width || y >= image.height) {
-    return false;
-  }
-  const o = (y * image.width + x) * 4;
-  return isSkinRgb(image.data[o], image.data[o + 1], image.data[o + 2]);
-}
-
-function imageToCanvas(img: HTMLImageElement): HTMLCanvasElement {
-  const canvas = document.createElement('canvas');
-  canvas.width = img.naturalWidth;
-  canvas.height = img.naturalHeight;
-  canvas.getContext('2d')?.drawImage(img, 0, 0);
-  return canvas;
+/** Skin test backed by a capture's baked CSV-space mask. */
+function maskSkinTest(
+  mask: Uint8Array,
+  width: number,
+  height: number,
+): (csvX: number, csvY: number) => boolean {
+  return (csvX, csvY) => {
+    const x = csvX | 0;
+    const y = csvY | 0;
+    return x >= 0 && y >= 0 && x < width && y < height && mask[y * width + x] === 1;
+  };
 }
 
 function formatCelsius(value: number): string {

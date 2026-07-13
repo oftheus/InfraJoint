@@ -117,6 +117,40 @@ O JPEG da câmera é um *upsampling* de 1,5× da matriz CSV.
   `public/mediapipe/` para funcionar offline, com carregamento lazy no primeiro
   uso.
 
+### Sequência temporal (protocolo de reaquecimento)
+
+Além da análise individual, o módulo importa uma **sessão completa do
+protocolo** (pasta tipo `V051/`): 1 baseline (`Est`, t₀ = 0) + ~20 capturas
+dinâmicas (`Din01…`) em intervalo fixo (padrão 15 s, editável na conferência).
+
+- **[`sequence.model.ts`](sequence.model.ts)** — tipos da sequência
+  (`ReviewCapture`, `SequenceReview`, `SequenceCapture`) e helpers de rótulo/
+  tempo.
+- **[`sequence-files.ts`](sequence-files.ts)** — agrupamento do lote pelo nome
+  dos arquivos (`{Sujeito}_{Trial}_{Est|DinNN}[_DAR|_IR].{jpeg|csv}`);
+  originais da câmera (sem sufixo) e planilhas clínicas são ignorados e apenas
+  contados.
+- **[`sequence.service.ts`](sequence.service.ts)** — store (signals) + pipeline
+  de pré-processamento por captura: alinhamento (silhueta → fiduciais →
+  polish), landmarks, **máscara de pele em espaço CSV** e miniatura térmica.
+  Só os artefatos leves ficam em memória (~2,7 MB/captura); as fotos são
+  decodificadas sob demanda com cache LRU. Provido pela página (liberado ao
+  sair). `reset()` permite nova importação sem recarregar a aplicação.
+- **[`skin-mask.ts`](skin-mask.ts)** — teste de pele compartilhado (margem
+  ±2 px) e o *bake* da máscara por célula CSV, para as estatísticas da curva
+  concordarem exatamente com a tabela.
+- **[`rewarming-curve.ts`](rewarming-curve.ts)** — séries da **Curva de
+  Reaquecimento** (temperatura × tempo por articulação/lado, baseline em t₀,
+  lacunas onde a captura falhou).
+- **[`dom-images.ts`](dom-images.ts)** — helpers de decodificação
+  (File → imagem → canvas/pixels/miniatura) compartilhados pela página e pelo
+  serviço.
+
+As ROIs articulares são **re-detectadas em cada captura** (as mãos sofrem
+pequenas mexidas involuntárias); ajustes manuais por junta valem para a captura
+ativa. O visor em modo sequência ganha abas **Imagem | Curva de Reaquecimento**
+e uma **linha do tempo** (miniaturas + slider + play/pause + setas).
+
 ### Componentes ([`components/`](components/))
 
 - **[`overlay-canvas`](components/overlay-canvas/overlay-canvas.ts)** — desenha a
@@ -128,6 +162,17 @@ O JPEG da câmera é um *upsampling* de 1,5× da matriz CSV.
 - **[`upload-card`](components/upload-card/upload-card.ts)** — área de upload
   arrastar-e-soltar de um arquivo, com estados de hover, drag-over, carregando,
   sucesso (nome/tamanho + trocar arquivo) e erro.
+- **[`sequence-import`](components/sequence-import/sequence-import.ts)** —
+  importação em lote da sessão: seletor/drop de pasta (com travessia de
+  diretórios), tela de conferência (tripletos completos/faltando, arquivos
+  ignorados, intervalo) e progresso do processamento com cancelamento.
+- **[`timeline`](components/timeline/timeline.ts)** — navegação da sequência:
+  filmstrip de miniaturas térmicas (baseline fixada), slider, play/pause com
+  velocidade e navegação por teclado (←/→/espaço).
+- **[`rewarming-chart`](components/rewarming-chart/rewarming-chart.ts)** —
+  Curva de Reaquecimento em Chart.js: uma linha por (lado, articulação),
+  referência tracejada no valor basal, playhead sincronizado com a linha do
+  tempo e clique-para-navegar.
 
 ### Estado
 

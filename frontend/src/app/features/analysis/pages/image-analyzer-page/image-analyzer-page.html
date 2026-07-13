@@ -5,22 +5,36 @@
       <header class="flex flex-wrap items-center justify-between gap-4">
         <div class="min-w-0">
           <h1 class="text-2xl font-bold tracking-tight text-primary">Analisador de imagens</h1>
-          <p class="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted">
-            <span class="inline-flex items-center gap-1.5 truncate" title="Fotografia óptica carregada">
-              <svg [lucideIcon]="'image'" class="h-3.5 w-3.5 shrink-0" aria-hidden="true"></svg>
-              {{ rgbFileName() }}
-            </span>
-            <span class="inline-flex items-center gap-1.5 truncate" title="Matriz térmica (CSV) carregada">
-              <svg [lucideIcon]="'file-spreadsheet'" class="h-3.5 w-3.5 shrink-0" aria-hidden="true"></svg>
-              {{ csvFileName() }}
-            </span>
-            @if (jpegFileName(); as jpegName) {
-              <span class="inline-flex items-center gap-1.5 truncate" title="Imagem térmica carregada">
-                <svg [lucideIcon]="'thermometer'" class="h-3.5 w-3.5 shrink-0" aria-hidden="true"></svg>
-                {{ jpegName }}
+          @if (activeSequenceCapture(); as capture) {
+            <p class="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted">
+              <span class="inline-flex items-center gap-1.5" title="Sequência temporal carregada">
+                <svg [lucideIcon]="'images'" class="h-3.5 w-3.5 shrink-0" aria-hidden="true"></svg>
+                Sequência {{ sequenceService.sessionLabel() }}
               </span>
-            }
-          </p>
+              <span class="inline-flex items-center gap-1.5 tabular-nums" title="Captura ativa na linha do tempo">
+                <svg [lucideIcon]="'thermometer'" class="h-3.5 w-3.5 shrink-0" aria-hidden="true"></svg>
+                {{ captureDisplayLabel(capture) }} · t = {{ formatSeconds(capture.timeSeconds) }}
+              </span>
+              <span>{{ sequenceService.captures().length }} capturas · intervalo {{ sequenceService.intervalSeconds() }} s</span>
+            </p>
+          } @else {
+            <p class="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted">
+              <span class="inline-flex items-center gap-1.5 truncate" title="Fotografia óptica carregada">
+                <svg [lucideIcon]="'image'" class="h-3.5 w-3.5 shrink-0" aria-hidden="true"></svg>
+                {{ rgbFileName() }}
+              </span>
+              <span class="inline-flex items-center gap-1.5 truncate" title="Matriz térmica (CSV) carregada">
+                <svg [lucideIcon]="'file-spreadsheet'" class="h-3.5 w-3.5 shrink-0" aria-hidden="true"></svg>
+                {{ csvFileName() }}
+              </span>
+              @if (jpegFileName(); as jpegName) {
+                <span class="inline-flex items-center gap-1.5 truncate" title="Imagem térmica carregada">
+                  <svg [lucideIcon]="'thermometer'" class="h-3.5 w-3.5 shrink-0" aria-hidden="true"></svg>
+                  {{ jpegName }}
+                </span>
+              }
+            </p>
+          }
         </div>
         <div class="flex shrink-0 items-center gap-2">
           <button
@@ -369,9 +383,9 @@
 
                   <div class="mt-4">
                     <div class="flex items-center justify-between gap-2">
-                      <label id="ignore-bg-label" class="text-sm font-medium text-primary">
+                      <span id="ignore-bg-label" class="text-sm font-medium text-primary">
                         Ignorar fundo
-                      </label>
+                      </span>
                       <button
                         type="button"
                         role="switch"
@@ -383,8 +397,8 @@
                         [class.bg-slate-300]="!ignoreBackground()"
                         [title]="
                           ignoreBackground()
-                            ? 'Medindo só a pele — clique para incluir o fundo'
-                            : 'Medindo a região inteira — clique para descartar o fundo'
+                            ? 'Medindo só a pele. Clique para incluir o fundo'
+                            : 'Medindo a região inteira. Clique para descartar o fundo'
                         "
                       >
                         <span
@@ -424,6 +438,39 @@
 
         <!-- ---------- Área central: imagem ---------- -->
         <section class="min-w-0" aria-label="Imagem da análise">
+          @if (sequenceActive() && !calibrating()) {
+            <div
+              class="mb-3 inline-flex items-center gap-1 rounded-xl border border-slate-200 bg-slate-100 p-1"
+              role="tablist"
+              aria-label="Visualização da sequência"
+            >
+              <button
+                type="button"
+                role="tab"
+                class="flex items-center gap-1.5 rounded-lg px-4 py-1.5 text-sm font-medium transition-colors"
+                [class]="viewerTab() === 'image' ? 'bg-white text-primary shadow-sm' : 'text-slate-500 hover:text-primary'"
+                [attr.aria-selected]="viewerTab() === 'image'"
+                (click)="setViewerTab('image')"
+                title="Sobreposição da captura ativa com as ROIs"
+              >
+                <svg [lucideIcon]="'image'" class="h-4 w-4" aria-hidden="true"></svg>
+                Imagem
+              </button>
+              <button
+                type="button"
+                role="tab"
+                class="flex items-center gap-1.5 rounded-lg px-4 py-1.5 text-sm font-medium transition-colors"
+                [class]="viewerTab() === 'curves' ? 'bg-white text-primary shadow-sm' : 'text-slate-500 hover:text-primary'"
+                [attr.aria-selected]="viewerTab() === 'curves'"
+                (click)="setViewerTab('curves')"
+                title="Curva de Reaquecimento: temperatura das articulações ao longo do tempo"
+              >
+                <svg [lucideIcon]="'chart-no-axes-combined'" class="h-4 w-4" aria-hidden="true"></svg>
+                Curva de Reaquecimento
+              </button>
+            </div>
+          }
+
           @if (calibrating() && thermalDisplay(); as display) {
             <div class="rounded-2xl border border-gray-100 bg-white p-4 sm:p-6">
               <h2 class="text-lg font-semibold text-primary">Calibração manual de marcadores</h2>
@@ -458,6 +505,75 @@
                   />
                 </div>
               </div>
+            </div>
+          } @else if (sequenceActive() && viewerTab() === 'curves') {
+            <!-- Curva de Reaquecimento -->
+            <div class="rounded-2xl border border-gray-100 bg-white p-5">
+              <div class="flex flex-wrap items-center justify-between gap-3">
+                <h2 class="text-lg font-semibold text-primary">Curva de Reaquecimento</h2>
+                <p class="text-xs text-muted">
+                  Baseline em t₀ = 0 · linha tracejada = temperatura basal · clique na curva para
+                  ir à captura
+                </p>
+              </div>
+
+              <div class="mt-3 flex flex-wrap items-center gap-x-6 gap-y-3">
+                <div>
+                  <p class="text-xs font-semibold uppercase tracking-wide text-muted">Articulações</p>
+                  <div class="mt-1.5 flex flex-wrap gap-1.5" role="group" aria-label="Articulações na curva">
+                    @for (def of jointDefs; track def.landmarkId) {
+                      <button
+                        type="button"
+                        class="filter-pill px-3 py-1 text-xs"
+                        [class.filter-pill-active]="curveJointIds().includes(def.landmarkId)"
+                        [attr.aria-pressed]="curveJointIds().includes(def.landmarkId)"
+                        (click)="toggleCurveJoint(def.landmarkId)"
+                        [title]="'Mostrar/ocultar ' + def.label + ' na curva (ambas as mãos)'"
+                      >
+                        {{ def.label }}
+                      </button>
+                    }
+                  </div>
+                </div>
+                <div>
+                  <p class="text-xs font-semibold uppercase tracking-wide text-muted">Estatística</p>
+                  <div class="mt-1.5 flex gap-1.5" role="group" aria-label="Estatística da curva">
+                    @for (stat of curveStatistics; track stat[0]) {
+                      <button
+                        type="button"
+                        class="filter-pill px-3 py-1 text-xs"
+                        [class.filter-pill-active]="curveStatistic() === stat[0]"
+                        [attr.aria-pressed]="curveStatistic() === stat[0]"
+                        (click)="setCurveStatistic(stat[0])"
+                        [title]="'Traçar a temperatura ' + stat[1].toLowerCase() + ' de cada ROI'"
+                      >
+                        {{ stat[1] }}
+                      </button>
+                    }
+                  </div>
+                </div>
+                <p class="ml-auto text-xs text-muted">
+                  <span class="mr-3 inline-flex items-center gap-1.5">
+                    <span class="h-2.5 w-2.5 rounded-full bg-cyan-500"></span> Mão esquerda
+                  </span>
+                  <span class="inline-flex items-center gap-1.5">
+                    <span class="h-2.5 w-2.5 rounded-full bg-amber-500"></span> Mão direita
+                  </span>
+                </p>
+              </div>
+
+              <div class="mt-4">
+                <app-rewarming-chart
+                  [series]="rewarmingSeries()"
+                  [activeTime]="activeCaptureTime()"
+                  (timeSelected)="onCurveTimeSelected($event)"
+                />
+              </div>
+              <p class="mt-3 text-xs text-muted">
+                Cada ponto é a estatística da ROI articular naquela captura, com as ROIs
+                reposicionadas pelos landmarks de cada imagem. Capturas com falha de
+                alinhamento/detecção aparecem como lacunas.
+              </p>
             </div>
           } @else {
             <div class="relative">
@@ -500,6 +616,18 @@
             </p>
           }
 
+          @if (sequenceActive() && !calibrating()) {
+            <!-- Linha do tempo da sequência -->
+            <div class="mt-4">
+              <app-timeline
+                [captures]="sequenceService.captures()"
+                [activeIndex]="activeCaptureIndex()"
+                (activeIndexChange)="onCaptureIndexChange($event)"
+              />
+            </div>
+          }
+
+          @if (!sequenceActive() || viewerTab() === 'image') {
           <!-- Resultados das ROIs -->
           <div class="mt-4 rounded-2xl border border-gray-100 bg-white p-5">
             <div class="flex flex-wrap items-center justify-between gap-3">
@@ -734,6 +862,7 @@
               </div>
             </div>
           }
+          }
         </section>
 
       </div>
@@ -757,9 +886,54 @@
         </button>
       </div>
       <p class="mt-3 text-base text-muted">
-        Carregue uma fotografia óptica, a matriz térmica (CSV) e a imagem térmica para alinhar e sobrepor as imagens, desenhar regiões de interesse (ROIs) e visualizar as temperaturas correspondentes.
+        @if (uploadMode() === 'single') {
+          Carregue uma fotografia óptica, a matriz térmica (CSV) e a imagem térmica para alinhar e
+          sobrepor as imagens, desenhar regiões de interesse (ROIs) e visualizar as temperaturas
+          correspondentes.
+        } @else {
+          Importe a pasta de uma sessão do protocolo (baseline + capturas dinâmicas) para navegar
+          pelo reaquecimento na linha do tempo e traçar a Curva de Reaquecimento das articulações.
+        }
       </p>
 
+      <!-- Tipo de análise -->
+      <div
+        class="mt-6 inline-flex items-center gap-1 rounded-xl border border-slate-200 bg-slate-100 p-1"
+        role="tablist"
+        aria-label="Tipo de análise"
+      >
+        <button
+          type="button"
+          role="tab"
+          class="flex items-center gap-1.5 rounded-lg px-4 py-2 text-sm font-medium transition-colors"
+          [class]="uploadMode() === 'single' ? 'bg-white text-primary shadow-sm' : 'text-slate-500 hover:text-primary'"
+          [attr.aria-selected]="uploadMode() === 'single'"
+          (click)="setUploadMode('single')"
+          title="Analisar uma única captura (três arquivos)"
+        >
+          <svg [lucideIcon]="'image'" class="h-4 w-4" aria-hidden="true"></svg>
+          Análise individual
+        </button>
+        <button
+          type="button"
+          role="tab"
+          class="flex items-center gap-1.5 rounded-lg px-4 py-2 text-sm font-medium transition-colors"
+          [class]="uploadMode() === 'sequence' ? 'bg-white text-primary shadow-sm' : 'text-slate-500 hover:text-primary'"
+          [attr.aria-selected]="uploadMode() === 'sequence'"
+          (click)="setUploadMode('sequence')"
+          title="Importar a sequência completa do protocolo (baseline + dinâmicas)"
+        >
+          <svg [lucideIcon]="'chart-no-axes-combined'" class="h-4 w-4" aria-hidden="true"></svg>
+          Sequência temporal
+        </button>
+      </div>
+
+      @if (uploadMode() === 'sequence') {
+        <!-- Importação em lote da sequência -->
+        <section class="mt-6" aria-label="Importação da sequência">
+          <app-sequence-import (enter)="enterSequenceAnalysis()" />
+        </section>
+      } @else {
       <!-- Uploads -->
       <section class="mt-8 grid gap-4 sm:grid-cols-3" aria-label="Arquivos da análise">
         <app-upload-card
@@ -877,6 +1051,7 @@ Nenhuma imagem ou dado é enviado para servidores.
           </p>
         }
       </div>
+      }
     </div>
   }
 
@@ -993,6 +1168,24 @@ Nenhuma imagem ou dado é enviado para servidores.
                 As tabelas mostram mínima, média e máxima em °C. Um <span class="text-amber-600">⚠</span>
                 indica ROI com pouca pele (valor pouco confiável). Cores: ciano = mão esquerda,
                 âmbar = mão direita.
+              </p>
+            </div>
+          </section>
+
+          <section class="flex gap-3">
+            <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-brand-50 text-accent">
+              <svg [lucideIcon]="'chart-no-axes-combined'" class="h-5 w-5" aria-hidden="true"></svg>
+            </span>
+            <div>
+              <h3 class="font-semibold text-primary">6. Sequência temporal (protocolo)</h3>
+              <p class="mt-0.5 text-muted">
+                Na tela inicial, escolha <strong class="text-primary">Sequência temporal</strong> e
+                importe a pasta da sessão (baseline Est + capturas Din). Cada captura é alinhada e
+                tem as articulações re-detectadas; navegue pela
+                <strong class="text-primary">linha do tempo</strong> (▶, setas, miniaturas) e abra a
+                <strong class="text-primary">Curva de Reaquecimento</strong> para acompanhar a
+                temperatura das articulações ao longo do tempo, com o repouso como referência
+                (linha tracejada).
               </p>
             </div>
           </section>
