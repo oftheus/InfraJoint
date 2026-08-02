@@ -27,8 +27,9 @@ de pesquisa (`scripts/manual_roi_verifier.py` + `scripts/core.py`).
      sobreposição das silhuetas — milhares de pontos de correspondência
      automáticos, sem depender de marcadores. Se as silhuetas não puderem ser
      segmentadas, o usuário recorre à calibração manual.
-   - **Homografia manual** — o usuário clica em ≥3 pares de pontos
-     correspondentes e a transformação é ajustada por mínimos quadrados.
+   - **Calibração manual** — o usuário clica em ≥3 pares de pontos
+     correspondentes e a transformação de similaridade (rotação + escala
+     uniforme + translação) é ajustada por mínimos quadrados.
 4. **Detecta as 22 articulações do mapa corporal** (botão "Detectar
    articulações"): os landmarks de mão do MediaPipe posicionam Punho, MCP 1–5 e
    IFP 1–5 de cada mão; cada articulação ganha uma ROI em células da matriz
