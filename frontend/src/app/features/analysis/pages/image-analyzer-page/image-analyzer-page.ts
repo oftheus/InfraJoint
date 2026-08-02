@@ -1033,7 +1033,7 @@ export class ImageAnalyzerPage {
       [...this.thermalPointsCsv()],
     );
     if (!matrix) {
-      this.error.set('Não foi possível calcular a homografia com os pontos informados.');
+      this.error.set('Não foi possível calcular o alinhamento com os pontos informados.');
       return;
     }
     this.error.set(null);
