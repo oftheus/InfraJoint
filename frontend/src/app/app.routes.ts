@@ -17,6 +17,10 @@ export const appRoutes: Routes = [
     loadChildren: () => import('./features/auth/auth.routes').then((m) => m.registerRoutes),
   },
   {
+    path: 'politica-de-privacidade',
+    loadChildren: () => import('./features/legal/legal.routes').then((m) => m.privacyPolicyRoutes),
+  },
+  {
     path: 'auth/callback',
     loadComponent: () =>
       import('./features/auth/pages/auth-callback/auth-callback').then((m) => m.AuthCallback),
