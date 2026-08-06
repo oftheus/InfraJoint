@@ -1,12 +1,5 @@
-import { PolicySection } from './privacy-policy.model';
-
-/**
- * Contact address published for data-subject requests (LGPD art. 18).
- *
- * TODO: replace with the project's official address before going public — the
- * policy promises a reply channel, so it must reach a real inbox.
- */
-export const PRIVACY_POLICY_CONTACT_EMAIL = 'sistemainfrajoint@gmail.com';
+import { LEGAL_CONTACT_EMAIL } from './legal-contact';
+import { LegalSection } from './legal-document.model';
 
 /** Machine-readable date for the `<time>` element. */
 export const PRIVACY_POLICY_LAST_UPDATED_ISO = '2026-08-06';
@@ -22,7 +15,7 @@ export const PRIVACY_POLICY_LAST_UPDATED = '6 de agosto de 2026';
  * and profile data live in Supabase, while thermographic images and CSV files
  * are processed entirely in the browser and never leave the user's device.
  */
-export const PRIVACY_POLICY_SECTIONS: PolicySection[] = [
+export const PRIVACY_POLICY_SECTIONS: LegalSection[] = [
   {
     id: 'visao-geral',
     title: 'Visão geral',
@@ -357,7 +350,7 @@ export const PRIVACY_POLICY_SECTIONS: PolicySection[] = [
       {
         kind: 'contact',
         label: 'Encarregado pelo tratamento de dados',
-        email: PRIVACY_POLICY_CONTACT_EMAIL,
+        email: LEGAL_CONTACT_EMAIL,
       },
       {
         kind: 'paragraph',

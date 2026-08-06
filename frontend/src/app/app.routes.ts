@@ -21,6 +21,10 @@ export const appRoutes: Routes = [
     loadChildren: () => import('./features/legal/legal.routes').then((m) => m.privacyPolicyRoutes),
   },
   {
+    path: 'termos-de-uso',
+    loadChildren: () => import('./features/legal/legal.routes').then((m) => m.termsOfUseRoutes),
+  },
+  {
     path: 'auth/callback',
     loadComponent: () =>
       import('./features/auth/pages/auth-callback/auth-callback').then((m) => m.AuthCallback),

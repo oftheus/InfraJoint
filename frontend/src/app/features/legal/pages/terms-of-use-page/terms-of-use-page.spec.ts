@@ -4,16 +4,16 @@ import { provideRouter } from '@angular/router';
 import { LucideMenu, LucideShieldCheck, LucideX, provideLucideIcons } from '@lucide/angular';
 
 import { AuthService } from '../../../../core/auth/auth.service';
-import { PRIVACY_POLICY_SECTIONS } from '../../privacy-policy.data';
-import { PrivacyPolicyPage } from './privacy-policy-page';
+import { TERMS_OF_USE_SECTIONS } from '../../terms-of-use.data';
+import { TermsOfUsePage } from './terms-of-use-page';
 
 /** Minimal stand-in so the navbar renders without touching Supabase. */
 const authStub = { isAuthenticated: signal(false) };
 
-describe('PrivacyPolicyPage', () => {
+describe('TermsOfUsePage', () => {
   beforeEach(async () => {
     await TestBed.configureTestingModule({
-      imports: [PrivacyPolicyPage],
+      imports: [TermsOfUsePage],
       providers: [
         provideRouter([]),
         provideLucideIcons(LucideMenu, LucideShieldCheck, LucideX),
@@ -23,42 +23,35 @@ describe('PrivacyPolicyPage', () => {
   });
 
   it('should create the page', () => {
-    const fixture = TestBed.createComponent(PrivacyPolicyPage);
+    const fixture = TestBed.createComponent(TermsOfUsePage);
     expect(fixture.componentInstance).toBeTruthy();
   });
 
-  it('should render one anchored section per policy entry', async () => {
-    const fixture = TestBed.createComponent(PrivacyPolicyPage);
+  it('should render one anchored section per entry, all listed in the summary', async () => {
+    const fixture = TestBed.createComponent(TermsOfUsePage);
     await fixture.whenStable();
 
     const host = fixture.nativeElement as HTMLElement;
 
-    for (const section of PRIVACY_POLICY_SECTIONS) {
+    for (const section of TERMS_OF_USE_SECTIONS) {
       const element = host.querySelector(`section#${section.id}`);
       expect(element, `missing section: ${section.id}`).toBeTruthy();
       expect(element?.textContent).toContain(section.title);
     }
-  });
 
-  it('should list every section in the table of contents', async () => {
-    const fixture = TestBed.createComponent(PrivacyPolicyPage);
-    await fixture.whenStable();
-
-    const host = fixture.nativeElement as HTMLElement;
     const links = host.querySelectorAll('nav[aria-label^="Sumário"] a');
-
-    expect(links.length).toBe(PRIVACY_POLICY_SECTIONS.length);
+    expect(links.length).toBe(TERMS_OF_USE_SECTIONS.length);
   });
 });
 
-describe('privacy policy content', () => {
+describe('terms of use content', () => {
   it('should use unique anchors so deep links resolve', () => {
-    const ids = PRIVACY_POLICY_SECTIONS.map((section) => section.id);
+    const ids = TERMS_OF_USE_SECTIONS.map((section) => section.id);
     expect(new Set(ids).size).toBe(ids.length);
   });
 
   it('should not contain empty sections', () => {
-    for (const section of PRIVACY_POLICY_SECTIONS) {
+    for (const section of TERMS_OF_USE_SECTIONS) {
       expect(section.blocks.length, `empty section: ${section.id}`).toBeGreaterThan(0);
     }
   });

@@ -1,9 +1,8 @@
 import { ChangeDetectionStrategy, Component } from '@angular/core';
-import { RouterLink } from '@angular/router';
-import { LucideShieldCheck } from '@lucide/angular';
 
 import { Footer } from '../../../../shared/components/footer/footer';
 import { Navbar } from '../../../../shared/components/navbar/navbar';
+import { LegalDocument } from '../../components/legal-document/legal-document';
 import {
   PRIVACY_POLICY_LAST_UPDATED,
   PRIVACY_POLICY_LAST_UPDATED_ISO,
@@ -17,7 +16,7 @@ import {
  */
 @Component({
   selector: 'app-privacy-policy-page',
-  imports: [Navbar, Footer, RouterLink, LucideShieldCheck],
+  imports: [Navbar, Footer, LegalDocument],
   templateUrl: './privacy-policy-page.html',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
