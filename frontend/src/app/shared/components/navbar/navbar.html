@@ -17,7 +17,7 @@
           height="377"
           sizes="(min-width: 1024px) 12vw, (min-width: 640px) 18vw, 32vw"
           alt="InfraJoint"
-          class="h-6 w-auto object-contain sm:h-10 lg:h-11"
+          class="h-10 w-auto object-contain sm:h-10 lg:h-11"
         />
       </a>
     </div>
@@ -25,48 +25,20 @@
     <!-- Center: site links (desktop only) -->
     @if (showSiteLinks()) {
       <div class="hidden flex-1 items-center justify-center gap-4 sm:gap-9 lg:flex">
-        <a
-          routerLink="/"
-          class="nav-link"
-        >
-          Home
-        </a>
+        <a routerLink="/" class="nav-link"> Home </a>
 
-        <a
-          routerLink="/"
-          fragment="recursos"
-          class="nav-link"
-        >
-          Recursos
-        </a>
+        <a routerLink="/" fragment="recursos" class="nav-link"> Recursos </a>
 
-        <a
-          routerLink="/"
-          fragment="fluxo"
-          class="nav-link"
-        >
-          Fluxo de Análise
-        </a>
+        <a routerLink="/" fragment="fluxo" class="nav-link"> Fluxo de Análise </a>
 
-        <a
-          routerLink="/"
-          fragment="sobre"
-          class="nav-link"
-        >
-          Sobre
-        </a>
+        <a routerLink="/" fragment="sobre" class="nav-link"> Sobre </a>
       </div>
     }
 
     <!-- Right: priority actions (Login/avatar) + hamburger on mobile -->
     <div class="flex items-center justify-end gap-3 sm:gap-4 lg:flex-1 lg:gap-6">
       @if (isAuthenticated()) {
-        <a
-          routerLink="/dashboard"
-          class="nav-link hidden lg:block"
-        >
-          Dashboard
-        </a>
+        <a routerLink="/dashboard" class="nav-link hidden lg:block"> Dashboard </a>
 
         <a
           routerLink="/perfil"
@@ -76,17 +48,9 @@
           <app-user-avatar />
         </a>
       } @else {
-        <a
-          routerLink="/login"
-          class="navbar-cta-secondary"
-        >
-          Entrar
-        </a>
+        <a routerLink="/login" class="navbar-cta-secondary"> Entrar </a>
 
-        <a
-          routerLink="/register"
-          class="btn-primary navbar-cta hidden lg:inline-flex"
-        >
+        <a routerLink="/register" class="btn-primary navbar-cta hidden lg:inline-flex">
           Cadastrar
         </a>
       }
@@ -139,7 +103,7 @@
         width="1518"
         height="377"
         alt="InfraJoint"
-        class="h-7 w-auto object-contain"
+        class="h-10 w-auto object-contain"
       />
     </a>
 
@@ -158,7 +122,9 @@
     @if (showSiteLinks()) {
       <a routerLink="/" (click)="closeDrawer()" class="drawer-link">Home</a>
       <a routerLink="/" fragment="recursos" (click)="closeDrawer()" class="drawer-link">Recursos</a>
-      <a routerLink="/" fragment="fluxo" (click)="closeDrawer()" class="drawer-link">Fluxo de Análise</a>
+      <a routerLink="/" fragment="fluxo" (click)="closeDrawer()" class="drawer-link"
+        >Fluxo de Análise</a
+      >
       <a routerLink="/" fragment="sobre" (click)="closeDrawer()" class="drawer-link">Sobre</a>
     }
   </nav>
@@ -166,19 +132,11 @@
   <!-- Drawer footer CTA -->
   <div class="border-t border-black/5 px-5 py-4">
     @if (isAuthenticated()) {
-      <a
-        routerLink="/dashboard"
-        (click)="closeDrawer()"
-        class="btn-primary navbar-cta w-full"
-      >
+      <a routerLink="/dashboard" (click)="closeDrawer()" class="btn-primary navbar-cta w-full">
         Ir para o Dashboard
       </a>
     } @else {
-      <a
-        routerLink="/register"
-        (click)="closeDrawer()"
-        class="btn-primary navbar-cta w-full"
-      >
+      <a routerLink="/register" (click)="closeDrawer()" class="btn-primary navbar-cta w-full">
         Cadastrar
       </a>
     }
