@@ -51,7 +51,11 @@ import {
   ThermalMatrix,
 } from '../../image-analyzer/image-analyzer.model';
 import { polishTranslation } from '../../image-analyzer/alignment-polish';
-import { refineWithFiducials } from '../../image-analyzer/fiducial-markers';
+import {
+  measureSilhouetteAgreement,
+  SilhouetteAgreement,
+} from '../../image-analyzer/alignment-quality';
+import { FiducialCorrection, refineWithFiducials } from '../../image-analyzer/fiducial-markers';
 import {
   JOINT_ROI_DEFS,
   JointRoi,
@@ -203,6 +207,88 @@ export class ImageAnalyzerPage {
   protected readonly aligning = signal(false);
   /** How the last automatic alignment was solved, for an accurate label. */
   private readonly autoMethod = signal<AutoMethod | null>(null);
+  /**
+   * Silhouette agreement of the active alignment. It lives in the panel, not in
+   * the result banner: the banner is dismissible and, in sequence mode, every
+   * frame carries its own value, which has to survive stepping between captures.
+   */
+  private readonly agreement = signal<SilhouetteAgreement | null>(null);
+
+  /** The panel figure, or null when no alignment was measured (manual, failed). */
+  protected readonly overlapPercent = computed(() => {
+    const measured = this.agreement();
+    return measured ? `${(measured.normalized * 100).toFixed(0)}%` : null;
+  });
+
+  /**
+   * Tooltip for the figure above. Says what the number is about in the user's
+   * terms and names its main limitation: the score is computed over *areas*, so
+   * two silhouettes can overlap almost entirely while being internally
+   * displaced. The normalization it carries ("of the attainable maximum") stays
+   * out — that is a modelling detail for the method write-up, not a sidebar.
+   * See `alignment-quality.ts`.
+   */
+  protected readonly OVERLAP_HELP =
+    'Indica o quanto as regiões identificadas como mão na imagem óptica e na ' +
+    'imagem térmica se sobrepõem depois do alinhamento. É uma medida de ' +
+    'concordância espacial global entre as silhuetas e não representa a ' +
+    'precisão ponto a ponto nem garante, isoladamente, a exatidão das ' +
+    'temperaturas extraídas das ROIs.';
+
+  /** Marker correction of the active alignment, when the fiducial path ran. */
+  private readonly correction = signal<FiducialCorrection | null>(null);
+  /**
+   * UI-only: which figure has its explanation open. A native `title` was tried
+   * first and is the wrong tool here — it needs a long hover to appear, cannot
+   * hold a breakdown, and makes a button look inert when clicked.
+   */
+  protected readonly openInfo = signal<'overlap' | 'correction' | null>(null);
+
+  /** The panel figure — the same mean the breakdown reconstructs. */
+  protected readonly correctionCells = computed(() => {
+    const applied = this.correction();
+    return applied ? applied.magnitude.toFixed(1).replace('.', ',') : null;
+  });
+
+  /**
+   * Every number needed to redo the mean by hand: predicted, detected, their
+   * difference and each marker's own length. Showing only the aggregate would
+   * leave the user with a figure they cannot check, and showing only X/Y/scale/
+   * rotation would not reconstruct it either — the mean comes from the vector
+   * lengths, not from the components.
+   */
+  protected readonly correctionDetails = computed(() => {
+    const applied = this.correction();
+    if (!applied) {
+      return null;
+    }
+    const markers = applied.offsets.map((offset, i) => {
+      const predicted = applied.predicted[i];
+      const detected = applied.detected[i];
+      const length = Math.hypot(offset.x, offset.y);
+      return {
+        label: `Marcador ${i + 1}`,
+        predictedX: cells(predicted?.x),
+        predictedY: cells(predicted?.y),
+        detectedX: cells(detected?.x),
+        detectedY: cells(detected?.y),
+        deltaX: cells(offset.x),
+        deltaY: cells(offset.y),
+        length: cells(length),
+      };
+    });
+    return {
+      markers,
+      // The addends are the same rounded values shown per marker, so the line
+      // reads as an arithmetic identity; the result is the exact mean.
+      meanFormula: `(${markers.map((m) => m.length).join(' + ')}) / ${markers.length}`,
+      mean: cells(applied.magnitude),
+      shiftX: cells(applied.shiftX),
+      shiftY: cells(applied.shiftY),
+      scale: `${applied.scaleRatio.toFixed(3).replace('.', ',')}×`,
+      rotation: `${applied.rotationDeg.toFixed(2).replace('.', ',')}°`,
+    };
+  });
 
   /** Human label for the active alignment, accurate to the method actually used. */
   protected readonly alignmentLabel = computed(() => {
@@ -256,6 +342,8 @@ export class ImageAnalyzerPage {
   protected readonly uploadMode = signal<'single' | 'sequence'>('single');
   /** True while the viewer is showing a processed sequence. */
   protected readonly sequenceActive = signal(false);
+  /** `processedRunId` of the sequence currently loaded in the viewer. */
+  private loadedRunId: number | null = null;
   /** Index of the capture shown in the viewer (0 = baseline). */
   protected readonly activeCaptureIndex = signal(0);
   /** Viewer tab in sequence mode: the frame image or the rewarming curves. */
@@ -575,6 +663,7 @@ export class ImageAnalyzerPage {
     // including a processed sequence (a new import never needs a reload).
     if (this.sequenceActive() || this.sequenceService.status() !== 'idle') {
       this.sequenceActive.set(false);
+      this.loadedRunId = null;
       this.sequenceService.reset();
     }
     this.error.set(null);
@@ -586,6 +675,8 @@ export class ImageAnalyzerPage {
     this.manualMatrix.set(null);
     this.autoMatrix.set(null);
     this.autoMethod.set(null);
+    this.agreement.set(null);
+    this.setCorrection(null);
     this.detectedHands.set(null);
     this.jointOverrides.set(new Map());
     this.selectedJointKey.set(null);
@@ -631,14 +722,20 @@ export class ImageAnalyzerPage {
     if (captures.length === 0) {
       return;
     }
-    if (this.sequenceActive()) {
-      // Coming back from the upload screen: keep the viewer state as-is.
+    const runId = this.sequenceService.processedRunId();
+    if (this.sequenceActive() && this.loadedRunId === runId) {
+      // Came back from the upload screen without importing: keep viewer state.
       this.analysisStarted.set(true);
       return;
     }
+    // A different session was processed — nothing from the previous one may
+    // survive in the viewer (its frame is still on the canvas at this point).
+    this.loadedRunId = runId;
     this.sequenceActive.set(true);
     this.viewerTab.set('image');
     this.rois.set([]);
+    this.rgbPoints.set([]);
+    this.thermalPointsCsv.set([]);
     this.calibrating.set(false);
     await this.activateCapture(0);
     this.analysisStarted.set(true);
@@ -710,6 +807,8 @@ export class ImageAnalyzerPage {
     this.matrix.set(capture.matrix.width > 0 ? capture.matrix : null);
     this.autoMatrix.set(capture.alignment);
     this.autoMethod.set(capture.autoMethod === 'manual' ? 'manual' : capture.autoMethod);
+    this.agreement.set(capture.agreement);
+    this.setCorrection(capture.correction);
     this.manualMatrix.set(null);
     this.mode.set('auto');
     this.detectedHands.set(capture.hands.length > 0 ? capture.hands : null);
@@ -735,6 +834,8 @@ export class ImageAnalyzerPage {
     alignment: AffineMatrix,
     method: AutoMethod,
     pixels: ImageData | null,
+    agreement: SilhouetteAgreement | null = null,
+    correction: FiducialCorrection | null = null,
   ): void {
     if (!this.sequenceActive()) {
       return;
@@ -749,8 +850,25 @@ export class ImageAnalyzerPage {
       alignment,
       autoMethod: method,
       skinMask,
+      agreement,
+      correction,
       issue: null,
     });
+  }
+
+  /** Swaps the active correction, collapsing any breakdown of the previous one. */
+  private setCorrection(value: FiducialCorrection | null): void {
+    this.correction.set(value);
+    this.openInfo.set(null);
+  }
+
+  /** Opens one explanation at a time; clicking the open one closes it. */
+  protected toggleInfo(which: 'overlap' | 'correction'): void {
+    this.openInfo.update((open) => (open === which ? null : which));
+  }
+
+  protected closeInfo(): void {
+    this.openInfo.set(null);
   }
 
   protected openHelp(): void {
@@ -899,6 +1017,8 @@ export class ImageAnalyzerPage {
       const coarse = registration?.matrix ?? null;
       if (!coarse || !withinAutoScale(similarityScale(coarse))) {
         this.autoMatrix.set(null);
+        this.agreement.set(null);
+        this.setCorrection(null);
         this.error.set(
           'O alinhamento automático falhou (não foi possível segmentar as mãos nas duas ' +
             'imagens). Use a calibração manual.',
@@ -915,21 +1035,35 @@ export class ImageAnalyzerPage {
       const fitted = polishTranslation(pixels, matrix, aligned) ?? aligned;
       const scale = similarityScale(fitted);
 
+      // Evaluated on the final transform, not the coarse one it started from.
+      const agreement = measureSilhouetteAgreement(pixels, matrix, fitted);
+
+      const method = fiducial ? 'fiducial' : 'silhouette';
       this.autoMatrix.set(fitted);
-      this.autoMethod.set(fiducial ? 'fiducial' : 'silhouette');
+      this.autoMethod.set(method);
+      this.agreement.set(agreement);
+      this.setCorrection(fiducial?.correction ?? null);
       this.mode.set('auto');
-      this.syncCaptureAlignment(fitted, fiducial ? 'fiducial' : 'silhouette', pixels);
-      this.info.set(
-        fiducial
-          ? `Alinhamento automático pelos marcadores fiduciais ` +
-              `(escala ${scale.toFixed(2).replace('.', ',')}, precisão de calibração manual).`
-          : `Alinhamento automático por registro de silhuetas ` +
-              `(escala ${scale.toFixed(2).replace('.', ',')}, sobreposição ` +
-              `${(registration!.score * 100).toFixed(0)}%).`,
-      );
+      this.syncCaptureAlignment(fitted, method, pixels, agreement, fiducial?.correction ?? null);
+      this.info.set(this.describeAutoAlignment(scale, method));
     } finally {
       this.aligning.set(false);
     }
+  }
+
+  /**
+   * The alignment message: which method solved it, and the recovered scale.
+   * The overlap figure and the marker correction are deliberately not here —
+   * both belong to the panel, where they persist, follow the active capture and
+   * carry their own explanation. The alignment is also never described as
+   * *quality*: the metric does not see every geometric error, and it carries no
+   * threshold or color, since none is calibrated yet.
+   */
+  private describeAutoAlignment(scale: number, method: 'fiducial' | 'silhouette'): string {
+    const scaleText = `escala ${scale.toFixed(2).replace('.', ',')}`;
+    return method === 'fiducial'
+      ? `Alinhamento automático pelos marcadores fiduciais (${scaleText}).`
+      : `Alinhamento automático por silhuetas (${scaleText}).`;
   }
 
   // --- Automatic joint ROIs ----------------------------------------------------
@@ -1040,6 +1174,10 @@ export class ImageAnalyzerPage {
     this.manualMatrix.set(matrix);
     this.mode.set('manual');
     this.calibrating.set(false);
+    // The stored figures measured the transform this one replaces; the manual
+    // path does not produce new ones, so the panel shows none.
+    this.agreement.set(null);
+    this.setCorrection(null);
     if (this.sequenceActive()) {
       // The frame's record (and its skin mask) must follow the new alignment
       // so the rewarming curve reads this capture with the corrected mapping.
@@ -1092,6 +1230,13 @@ function maskSkinTest(
 
 function formatCelsius(value: number): string {
   return Number.isFinite(value) ? `${value.toFixed(2).replace('.', ',')} °C` : '—';
+}
+
+/** CSV-cell figure for the correction breakdown, at the precision it is checked in. */
+function cells(value: number | undefined): string {
+  return value !== undefined && Number.isFinite(value)
+    ? value.toFixed(2).replace('.', ',')
+    : '—';
 }
 
 function dropLast<T>(items: readonly T[]): readonly T[] {

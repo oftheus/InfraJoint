@@ -28,8 +28,6 @@ import { connectedComponents, binaryOpen, nearestFeatureMap, otsuThreshold } fro
 export interface SilhouetteRegistration {
   /** RGB → CSV scale + translation. */
   readonly matrix: AffineMatrix;
-  /** Dice-style overlap of the two silhouettes under `matrix` (0–1). */
-  readonly score: number;
 }
 
 /** Work on a decimated grid: RGB sampled every 4 px, CSV every 2 px. */
@@ -155,6 +153,11 @@ export function registerSilhouettes(
 
   // In grid coords: p_csvGrid = s'·p_rgbGrid + t' with s' = s·RGB_STRIDE/CSV_STRIDE
   // (nominal s ≈ 0.5 → s' ≈ 1) and t' = t/CSV_STRIDE.
+  //
+  // This is the search *objective*, not a quality figure: the denominator mixes
+  // the subsampled point set with the full thermal mask, which is fine for
+  // ranking candidates (both terms are constant within a capture) but is not a
+  // Dice coefficient and must never be reported. See `alignment-quality.ts`.
   const dice = (s: number, tx: number, ty: number): number => {
     let inter = 0;
     for (let i = 0; i < px.length; i++) {
@@ -201,10 +204,7 @@ export function registerSilhouettes(
   };
   const refinedGrid = refineByIcp(rgb, thermal, coarseGrid) ?? coarseGrid;
 
-  return {
-    score: diceOfGrid(px, py, thermalCount, thermal, refinedGrid),
-    matrix: gridToCsvMatrix(refinedGrid),
-  };
+  return { matrix: gridToCsvMatrix(refinedGrid) };
 }
 
 /** Grid-space affine (RGB grid → CSV grid) to the RGB px → CSV cell matrix. */
@@ -218,26 +218,6 @@ function gridToCsvMatrix(g: AffineMatrix): AffineMatrix {
     d: g.d * k,
     ty: g.ty * CSV_STRIDE,
   };
-}
-
-/** Dice overlap of the sampled RGB silhouette against the thermal mask. */
-function diceOfGrid(
-  px: readonly number[],
-  py: readonly number[],
-  thermalCount: number,
-  thermal: GridMask,
-  g: AffineMatrix,
-): number {
-  let inter = 0;
-  for (let i = 0; i < px.length; i++) {
-    const p = applyAffine(g, px[i], py[i]);
-    const x = p.x | 0;
-    const y = p.y | 0;
-    if (x >= 0 && x < thermal.width && y >= 0 && y < thermal.height) {
-      inter += thermal.mask[y * thermal.width + x];
-    }
-  }
-  return (2 * inter) / (px.length + thermalCount);
 }
 
 /** Max contour points fed to the ICP fit (per iteration). */

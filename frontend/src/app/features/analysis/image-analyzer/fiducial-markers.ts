@@ -26,6 +26,57 @@ export interface FiducialRefinement {
   /** Detected marker centroids, for diagnostics/overlay. */
   readonly rgbPoints: readonly Point[];
   readonly csvPoints: readonly Point[];
+  /** How far this fit moved the coarse estimate. */
+  readonly correction: FiducialCorrection;
+}
+
+/**
+ * The gap between where the silhouettes predicted each marker and where its
+ * impression actually is — i.e. **how much the marker refinement changed the
+ * silhouette estimate**, not a residual of the fiducial fit. Two pairs give
+ * four equations for a similarity's four degrees of freedom, so the fit is
+ * exactly determined and its residual is identically zero, even when a marker
+ * was detected wrong; there is no redundancy left to check.
+ *
+ * Those same four degrees of freedom are what the two discrepancy vectors
+ * decompose into: their common part is translation, their differential part is
+ * scale and rotation. Decomposing about the marker midpoint rather than the
+ * image origin keeps the four independent — otherwise a pure rotation shows up
+ * as a large spurious translation.
+ *
+ * The decomposition is exact, not an approximation. A similarity is fixed by
+ * two point pairs, and this one maps every predicted position onto its detected
+ * one, so it *is* `fitted ∘ coarse⁻¹` — the transform that carries the coarse
+ * alignment to the final one. `scaleRatio` and `rotationDeg` are therefore the
+ * scale and rotation of the correction itself, not of the final alignment.
+ *
+ * Two limits to carry into any analysis of these numbers: each offset is
+ * censored at `MAX_PREDICTION_DIST` (impressions farther away are never
+ * matched, so a bad alignment surfaces as *no fiducials* rather than as a large
+ * correction — absent captures are censored, not missing at random), and the
+ * markers sit on the forearms, so a scale correction anchored there displaces
+ * the hand joints more than it displaced the markers.
+ */
+export interface FiducialCorrection {
+  /** Where the coarse transform put each marker, in CSV cells. */
+  readonly predicted: readonly Point[];
+  /** Where its thermal impression actually is, in CSV cells. */
+  readonly detected: readonly Point[];
+  /** `detected − predicted` per marker, in CSV cells. */
+  readonly offsets: readonly Point[];
+  /**
+   * Mean of the offset *lengths*: `Σ √(Δxᵢ² + Δyᵢ²) / n`. It is a summary of
+   * the same vectors the components below decompose, not a fourth component —
+   * it is never the sum of shift, scale and rotation.
+   */
+  readonly magnitude: number;
+  /** Displacement of the marker-pair midpoint: the translation component. */
+  readonly shiftX: number;
+  readonly shiftY: number;
+  /** Detected marker separation ÷ predicted separation. */
+  readonly scaleRatio: number;
+  /** Rotation of the marker axis, in degrees. */
+  readonly rotationDeg: number;
 }
 
 /** RGB marker blob area in full-resolution pixels (tape ≈ 30–60 px wide). */
@@ -73,6 +124,7 @@ export function refineWithFiducials(
   // Keep only candidates whose predicted CSV neighborhood holds a cold blob.
   const rgbMarkers: Point[] = [];
   const csvMarkers: Point[] = [];
+  const predictions: Point[] = [];
   for (const candidate of candidates) {
     const predicted = applyAffine(coarse, candidate.x, candidate.y);
     const impression = findImpressionNear(matrix, predicted);
@@ -86,6 +138,7 @@ export function refineWithFiducials(
     if (impression) {
       rgbMarkers.push(candidate);
       csvMarkers.push(impression);
+      predictions.push(predicted);
     }
   }
   if (rgbMarkers.length !== 2) {
@@ -117,7 +170,54 @@ export function refineWithFiducials(
     return null;
   }
   debug('aplicado', { rgbMarkers, csvMarkers });
-  return { matrix: fitted, rgbPoints: rgbMarkers, csvPoints: csvMarkers };
+  return {
+    matrix: fitted,
+    rgbPoints: rgbMarkers,
+    csvPoints: csvMarkers,
+    correction: describeCorrection(predictions, csvMarkers),
+  };
+}
+
+/** Decomposes the predicted → detected offsets about the marker midpoint. */
+function describeCorrection(
+  predicted: readonly Point[],
+  detected: readonly Point[],
+): FiducialCorrection {
+  const offsets = detected.map((d, i) => ({
+    x: d.x - predicted[i].x,
+    y: d.y - predicted[i].y,
+  }));
+  const magnitude =
+    offsets.reduce((sum, o) => sum + Math.hypot(o.x, o.y), 0) / offsets.length;
+  // Midpoint displacement — the part common to both markers.
+  const shiftX = offsets.reduce((sum, o) => sum + o.x, 0) / offsets.length;
+  const shiftY = offsets.reduce((sum, o) => sum + o.y, 0) / offsets.length;
+
+  const predictedAxis = { x: predicted[1].x - predicted[0].x, y: predicted[1].y - predicted[0].y };
+  const detectedAxis = { x: detected[1].x - detected[0].x, y: detected[1].y - detected[0].y };
+  const predictedLength = Math.hypot(predictedAxis.x, predictedAxis.y);
+  const detectedLength = Math.hypot(detectedAxis.x, detectedAxis.y);
+  const scaleRatio = predictedLength > 0 ? detectedLength / predictedLength : 1;
+  const rotationDeg =
+    predictedLength > 0 && detectedLength > 0
+      ? ((Math.atan2(detectedAxis.y, detectedAxis.x) -
+          Math.atan2(predictedAxis.y, predictedAxis.x) +
+          Math.PI * 3) %
+          (Math.PI * 2)) *
+          (180 / Math.PI) -
+        180
+      : 0;
+
+  return {
+    predicted: [...predicted],
+    detected: [...detected],
+    offsets,
+    magnitude,
+    shiftX,
+    shiftY,
+    scaleRatio,
+    rotationDeg,
+  };
 }
 
 /** Diagnostic trail for support: visible via the browser console's Info level. */

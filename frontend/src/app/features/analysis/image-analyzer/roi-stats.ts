@@ -4,6 +4,18 @@
  * Port of `_roi_stats` (manual_roi_verifier.py) plus the median from
  * `extract_thermal_roi_stats` (core.py): clamps the bounding box to the
  * matrix, applies a circular/elliptical mask and aggregates ignoring NaNs.
+ *
+ * Cells are read straight out of the matrix at integer coordinates — no
+ * interpolation, no resampling, no smoothing. The value reported is the
+ * camera's own reading for that cell.
+ *
+ * Worth keeping in mind when interpreting the output: `min` and `max` are
+ * **single-cell order statistics**, not averages of the coldest/hottest cells.
+ * One stray cell moves them by the full contrast between skin and whatever it
+ * came from (~6 °C against the mat, measured on V047), while `mean` moves by
+ * that contrast times the *fraction* of cells swapped. That is why a small
+ * alignment error shows up dramatically in `min` and mildly in `mean` — see
+ * §4.11 of `src/escrita/analisador/texto-inicial.MD`.
  */
 
 import { RoiShape, RoiStats, ThermalMatrix } from './image-analyzer.model';

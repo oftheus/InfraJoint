@@ -17,8 +17,9 @@ import { Injectable, computed, inject, signal } from '@angular/core';
 
 import { invertAffine, similarityScale } from './alignment';
 import { polishTranslation } from './alignment-polish';
+import { measureSilhouetteAgreement, SilhouetteAgreement } from './alignment-quality';
 import { imageToCanvas, imageToPixels, imageToThumbnail, loadImage } from './dom-images';
-import { refineWithFiducials } from './fiducial-markers';
+import { FiducialCorrection, refineWithFiducials } from './fiducial-markers';
 import { HandLandmarksService } from './hand-landmarks.service';
 import { buildCsvSkinMask } from './skin-mask';
 import { groupSequenceFiles } from './sequence-files';
@@ -65,6 +66,13 @@ export class SequenceService {
   readonly intervalSeconds = signal(DEFAULT_CAPTURE_INTERVAL_SECONDS);
   readonly progress = signal<SequenceProgress | null>(null);
   readonly captures = signal<readonly SequenceCapture[]>([]);
+  /**
+   * Bumped every time `captures` is replaced by a freshly processed batch —
+   * never by `updateCapture`. Lets the viewer tell "the user came back from the
+   * upload screen" from "another session was imported and processed", which
+   * array identity cannot (per-capture edits also produce a new array).
+   */
+  readonly processedRunId = signal(0);
   readonly error = signal<string | null>(null);
 
   readonly selectedReview = computed<SequenceReview | null>(
@@ -167,6 +175,7 @@ export class SequenceService {
 
     this.progress.set(null);
     this.captures.set(results);
+    this.processedRunId.update((id) => id + 1);
     this.status.set('ready');
   }
 
@@ -274,12 +283,16 @@ export class SequenceService {
     const registration = registerSilhouettes(pixels, matrix);
     let alignment = registration?.matrix ?? null;
     let autoMethod: SequenceCapture['autoMethod'] = null;
+    let agreement: SilhouetteAgreement | null = null;
+    let correction: FiducialCorrection | null = null;
     let issue: string | null = null;
     if (alignment && withinAutoScale(similarityScale(alignment))) {
       const fiducial = refineWithFiducials(pixels, matrix, alignment);
       const aligned = fiducial?.matrix ?? alignment;
       alignment = polishTranslation(pixels, matrix, aligned) ?? aligned;
       autoMethod = fiducial ? 'fiducial' : 'silhouette';
+      correction = fiducial?.correction ?? null;
+      agreement = measureSilhouetteAgreement(pixels, matrix, alignment);
     } else {
       alignment = null;
       issue = 'Alinhamento automático falhou nesta captura.';
@@ -303,6 +316,8 @@ export class SequenceService {
       matrix,
       alignment,
       autoMethod,
+      agreement,
+      correction,
       hands,
       skinMask,
       thumbnail: imageToThumbnail(thermalImg, THUMBNAIL_WIDTH),
@@ -322,6 +337,8 @@ export class SequenceService {
       matrix: { width: 0, height: 0, values: new Float64Array(0) },
       alignment: null,
       autoMethod: null,
+      agreement: null,
+      correction: null,
       hands: [],
       skinMask: null,
       thumbnail: '',

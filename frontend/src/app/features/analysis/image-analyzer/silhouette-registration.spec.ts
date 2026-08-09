@@ -1,4 +1,5 @@
 import { applyAffine, similarityScale } from './alignment';
+import { measureSilhouetteAgreement } from './alignment-quality';
 import { RgbPixels, ThermalMatrix } from './image-analyzer.model';
 import { registerSilhouettes } from './silhouette-registration';
 
@@ -63,7 +64,9 @@ describe('registerSilhouettes', () => {
     const reg = registerSilhouettes(pixels, matrix)!;
     expect(reg).not.toBeNull();
     expect(similarityScale(reg.matrix)).toBeCloseTo(0.5, 1.5);
-    expect(reg.score).toBeGreaterThan(0.5);
+    // These synthetic silhouettes match exactly (no thermal bleed), so the
+    // agreement should sit essentially at its ceiling.
+    expect(measureSilhouetteAgreement(pixels, matrix, reg.matrix)!.normalized).toBeGreaterThan(0.9);
 
     // A point at an arm center must land on the corresponding thermal spot.
     const mapped = applyAffine(reg.matrix, 80, 120);
