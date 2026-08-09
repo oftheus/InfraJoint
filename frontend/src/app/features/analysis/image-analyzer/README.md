@@ -101,11 +101,55 @@ O JPEG da câmera é um *upsampling* de 1,5× da matriz CSV.
   automático por **registro de silhuetas**, o método primário do botão
   "Alinhar automaticamente". Segmenta a pele (não-azul, 2 maiores componentes)
   e o corpo quente (Otsu), decima as máscaras (RGB ÷4, CSV ÷2) e faz busca em
-  grade grossa→fina da escala+translação que maximiza a sobreposição (métrica
-  Dice) — ~150 ms para 1280×960. Por usar a silhueta inteira como
-  correspondência, um marcador mal detectado não distorce o resultado.
-  Validado no par real V047: recupera s=0,5025, e ambos os marcadores caem a
-  ≤2 células das suas impressões térmicas sem participarem do ajuste.
+  grade grossa→fina da escala+translação que maximiza a sobreposição — ~150 ms
+  para 1280×960. Por usar a silhueta inteira como correspondência, um marcador
+  mal detectado não distorce o resultado. Validado no par real V047: recupera
+  s=0,5025, e ambos os marcadores caem a ≤2 células das suas impressões térmicas
+  sem participarem do ajuste. O `score` da busca tem forma de Dice mas **não é**
+  um: seu denominador mistura o conjunto de pontos subamostrado com a máscara
+  térmica completa, o que serve para ordenar candidatas dentro de uma captura e
+  nunca deve ser exibido — quem avalia o resultado é `alignment-quality.ts`.
+- **[`alignment-quality.ts`](alignment-quality.ts)** — **avaliação** do
+  alinhamento, separada do ajuste. Sob a transformação **final** (pós-fiduciais e
+  polish), monta as duas silhuetas em espaço CSV na resolução plena da matriz —
+  a óptica warpada, a térmica por Otsu, ambas com a mesma limpeza de ruído — e
+  reporta o Dice de área dividido pelo teto atingível `2·min(A,B)/(A+B)`, que se
+  reduz a `I / min(A,B)`. A normalização absorve a diferença sistemática de forma
+  entre as modalidades (halo térmico dilata; Otsu descarta dedos frios) e torna o
+  valor comparável entre capturas. Ponto cego documentado: quase insensível a
+  translação pura (32 px ≈ 5–20 pontos; escala −10% ≈ 20–35), por isso é
+  *verificação de consistência das silhuetas*, não garantia de precisão
+  geométrica. **Ressalva a manter em qualquer texto sobre o módulo:** o índice
+  avalia concordância espacial **global** entre as silhuetas e não é, sozinho,
+  medida do erro de localização de cada ponto anatômico nem validação da
+  exatidão das temperaturas das ROIs — ele é calculado *por área*, e a
+  interseção não registra qual ponto caiu sobre qual. Na interface aparece só
+  como `Sobreposição das silhuetas: 95%` no painel, com ícone de informação; a
+  normalização ("do máximo possível") é detalhe de modelagem e fica na
+  documentação. `AGREEMENT_METRIC_VERSION` versiona a definição (v2 atual;
+  valores v1 não são comparáveis). Fundamentação completa: seções 4.9–4.12 de
+  `src/escrita/analisador/texto-inicial.MD`.
+- **[`fiducial-markers.ts`](fiducial-markers.ts)** — refinamento pelos quadrados
+  de fita azul dos antebraços: mancha azul cercada de pele na RGB + impressão
+  fria cercada de corpo quente na CSV (Otsu local numa janela de ±18 células em
+  torno da previsão, com cascata de dois limiares). Correspondências
+  **interiores**, imunes ao viés de borda do halo térmico. Só aplica com
+  exatamente dois pares confirmados e dentro de ±6% de escala / ≤3,4° do coarse.
+  A `FiducialCorrection` guardada é a **correção** que os marcadores aplicaram
+  (previsão × detecção), decomposta em translação/escala/rotação em torno do
+  ponto médio — **não** é resíduo do ajuste: com 2 pares a similaridade é
+  exatamente determinada e o resíduo é zero por construção. Ela retém
+  `predicted`/`detected`/`offsets` por marcador, e não só o agregado, para que a
+  magnitude exibida (`Σ‖dᵢ‖ / n`, a média dos comprimentos) possa ser refeita à
+  mão na tooltip do painel. `scaleRatio` e `rotationDeg` são a escala e a rotação
+  **da correção** — a similaridade `fitted ∘ coarse⁻¹` — e a magnitude não é a
+  soma delas. A magnitude é
+  censurada em `MAX_PREDICTION_DIST` = 15 células, logo um alinhamento ruim
+  aparece como *ausência* de fiduciais, não como correção grande.
+- **[`alignment-polish.ts`](alignment-polish.ts)** — compensação final de
+  paralaxe: pareia transições pele↔fundo (RGB) com quente↔frio (CSV) ao longo de
+  linhas de varredura e promedia entrada e saída, o que cancela o halo térmico e
+  isola o deslocamento real. Altera só a translação, limitada a 6 px por eixo.
 - **[`image-ops.ts`](image-ops.ts)** — operações compartilhadas: morfologia
   binária separável, componentes conexos 8-conectados e limiar de Otsu.
 - **[`joint-rois.ts`](joint-rois.ts)** — as 22 ROIs articulares do mapa
@@ -130,7 +174,16 @@ dinâmicas (`Din01…`) em intervalo fixo (padrão 15 s, editável na conferênc
 - **[`sequence-files.ts`](sequence-files.ts)** — agrupamento do lote pelo nome
   dos arquivos (`{Sujeito}_{Trial}_{Est|DinNN}[_DAR|_IR].{jpeg|csv}`);
   originais da câmera (sem sufixo) e planilhas clínicas são ignorados e apenas
-  contados.
+  contados. Também reconhece a **nomenclatura antiga** (`V014/`), que insere
+  entre o trial e a fase um token da superfície de apoio — `E` (EVA azul),
+  `EP` (EVA + papel), `M` (madeira): `V014_T1_E_Din01_IR.jpeg`. Ela é
+  **normalizada para o protocolo atual** na importação: mantém-se só a `E`,
+  que é a superfície adotada no protocolo novo (as aquisições `EP`/`M` são
+  ensaios de superfície, só com baseline), e descarta-se a `Din00`, que é o
+  mesmo instante da `Est`. O que sobra é uma sessão idêntica à atual (`Est` +
+  `Din01…`), então `V014` é conferido e processado como `V014_T1` e nenhum
+  conceito legado vaza para o resto do pipeline. Os descartes vão para
+  `ignoredLegacy` e aparecem na conferência.
 - **[`sequence.service.ts`](sequence.service.ts)** — store (signals) + pipeline
   de pré-processamento por captura: alinhamento (silhueta → fiduciais →
   polish), landmarks, **máscara de pele em espaço CSV** e miniatura térmica.
@@ -230,8 +283,22 @@ Validado **contra um export real da câmera** (`V047_T1_Din01`):
   pele < 35% são sinalizadas como pouco confiáveis; punhos ficam com 100% de
   cobertura e valores inalterados.
 
+Sobreposição das silhuetas (`alignment-quality.ts`) nas 7 capturas de referência,
+rodando o próprio código fora do navegador: **91,7–98,8%** normalizado, todas
+pelo caminho fiducial, correções dos marcadores de **1,5–4,9 células**. O ganho
+da normalização é visível no V043 (84,7% bruto → 96,3% normalizado, teto 87,9%) e
+no V031 (9% da pele óptica fora do quadro térmico, 95,2% com ou sem restrição de
+FOV). Sem limiar de aceitação e sem código de cores: n=7 com falhas sintéticas
+não é calibração, e um selo verde/vermelho seria um limiar implícito.
+
 **Pendências:** validar com mais pacientes (enquadramentos e temperaturas
-variados) e testar a detecção de articulações no navegador com fotos reais — o
+variados); **medir o impacto do erro de alinhamento em °C** — perturbar a
+transformação em ±1/±2/±3 células e recalcular as ROIs articulares, já que uma
+boa sobreposição das silhuetas *não* demonstra exatidão da temperatura extraída
+(o Dice é quase cego a translação, e os marcadores validam o antebraço, não as
+juntas); exportar as componentes da métrica (não há camada de persistência, os
+valores morrem com a sessão); e testar a detecção de articulações no navegador
+com fotos reais — o
 MediaPipe roda apenas no cliente, então essa etapa não é coberta pelos testes
 de nó. A rotulagem esquerda/direita vem do próprio MediaPipe (mesma convenção
 do `core.py`) e vale conferir com mãos em dorso para cima.

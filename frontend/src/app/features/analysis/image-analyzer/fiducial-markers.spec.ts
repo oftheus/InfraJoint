@@ -92,6 +92,53 @@ describe('refineWithFiducials', () => {
     }
   });
 
+  it('exposes the parts that reconstruct the reported magnitude', () => {
+    // The UI shows one mean; these are the numbers that let a reader redo it.
+    const pixels = rgbScene(320, 240, arms, markers);
+    const matrix = thermalScene(
+      160,
+      120,
+      arms.map((r) => mapRect(r, 0.5, 4, -2)),
+      markers.map((r) => mapRect(r, 0.5, 4, -2)),
+    );
+    const coarse: AffineMatrix = { a: 0.5, b: 0, tx: 7, c: 0, d: 0.5, ty: -5 };
+
+    const { correction, rgbPoints } = refineWithFiducials(pixels, matrix, coarse)!;
+    expect(correction.predicted).toHaveLength(2);
+    expect(correction.detected).toHaveLength(2);
+
+    correction.offsets.forEach((offset, i) => {
+      // `predicted` is where the coarse transform put the marker...
+      const fromCoarse = applyAffine(coarse, rgbPoints[i].x, rgbPoints[i].y);
+      expect(correction.predicted[i].x).toBeCloseTo(fromCoarse.x, 6);
+      expect(correction.predicted[i].y).toBeCloseTo(fromCoarse.y, 6);
+      // ...and the offset is exactly detected − predicted.
+      expect(offset.x).toBeCloseTo(correction.detected[i].x - correction.predicted[i].x, 6);
+      expect(offset.y).toBeCloseTo(correction.detected[i].y - correction.predicted[i].y, 6);
+    });
+
+    // The reported magnitude is the mean of the offset lengths — not the length
+    // of the mean offset, and not a combination of shift, scale and rotation.
+    const lengths = correction.offsets.map((o) => Math.hypot(o.x, o.y));
+    expect(correction.magnitude).toBeCloseTo((lengths[0] + lengths[1]) / 2, 6);
+    expect(correction.shiftX).toBeCloseTo(
+      (correction.offsets[0].x + correction.offsets[1].x) / 2,
+      6,
+    );
+    expect(correction.shiftY).toBeCloseTo(
+      (correction.offsets[0].y + correction.offsets[1].y) / 2,
+      6,
+    );
+
+    // Scale and rotation describe the same predicted → detected similarity.
+    const span = (points: readonly { x: number; y: number }[]): number =>
+      Math.hypot(points[1].x - points[0].x, points[1].y - points[0].y);
+    expect(correction.scaleRatio).toBeCloseTo(
+      span(correction.detected) / span(correction.predicted),
+      6,
+    );
+  });
+
   it('finds a lukewarm impression when the window also contains background', () => {
     // V043 regression: the tape reads BETWEEN background and skin (lukewarm),
     // and the marker sits near the arm's edge so the local window holds cold

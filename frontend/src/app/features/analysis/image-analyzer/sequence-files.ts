@@ -9,6 +9,22 @@
  * - `V051_T1_Est.csv`      / `V051_T1_Din07.csv`      → temperature matrix
  * - `V051_T1_Din07.jpeg` (no suffix) → camera original, ignored
  *
+ * Earlier sessions (e.g. `V014/`) carry an extra token between the trial and
+ * the phase naming the support surface the hands rested on — `E` (blue EVA),
+ * `EP` (EVA + paper) and `M` (wood): `V014_T1_E_Din00_IR.jpeg`,
+ * `V014_T1_EP_Est.csv`. They are normalized onto the current protocol rather
+ * than modeled as a variation of it, since only one of their acquisitions
+ * matches it:
+ *
+ * - only `E` is kept — blue EVA is the surface the current protocol settled
+ *   on, and the `EP`/`M` acquisitions are baseline-only surface trials;
+ * - `Din00` is dropped — it is the same instant as `Est`, which the current
+ *   naming records once.
+ *
+ * What is left is exactly a current-naming session (`Est` + `Din01…`), so a
+ * legacy folder reviews and processes as `V014_T1` with no legacy concept
+ * leaking downstream. The discards are counted for the review screen.
+ *
  * Anything else (clinical spreadsheets, hidden files…) is ignored and only
  * counted, so the review screen can say what was skipped. Files never leave
  * the browser.
@@ -16,7 +32,11 @@
 
 import { ReviewCapture, SequenceReview } from './sequence.model';
 
-const CAPTURE_FILE_RE = /^([A-Za-z0-9]+)_([A-Za-z0-9]+)_(Est|Din(\d+))(?:_(DAR|IR))?\.(jpe?g|csv)$/i;
+const CAPTURE_FILE_RE =
+  /^([A-Za-z0-9]+)_([A-Za-z0-9]+)(?:_([A-Za-z]{1,3}))?_(Est|Din(\d+))(?:_(DAR|IR))?\.(jpe?g|csv)$/i;
+
+/** Legacy support surface kept on import: blue EVA, as in the current protocol. */
+const KEPT_SURFACE = 'E';
 
 type Modality = 'optical' | 'thermal' | 'matrix';
 
@@ -26,6 +46,8 @@ interface ParsedName {
   readonly label: string;
   readonly index: number; // 0 = baseline
   readonly modality: Modality | 'original';
+  /** A legacy capture the current protocol has no place for — counted, not used. */
+  readonly legacyDiscard: boolean;
 }
 
 function parseCaptureFileName(name: string): ParsedName | null {
@@ -33,7 +55,7 @@ function parseCaptureFileName(name: string): ParsedName | null {
   if (!match) {
     return null;
   }
-  const [, subject, trial, phase, dinIndex, suffix, ext] = match;
+  const [, subject, trial, surface, phase, dinIndex, suffix, ext] = match;
   const isCsv = ext.toLowerCase() === 'csv';
   if (isCsv && suffix) {
     return null; // e.g. *_DAR.csv — not part of the protocol
@@ -45,12 +67,17 @@ function parseCaptureFileName(name: string): ParsedName | null {
       : suffix?.toUpperCase() === 'IR'
         ? 'thermal'
         : 'original';
+  const isBaseline = dinIndex === undefined;
+  const index = isBaseline ? 0 : Number.parseInt(dinIndex, 10);
   return {
     subject,
     trial,
     label: phase,
-    index: dinIndex === undefined ? 0 : Number.parseInt(dinIndex, 10),
+    index,
     modality,
+    legacyDiscard:
+      (surface !== undefined && surface.toUpperCase() !== KEPT_SURFACE) ||
+      (!isBaseline && index === 0),
   };
 }
 
@@ -73,6 +100,7 @@ export function groupSequenceFiles(files: readonly File[]): SequenceReview[] {
     trial: string;
     captures: Map<number, MutableCapture>;
     ignoredOriginals: number;
+    ignoredLegacy: number;
   }
 
   const groups = new Map<string, Group>();
@@ -90,11 +118,22 @@ export function groupSequenceFiles(files: readonly File[]): SequenceReview[] {
     const key = `${parsed.subject}_${parsed.trial}`;
     let group = groups.get(key);
     if (!group) {
-      group = { subject: parsed.subject, trial: parsed.trial, captures: new Map(), ignoredOriginals: 0 };
+      group = {
+        subject: parsed.subject,
+        trial: parsed.trial,
+        captures: new Map(),
+        ignoredOriginals: 0,
+        ignoredLegacy: 0,
+      };
       groups.set(key, group);
     }
     if (parsed.modality === 'original') {
+      // Unused in either naming, so it is an original before it is a discard.
       group.ignoredOriginals++;
+      continue;
+    }
+    if (parsed.legacyDiscard) {
+      group.ignoredLegacy++;
       continue;
     }
     let capture = group.captures.get(parsed.index);
@@ -129,6 +168,7 @@ export function groupSequenceFiles(files: readonly File[]): SequenceReview[] {
       captures,
       missingIndexes,
       ignoredOriginals: group.ignoredOriginals,
+      ignoredLegacy: group.ignoredLegacy,
       ignoredOthers,
     };
   });

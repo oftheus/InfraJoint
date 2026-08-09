@@ -6,8 +6,13 @@
  * hands' rewarming after cold stress. Each capture is the same triplet the
  * individual analysis uses: optical photo (`*_DAR.jpeg`), thermal render
  * (`*_IR.jpeg`) and temperature matrix (`*.csv`).
+ *
+ * Legacy folders ("V014/") use a different file naming, normalized onto this
+ * same shape on import; see `sequence-files.ts`.
  */
 
+import { SilhouetteAgreement } from './alignment-quality';
+import { FiducialCorrection } from './fiducial-markers';
 import { AffineMatrix, DetectedHand, ThermalMatrix } from './image-analyzer.model';
 import { JointRoiOverride } from './joint-rois';
 
@@ -43,6 +48,12 @@ export interface SequenceReview {
   readonly missingIndexes: readonly number[];
   /** Camera originals (`*_Din01.jpeg`, no `_DAR`/`_IR` suffix) — not used. */
   readonly ignoredOriginals: number;
+  /**
+   * Legacy captures the current protocol has no place for — the `EP`/`M`
+   * support-surface acquisitions and `Din00` (same instant as `Est`). Counted
+   * because they would otherwise be dropped silently.
+   */
+  readonly ignoredLegacy: number;
   /** Files outside the protocol naming (spreadsheets, etc.) — not used. */
   readonly ignoredOthers: number;
 }
@@ -61,6 +72,15 @@ export interface SequenceCapture {
   /** RGB→CSV alignment fitted for this capture, or null when it failed. */
   readonly alignment: AffineMatrix | null;
   readonly autoMethod: 'fiducial' | 'silhouette' | 'manual' | null;
+  /**
+   * Silhouette agreement of `alignment`. Kept whole rather than reduced to the
+   * displayed percentage: the acceptance threshold is not calibrated yet, and
+   * founding it later means re-deriving it from these captures without
+   * reprocessing them.
+   */
+  readonly agreement: SilhouetteAgreement | null;
+  /** Marker correction, when the fiducial path produced this alignment. */
+  readonly correction: FiducialCorrection | null;
   /** Hands landmarked on this capture's photo (per-frame re-anchoring). */
   readonly hands: readonly DetectedHand[];
   /**

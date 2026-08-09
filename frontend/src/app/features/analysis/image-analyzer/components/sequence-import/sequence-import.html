@@ -39,6 +39,9 @@
         <span class="mt-1 text-[11px] text-gray-400">
           Imagens ópticas (_DAR), térmicas (_IR) e matrizes CSV · baseline (Est) + dinâmicas (Din)
         </span>
+        <span class="text-[11px] text-gray-400">
+          Também aceita a nomenclatura antiga, com a superfície de apoio no nome (ex.: V014_T1_E_Din01)
+        </span>
       </button>
       <div class="border-t border-gray-100 px-4 py-3 text-center">
         <button
@@ -141,6 +144,13 @@
         @if (sequence.selectedReview(); as review) {
           @if (review.missingIndexes.length > 0) {
             <span class="text-amber-600">Índices ausentes: {{ review.missingIndexes.join(', ') }}</span>
+          }
+          @if (review.ignoredLegacy > 0) {
+            <span
+              title="Nomenclatura antiga: as capturas sobre EVA + papel e sobre madeira, e a Din00 (mesmo instante da Est), não fazem parte do protocolo atual"
+            >
+              {{ review.ignoredLegacy }} arquivo(s) da nomenclatura antiga descartado(s)
+            </span>
           }
         }
       </p>
