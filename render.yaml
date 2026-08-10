@@ -1,5 +1,9 @@
 # Deploy do backend no Render.
 #
+# Mora na RAIZ do repositório porque é onde o Render procura um Blueprint — em
+# backend/render.yaml o arquivo seria simplesmente ignorado. O `rootDir` abaixo é o que
+# aponta para a pasta certa.
+#
 # Versionado de propósito: configuração que só existe no dashboard é configuração que
 # ninguém revisa e que se perde ao recriar o serviço.
 #
