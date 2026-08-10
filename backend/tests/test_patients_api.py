@@ -171,6 +171,65 @@ async def test_consulta_criada_aparece_no_detalhe_do_paciente(client: tuple[Any,
     assert [e["reason"] for e in detalhe.json()["encounters"]] == ["dor articular"]
 
 
+async def test_apagar_o_nome_vira_422_e_nao_500(client: tuple[Any, dict]) -> None:
+    """`full_name` é `not null`: o erro é do cliente, não do servidor."""
+    http, acting = client
+    acting["user_id"] = MEDICO_A
+
+    paciente = await _criar_paciente(http, "API-TEST Ana")
+    response = await http.patch(f"/patients/{paciente['id']}", json={"full_name": None})
+    assert response.status_code == 422, response.text
+
+    # E o nome continua lá.
+    detalhe = await http.get(f"/patients/{paciente['id']}")
+    assert detalhe.json()["full_name"] == "API-TEST Ana"
+
+
+async def test_limpar_campo_opcional_continua_valendo(client: tuple[Any, dict]) -> None:
+    """O contrapeso do teste acima: `null` nos campos nulos ainda limpa o campo."""
+    http, acting = client
+    acting["user_id"] = MEDICO_A
+
+    criado = await http.post("/patients", json={"full_name": "API-TEST Ana", "phone": "11999"})
+    assert criado.status_code == 201
+    paciente = criado.json()
+    assert paciente["phone"] == "11999"
+
+    response = await http.patch(f"/patients/{paciente['id']}", json={"phone": None})
+    assert response.status_code == 200, response.text
+    assert response.json()["phone"] is None
+
+
+async def test_erro_inesperado_responde_500_com_cabecalho_de_cors(_seeded: None) -> None:
+    """Sem os cabeçalhos, o browser mostra erro de CORS no lugar do erro real.
+
+    O handler de 500 tem que ficar DENTRO do CORSMiddleware. Como `add_middleware`
+    insere na posição 0, isso depende da ordem de registro em `create_app()` — este
+    teste é o que impede a ordem de ser invertida sem querer.
+    """
+    from httpx import ASGITransport, AsyncClient
+
+    from app.main import create_app
+    from app.presentation import deps
+
+    origem = "http://localhost:4200"
+    app = create_app()
+    app.dependency_overrides[deps.get_user_id] = lambda: MEDICO_A
+
+    async with app.router.lifespan_context(app):
+        # Banco fora do ar depois de a aplicação ter subido: erro de infraestrutura
+        # genuíno, do tipo que o handler existe para cobrir.
+        await app.state.database.disconnect()
+
+        transport = ASGITransport(app=app, raise_app_exceptions=False)
+        async with AsyncClient(transport=transport, base_url="http://test") as http:
+            response = await http.get("/patients", headers={"Origin": origem})
+
+    assert response.status_code == 500
+    assert response.json() == {"detail": "erro interno"}, "a mensagem interna não pode vazar"
+    assert response.headers.get("access-control-allow-origin") == origem
+
+
 async def test_campo_desconhecido_vira_422(client: tuple[Any, dict]) -> None:
     http, acting = client
     acting["user_id"] = MEDICO_A
@@ -181,7 +240,9 @@ async def test_campo_desconhecido_vira_422(client: tuple[Any, dict]) -> None:
     assert response.status_code == 422, "tentar definir o dono não pode passar em silêncio"
 
 
-async def test_sem_token_recebe_401() -> None:
+async def test_sem_token_recebe_401(_seeded: None) -> None:
+    # Depende de `_seeded` só pelo skip que ele carrega: este teste sobe o lifespan de
+    # verdade, então sem banco ele falharia em vez de ser pulado como os outros.
     from httpx import ASGITransport, AsyncClient
 
     from app.main import create_app

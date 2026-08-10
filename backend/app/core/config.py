@@ -22,9 +22,19 @@ class Settings(BaseSettings):
 
     jwt_audience: str = "authenticated"
 
+    # /docs e /openapi.json publicam o mapa da API — rotas, campos e enums de dado
+    # clínico. Útil no desenvolvimento, reconhecimento gratuito em produção.
+    docs_enabled: bool = True
+
     @property
     def cors_origin_list(self) -> list[str]:
-        return [origin.strip() for origin in self.cors_origins.split(",") if origin.strip()]
+        origins = [origin.strip() for origin in self.cors_origins.split(",") if origin.strip()]
+        if "*" in origins:
+            # O frontend tem origem conhecida, então o curinga nunca é a resposta certa
+            # aqui — é o atalho de quem está tentando destravar um preflight. Recusar no
+            # boot custa um deploy vermelho; aceitar custa a API aberta para qualquer site.
+            raise ValueError("CORS_ORIGINS não aceita '*'; liste as origens explicitamente")
+        return origins
 
     @property
     def jwt_issuer(self) -> str:

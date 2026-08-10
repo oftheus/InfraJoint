@@ -9,7 +9,7 @@ from __future__ import annotations
 from datetime import date, datetime
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from app.domain.entities import Encounter, Patient, Sex
 
@@ -38,6 +38,19 @@ class PatientUpdate(BaseModel):
     sex: Sex | None = None
     phone: str | None = Field(default=None, max_length=40)
     primary_diagnosis: str | None = Field(default=None, max_length=300)
+
+    @field_validator("full_name")
+    @classmethod
+    def _nome_nao_pode_ser_apagado(cls, value: str | None) -> str | None:
+        """`min_length` só vale para `str`; sem isto, `null` explícito passaria.
+
+        Os outros quatro campos são nulos no banco, então enviar `null` neles significa
+        limpar o campo. `full_name` é `not null`: o `UPDATE` falharia no constraint e o
+        cliente receberia 500 por um erro que é dele.
+        """
+        if value is None:
+            raise ValueError("full_name não pode ser nulo")
+        return value
 
 
 class PatientOut(BaseModel):
@@ -69,7 +82,9 @@ class EncounterCreate(BaseModel):
 
     occurred_at: datetime | None = None
     reason: str | None = Field(default=None, max_length=300)
-    clinical_notes: str | None = None
+    # O uvicorn não limita o tamanho do corpo, e este era o único campo textual sem
+    # teto: um POST de centenas de MB seria bufferizado em memória e gravado.
+    clinical_notes: str | None = Field(default=None, max_length=20_000)
 
 
 class EncounterOut(BaseModel):
@@ -100,7 +115,3 @@ class PatientDetailOut(PatientOut):
     """
 
     encounters: list[EncounterOut]
-
-
-class ErrorOut(BaseModel):
-    detail: str
