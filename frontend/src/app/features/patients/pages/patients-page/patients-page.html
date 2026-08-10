@@ -1,4 +1,107 @@
 <main class="page-container py-16 text-ink-strong">
-  <h1 class="text-3xl font-bold tracking-tight text-primary sm:text-4xl">Pacientes</h1>
-  <p class="mt-3 text-base text-muted">Gerencie os pacientes acompanhados na plataforma.</p>
+  <div class="flex flex-wrap items-start justify-between gap-4">
+    <div>
+      <h1 class="text-3xl font-bold tracking-tight text-primary sm:text-4xl">Pacientes</h1>
+      <p class="mt-3 text-base text-muted">Gerencie os pacientes acompanhados na plataforma.</p>
+    </div>
+
+    <button type="button" class="btn-primary h-11 px-6 text-sm" (click)="toggleForm()">
+      <svg
+        [lucideIcon]="formOpen() ? 'x' : 'user-round'"
+        class="mr-2 h-4 w-4"
+        aria-hidden="true"
+      ></svg>
+      {{ formOpen() ? 'Cancelar' : 'Novo paciente' }}
+    </button>
+  </div>
+
+  @if (error()) {
+    <p
+      role="alert"
+      class="mt-6 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700"
+    >
+      {{ error() }}
+    </p>
+  }
+
+  @if (formOpen()) {
+    <form
+      [formGroup]="form"
+      (ngSubmit)="submit()"
+      class="mt-6 rounded-2xl border border-gray-200 bg-surface p-6"
+    >
+      <div class="grid gap-4 sm:grid-cols-2">
+        <label class="sm:col-span-2">
+          <span class="mb-1.5 block text-sm font-medium text-secondary">Nome completo *</span>
+          <input class="auth-input" formControlName="full_name" autocomplete="off" />
+          @if (form.controls.full_name.touched && form.controls.full_name.invalid) {
+            <span class="mt-1 block text-xs text-red-600">Informe o nome do paciente.</span>
+          }
+        </label>
+
+        <label>
+          <span class="mb-1.5 block text-sm font-medium text-secondary">Data de nascimento</span>
+          <input class="auth-input" type="date" formControlName="birth_date" />
+        </label>
+
+        <label>
+          <span class="mb-1.5 block text-sm font-medium text-secondary">Sexo</span>
+          <select class="auth-input" formControlName="sex">
+            <option value="">Selecione…</option>
+            @for (option of sexOptions; track option.value) {
+              <option [value]="option.value">{{ option.label }}</option>
+            }
+          </select>
+        </label>
+
+        <label>
+          <span class="mb-1.5 block text-sm font-medium text-secondary">Telefone</span>
+          <input class="auth-input" type="tel" formControlName="phone" autocomplete="off" />
+        </label>
+
+        <label class="sm:col-span-2">
+          <span class="mb-1.5 block text-sm font-medium text-secondary">Diagnóstico principal</span>
+          <input class="auth-input" formControlName="primary_diagnosis" autocomplete="off" />
+        </label>
+      </div>
+
+      <div class="mt-6 flex justify-end">
+        <button type="submit" class="btn-primary h-11 px-6 text-sm" [disabled]="saving()">
+          {{ saving() ? 'Salvando…' : 'Salvar paciente' }}
+        </button>
+      </div>
+    </form>
+  }
+
+  @if (loading()) {
+    <p class="empty-state mt-10">Carregando pacientes…</p>
+  } @else if (patients().length === 0) {
+    <p class="empty-state mt-10">Nenhum paciente cadastrado ainda.</p>
+  } @else {
+    <ul class="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      @for (patient of patients(); track patient.id) {
+        <li>
+          <a
+            [routerLink]="['/pacientes', patient.id]"
+            class="block h-full rounded-2xl border border-gray-200 bg-surface p-5 transition-shadow hover:shadow-[0_18px_50px_rgba(27,58,87,0.08)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+          >
+            <p class="text-base font-semibold text-primary">{{ patient.full_name }}</p>
+            <p class="mt-1 text-sm text-muted">
+              @if (patient.birth_date) {
+                Nascimento {{ patient.birth_date | date: 'dd/MM/yyyy' }}
+              } @else {
+                Data de nascimento não informada
+              }
+            </p>
+            @if (patient.primary_diagnosis) {
+              <p class="mt-3 text-sm text-secondary">{{ patient.primary_diagnosis }}</p>
+            }
+            <p class="mt-4 text-xs text-muted">
+              Cadastrado em {{ patient.created_at | date: 'dd/MM/yyyy' }}
+            </p>
+          </a>
+        </li>
+      }
+    </ul>
+  }
 </main>

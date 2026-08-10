@@ -24,8 +24,8 @@ interface NavLink {
   readonly icon: string;
   /** Router path the item navigates to. */
   readonly route: string;
-  /** When set, the entry is only shown to users holding this role. */
-  readonly requiredRole?: UserRole;
+  /** When set, the entry is only shown to users holding one of these roles. */
+  readonly requiredRoles?: readonly UserRole[];
 }
 
 /** A collapsible group of navigation links (a section with children). */
@@ -34,8 +34,8 @@ interface NavGroup {
   readonly label: string;
   readonly icon: string;
   readonly children: readonly NavLink[];
-  /** When set, the whole section is only shown to users holding this role. */
-  readonly requiredRole?: UserRole;
+  /** When set, the whole section is only shown to users holding one of these roles. */
+  readonly requiredRoles?: readonly UserRole[];
 }
 
 type NavEntry = NavLink | NavGroup;
@@ -82,12 +82,18 @@ export class AuthShell {
 
   /**
    * Full navigation tree. Append links/groups here to add new modules; the
-   * `requiredRole` flag gates visibility and groups render as collapsible
+   * `requiredRoles` flag gates visibility and groups render as collapsible
    * sections automatically.
    */
   private readonly navEntries: readonly NavEntry[] = [
     { kind: 'link', label: 'Dashboard', icon: 'house', route: '/dashboard' },
-    { kind: 'link', label: 'Pacientes', icon: 'user-round', route: '/pacientes' },
+    {
+      kind: 'link',
+      label: 'Pacientes',
+      icon: 'user-round',
+      route: '/pacientes',
+      requiredRoles: ['medico', 'admin'],
+    },
     {
       kind: 'group',
       label: 'Análise',
@@ -125,7 +131,7 @@ export class AuthShell {
       kind: 'group',
       label: 'Administração',
       icon: 'shield',
-      requiredRole: 'admin',
+      requiredRoles: ['admin'],
       children: [
         { kind: 'link', label: 'Usuários', icon: 'users-round', route: '/administracao/usuarios' },
         { kind: 'link', label: 'Dataset', icon: 'layers', route: '/administracao/dataset' },
@@ -220,7 +226,7 @@ export class AuthShell {
   }
 
   private canSee(entry: NavEntry, role: UserRole | undefined): boolean {
-    return !entry.requiredRole || entry.requiredRole === role;
+    return !entry.requiredRoles || (!!role && entry.requiredRoles.includes(role));
   }
 
   private isLinkActive(route: string): boolean {

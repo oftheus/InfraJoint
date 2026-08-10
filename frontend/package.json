@@ -8,7 +8,8 @@
     "watch": "ng build --watch --configuration development",
     "test": "ng test",
     "serve:ssr:InfraJoint": "node dist/InfraJoint/server/server.mjs",
-    "lint": "ng lint"
+    "lint": "ng lint",
+    "start:prod": "ng serve --configuration development"
   },
   "private": true,
   "packageManager": "npm@11.13.0",
