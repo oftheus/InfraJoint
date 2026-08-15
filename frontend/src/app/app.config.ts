@@ -4,7 +4,8 @@ import {
   provideAppInitializer,
   provideBrowserGlobalErrorListeners,
 } from '@angular/core';
-import { provideRouter, withInMemoryScrolling } from '@angular/router';
+import { provideRouter, withComponentInputBinding, withInMemoryScrolling } from '@angular/router';
+import { provideHttpClient, withInterceptors } from '@angular/common/http';
 import { provideAnimations } from '@angular/platform-browser/animations';
 import {
   LucideArrowLeft,
@@ -59,6 +60,7 @@ import {
 
 import { appRoutes } from './app.routes';
 import { AuthService } from './core/auth/auth.service';
+import { authInterceptor } from './core/http/auth.interceptor';
 
 export const appConfig: ApplicationConfig = {
   providers: [
@@ -69,8 +71,11 @@ export const appConfig: ApplicationConfig = {
         anchorScrolling: 'enabled',
         scrollPositionRestoration: 'enabled',
       }),
+      // Parâmetros de rota chegam como `input()` nos componentes (ex.: /pacientes/:id).
+      withComponentInputBinding(),
     ),
     provideAnimations(),
+    provideHttpClient(withInterceptors([authInterceptor])),
     // Eagerly instantiate AuthService so the session is resolved at startup.
     provideAppInitializer(() => {
       inject(AuthService);

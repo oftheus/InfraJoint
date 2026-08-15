@@ -1,0 +1,54 @@
+# Deploy do backend no Render.
+#
+# Mora na RAIZ do repositório porque é onde o Render procura um Blueprint — em
+# backend/render.yaml o arquivo seria simplesmente ignorado. O `rootDir` abaixo é o que
+# aponta para a pasta certa.
+#
+# Versionado de propósito: configuração que só existe no dashboard é configuração que
+# ninguém revisa e que se perde ao recriar o serviço.
+#
+# `sync: false` faz o Render pedir o valor no dashboard em vez de gravá-lo aqui —
+# nenhum segredo entra no repositório.
+
+services:
+  - type: web
+    name: infrajoint-api
+    runtime: python
+    rootDir: backend
+    plan: free
+
+    # O autodetect Python do Render procura requirements.txt / Pipfile / Poetry. Um
+    # pyproject.toml com backend setuptools puro não é reconhecido, então o build é
+    # explícito.
+    buildCommand: pip install -e .
+
+    # --host 0.0.0.0 e $PORT não são opcionais: o default do uvicorn é 127.0.0.1:8000,
+    # onde o health check do Render nunca chega.
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+
+    # Liveness, não readiness — /health responde sem tocar no banco de propósito.
+    healthCheckPath: /health
+
+    envVars:
+      # StrEnum (app/domain/entities.py) exige 3.11+, e o default do Render muda.
+      - key: PYTHON_VERSION
+        value: "3.11.9"
+
+      # Transaction pooler (porta 6543), usuário no formato <role>.<project_ref>, e
+      # ?sslmode=require — sem ele o asyncpg usa `prefer`, que aceita texto puro em
+      # silêncio e não valida certificado. É dado clínico atravessando a internet.
+      - key: DATABASE_URL
+        sync: false
+
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_JWKS_URL
+        sync: false
+
+      # Origens do frontend, separadas por vírgula. '*' é recusado no boot.
+      - key: CORS_ORIGINS
+        sync: false
+
+      # Em produção o mapa da API não precisa ser público.
+      - key: DOCS_ENABLED
+        value: "false"

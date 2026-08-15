@@ -1,0 +1,230 @@
+<main class="page-container py-16 text-ink-strong">
+  <a
+    routerLink="/pacientes"
+    class="inline-flex items-center text-sm font-medium text-accent hover:underline"
+  >
+    <svg [lucideIcon]="'arrow-left'" class="mr-1.5 h-4 w-4" aria-hidden="true"></svg>
+    Voltar para pacientes
+  </a>
+
+  @if (error()) {
+    <p
+      role="alert"
+      class="mt-6 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700"
+    >
+      {{ error() }}
+    </p>
+  }
+
+  @if (loading()) {
+    <p class="empty-state mt-10">Carregando…</p>
+  } @else if (patient(); as detail) {
+    <div class="mt-6 flex flex-wrap items-start justify-between gap-4">
+      <div>
+        <h1 class="text-3xl font-bold tracking-tight text-primary sm:text-4xl">
+          {{ detail.full_name }}
+        </h1>
+        <p class="mt-2 text-base text-muted">
+          @if (detail.birth_date) {
+            Nascimento {{ detail.birth_date | date: 'dd/MM/yyyy' }}
+          } @else {
+            Data de nascimento não informada
+          }
+          @if (sexLabel(detail.sex); as label) {
+            · {{ label }}
+          }
+        </p>
+      </div>
+
+      <div class="flex gap-3">
+        <button type="button" class="btn-secondary h-11 px-6 text-sm" (click)="toggleEditing()">
+          {{ editing() ? 'Cancelar' : 'Editar' }}
+        </button>
+        <button
+          type="button"
+          class="inline-flex h-11 items-center justify-center rounded-full border border-red-200 bg-red-50 px-6 text-sm font-semibold text-red-600 transition-colors hover:bg-red-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-400"
+          (click)="toggleConfirmDelete()"
+        >
+          <svg [lucideIcon]="'trash-2'" class="mr-2 h-4 w-4" aria-hidden="true"></svg>
+          Excluir
+        </button>
+      </div>
+    </div>
+
+    @if (confirmingDelete()) {
+      <section
+        role="alertdialog"
+        aria-labelledby="titulo-exclusao"
+        class="mt-6 rounded-2xl border border-red-200 bg-red-50 p-6"
+      >
+        <h2 id="titulo-exclusao" class="text-lg font-semibold text-red-800">
+          Excluir {{ detail.full_name }}?
+        </h2>
+
+        <!-- Dizer exatamente o que será destruído importa mais que perguntar
+             "tem certeza": as consultas somem por cascata e não há como desfazer. -->
+        <p class="mt-2 text-sm text-red-700">
+          @if (encounters().length === 0) {
+            Este paciente não tem consultas registradas.
+          } @else if (encounters().length === 1) {
+            <strong>1 consulta</strong> registrada será apagada junto, com todas as análises
+            dela.
+          } @else {
+            <strong>{{ encounters().length }} consultas</strong> registradas serão apagadas
+            junto, com todas as análises delas.
+          }
+          Esta ação não pode ser desfeita.
+        </p>
+
+        <div class="mt-5 flex flex-wrap gap-3">
+          <button
+            type="button"
+            class="inline-flex h-11 items-center justify-center rounded-full bg-red-600 px-6 text-sm font-semibold text-white transition-colors hover:bg-red-700 disabled:opacity-60"
+            [disabled]="deleting()"
+            (click)="confirmDelete()"
+          >
+            {{ deleting() ? 'Excluindo…' : 'Sim, excluir definitivamente' }}
+          </button>
+          <button
+            type="button"
+            class="btn-secondary h-11 px-6 text-sm"
+            [disabled]="deleting()"
+            (click)="toggleConfirmDelete()"
+          >
+            Cancelar
+          </button>
+        </div>
+      </section>
+    }
+
+    @if (editing()) {
+      <form
+        [formGroup]="patientForm"
+        (ngSubmit)="savePatient()"
+        class="mt-6 rounded-2xl border border-gray-200 bg-surface p-6"
+      >
+        <div class="grid gap-4 sm:grid-cols-2">
+          <label class="sm:col-span-2">
+            <span class="mb-1.5 block text-sm font-medium text-secondary">Nome completo *</span>
+            <input class="auth-input" formControlName="full_name" />
+            @if (patientForm.controls.full_name.touched && patientForm.controls.full_name.invalid) {
+              <span class="mt-1 block text-xs text-red-600">Informe o nome do paciente.</span>
+            }
+          </label>
+
+          <label>
+            <span class="mb-1.5 block text-sm font-medium text-secondary">
+              Data de nascimento
+            </span>
+            <input class="auth-input" type="date" formControlName="birth_date" />
+          </label>
+
+          <label>
+            <span class="mb-1.5 block text-sm font-medium text-secondary">Sexo</span>
+            <select class="auth-input" formControlName="sex">
+              <option value="">Selecione…</option>
+              @for (option of sexOptions; track option.value) {
+                <option [value]="option.value">{{ option.label }}</option>
+              }
+            </select>
+          </label>
+
+          <label>
+            <span class="mb-1.5 block text-sm font-medium text-secondary">Telefone</span>
+            <input class="auth-input" type="tel" formControlName="phone" />
+          </label>
+
+          <label>
+            <span class="mb-1.5 block text-sm font-medium text-secondary">
+              Diagnóstico principal
+            </span>
+            <input class="auth-input" formControlName="primary_diagnosis" />
+          </label>
+        </div>
+
+        <div class="mt-6 flex justify-end">
+          <button type="submit" class="btn-primary h-11 px-6 text-sm" [disabled]="savingPatient()">
+            {{ savingPatient() ? 'Salvando…' : 'Salvar alterações' }}
+          </button>
+        </div>
+      </form>
+    } @else {
+      <dl class="mt-6 grid gap-4 rounded-2xl border border-gray-200 bg-surface p-6 sm:grid-cols-2">
+        <div>
+          <dt class="text-sm font-medium text-secondary">Telefone</dt>
+          <dd class="mt-1 text-base">{{ detail.phone || '—' }}</dd>
+        </div>
+        <div>
+          <dt class="text-sm font-medium text-secondary">Sexo</dt>
+          <dd class="mt-1 text-base">{{ sexLabel(detail.sex) || '—' }}</dd>
+        </div>
+        <div class="sm:col-span-2">
+          <dt class="text-sm font-medium text-secondary">Diagnóstico principal</dt>
+          <dd class="mt-1 text-base">{{ detail.primary_diagnosis || '—' }}</dd>
+        </div>
+      </dl>
+    }
+
+    <section class="mt-12">
+      <div class="flex flex-wrap items-center justify-between gap-4">
+        <h2 class="text-2xl font-bold tracking-tight text-primary">Consultas</h2>
+        <button type="button" class="btn-primary h-11 px-6 text-sm" (click)="toggleEncounterForm()">
+          <svg
+            [lucideIcon]="encounterFormOpen() ? 'x' : 'stethoscope'"
+            class="mr-2 h-4 w-4"
+            aria-hidden="true"
+          ></svg>
+          {{ encounterFormOpen() ? 'Cancelar' : 'Nova consulta' }}
+        </button>
+      </div>
+
+      @if (encounterFormOpen()) {
+        <form
+          [formGroup]="encounterForm"
+          (ngSubmit)="createEncounter()"
+          class="mt-6 rounded-2xl border border-gray-200 bg-surface p-6"
+        >
+          <label class="block">
+            <span class="mb-1.5 block text-sm font-medium text-secondary">Motivo</span>
+            <input class="auth-input" formControlName="reason" />
+          </label>
+
+          <label class="mt-4 block">
+            <span class="mb-1.5 block text-sm font-medium text-secondary">Notas clínicas</span>
+            <textarea class="auth-input min-h-24" formControlName="clinical_notes"></textarea>
+          </label>
+
+          <div class="mt-6 flex justify-end">
+            <button
+              type="submit"
+              class="btn-primary h-11 px-6 text-sm"
+              [disabled]="savingEncounter()"
+            >
+              {{ savingEncounter() ? 'Salvando…' : 'Registrar consulta' }}
+            </button>
+          </div>
+        </form>
+      }
+
+      @if (encounters().length === 0) {
+        <p class="empty-state mt-8">Nenhuma consulta registrada para este paciente.</p>
+      } @else {
+        <ul class="mt-6 space-y-3">
+          @for (encounter of encounters(); track encounter.id) {
+            <li class="rounded-2xl border border-gray-200 bg-surface p-5">
+              <p class="text-sm font-semibold text-primary">
+                {{ encounter.occurred_at | date: 'dd/MM/yyyy HH:mm' }}
+              </p>
+              <p class="mt-1 text-base">{{ encounter.reason || 'Sem motivo informado' }}</p>
+              @if (encounter.clinical_notes) {
+                <p class="mt-2 whitespace-pre-line text-sm text-muted">
+                  {{ encounter.clinical_notes }}
+                </p>
+              }
+            </li>
+          }
+        </ul>
+      }
+    </section>
+  }
+</main>

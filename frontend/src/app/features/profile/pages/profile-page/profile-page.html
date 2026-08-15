@@ -97,7 +97,8 @@
             <span class="text-base text-ink-strong">
               @switch (profile()?.role) {
                 @case ('admin') { Administrador }
-                @case ('user') { Usuário }
+                @case ('medico') { Médico }
+                @case ('user') { Leitor }
                 @default { — }
               }
             </span>

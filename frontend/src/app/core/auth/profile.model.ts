@@ -1,5 +1,5 @@
 /** Role values mirror the `public.user_role` enum in the database. */
-export type UserRole = 'user' | 'admin';
+export type UserRole = 'user' | 'medico' | 'admin';
 
 /** A row from the `public.users` profile table. */
 export interface UserProfile {

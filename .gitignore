@@ -9,6 +9,18 @@
 **/.eslintcache
 **/*.tsbuildinfo
 
+### Python / FastAPI
+**/.venv/
+**/venv/
+**/__pycache__/
+**/*.py[cod]
+**/.pytest_cache/
+**/.ruff_cache/
+**/.mypy_cache/
+
+### Rascunhos de escrita (não fazem parte do build)
+frontend/src/escrita/
+
 ### Logs
 **/logs/
 **/*.log
@@ -20,8 +32,13 @@ pnpm-debug.log*
 ### Environment
 .env
 .env.*
-.env.local
-.env.*.local
+
+# Exceções: não carregam segredo e precisam ser versionadas.
+# `.env.example` documenta as variáveis; `.env.local` traz só as credenciais fixas
+# do Supabase CLI, que são públicas e valem apenas em 127.0.0.1.
+!.env.example
+!.env.*.example
+!.env.local
 
 ### IDE
 .vscode/
