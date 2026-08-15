@@ -17,6 +17,18 @@ services:
     rootDir: backend
     plan: free
 
+    # O Supabase está em sa-east-1 (São Paulo) e o Render não tem região na América do
+    # Sul. Virginia é a menos distante; o default seria Oregon, o pior caso. Importa
+    # porque cada request autenticado faz 5–6 round trips sequenciais ao banco (BEGIN,
+    # SET LOCAL ROLE, claims, SELECT role, query, COMMIT) — a latência multiplica por 6.
+    region: virginia
+
+    # Monorepo: sem isto, todo commit no frontend Angular redeploya o backend à toa.
+    buildFilter:
+      paths:
+        - backend/**
+        - render.yaml
+
     # O autodetect Python do Render procura requirements.txt / Pipfile / Poetry. Um
     # pyproject.toml com backend setuptools puro não é reconhecido, então o build é
     # explícito.
