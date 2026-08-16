@@ -61,6 +61,21 @@ services:
       - key: CORS_ORIGINS
         sync: false
 
+      # Cloudflare R2. Sem elas a API sobe, mas o upload de capturas responde 503 e a
+      # consulta reaberta não mostra imagem nenhuma — a Fase 5 inteira fica fora do ar
+      # sem nenhum erro no boot que denuncie isso.
+      #
+      # O bucket também precisa de política de CORS liberando a origem do frontend,
+      # com PUT e GET: o browser fala direto com o R2, o backend só assina.
+      - key: R2_ENDPOINT
+        sync: false
+      - key: R2_BUCKET
+        sync: false
+      - key: R2_ACCESS_KEY_ID
+        sync: false
+      - key: R2_SECRET_ACCESS_KEY
+        sync: false
+
       # Em produção o mapa da API não precisa ser público.
       - key: DOCS_ENABLED
         value: "false"

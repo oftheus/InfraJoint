@@ -5,6 +5,7 @@ import {
   computed,
   effect,
   inject,
+  input,
   signal,
   viewChild,
 } from '@angular/core';
@@ -60,6 +61,7 @@ import {
   JOINT_ROI_DEFS,
   JointRoi,
   JointRoiOverride,
+  applyJointOverrides,
   captureJointRois,
 } from '../../image-analyzer/joint-rois';
 import { computeRoiStats } from '../../image-analyzer/roi-stats';
@@ -159,9 +161,36 @@ export class ImageAnalyzerPage {
   });
 
   // --- Loaded inputs -------------------------------------------------------
+  /**
+   * Renderizado dentro do fluxo de Análise Térmica, e não como página própria.
+   *
+   * Só afeta o elemento raiz: a página traz o próprio `<main>`, e aninhar um
+   * dentro do `<main>` do fluxo é HTML inválido e atrapalha leitor de tela.
+   */
+  readonly embedded = input(false);
+
+  /**
+   * A página está mostrando uma consulta **gravada**, não uma sessão nova.
+   *
+   * Suprime a tela de upload: numa consulta reaberta ela não se aplica em momento
+   * algum, e aparecer enquanto a hidratação não termina fazia parecer que abrir
+   * uma consulta redirecionava para pedir arquivos.
+   */
+  readonly fromSaved = input(false);
+
+  /**
+   * Arquivos de origem, retidos para o upload da Fase 5.
+   *
+   * A tela solta nunca os envia — quem envia é o fluxo de Análise Térmica.
+   * Retê-los aqui é só não jogar fora o que já foi lido do disco.
+   */
+  readonly rgbFile = signal<File | null>(null);
+  readonly csvFile = signal<File | null>(null);
+  readonly jpegFile = signal<File | null>(null);
+
   protected readonly rgbImage = signal<HTMLImageElement | null>(null);
   protected readonly rgbFileName = signal<string | null>(null);
-  protected readonly matrix = signal<ThermalMatrix | null>(null);
+  readonly matrix = signal<ThermalMatrix | null>(null);
   protected readonly csvFileName = signal<string | null>(null);
   protected readonly jpegFileName = signal<string | null>(null);
   private readonly jpegCanvas = signal<HTMLCanvasElement | null>(null);
@@ -200,19 +229,19 @@ export class ImageAnalyzerPage {
   );
 
   // --- Alignment -----------------------------------------------------------
-  protected readonly mode = signal<AlignmentMode>('auto');
+  readonly mode = signal<AlignmentMode>('auto');
   protected readonly manualMatrix = signal<AffineMatrix | null>(null);
   protected readonly autoMatrix = signal<AffineMatrix | null>(null);
   /** UI-only: automatic alignment in progress (drives the busy overlay). */
   protected readonly aligning = signal(false);
   /** How the last automatic alignment was solved, for an accurate label. */
-  private readonly autoMethod = signal<AutoMethod | null>(null);
+  readonly autoMethod = signal<AutoMethod | null>(null);
   /**
    * Silhouette agreement of the active alignment. It lives in the panel, not in
    * the result banner: the banner is dismissible and, in sequence mode, every
    * frame carries its own value, which has to survive stepping between captures.
    */
-  private readonly agreement = signal<SilhouetteAgreement | null>(null);
+  readonly agreement = signal<SilhouetteAgreement | null>(null);
 
   /** The panel figure, or null when no alignment was measured (manual, failed). */
   protected readonly overlapPercent = computed(() => {
@@ -236,7 +265,7 @@ export class ImageAnalyzerPage {
     'temperaturas extraídas das ROIs.';
 
   /** Marker correction of the active alignment, when the fiducial path ran. */
-  private readonly correction = signal<FiducialCorrection | null>(null);
+  readonly correction = signal<FiducialCorrection | null>(null);
   /**
    * UI-only: which figure has its explanation open. A native `title` was tried
    * first and is the wrong tool here — it needs a long hover to appear, cannot
@@ -315,7 +344,7 @@ export class ImageAnalyzerPage {
    * automatic method is silhouette registration; manual calibration is the
    * fallback. Nothing is overlaid or measured until one of them has run.
    */
-  private readonly activeMatrix = computed<AffineMatrix | null>(() =>
+  readonly activeMatrix = computed<AffineMatrix | null>(() =>
     this.mode() === 'manual' ? this.manualMatrix() : this.autoMatrix(),
   );
 
@@ -337,11 +366,16 @@ export class ImageAnalyzerPage {
   protected readonly helpOpen = signal(false);
 
   // --- Temporal sequence -----------------------------------------------------
-  protected readonly sequenceService = inject(SequenceService);
+  readonly sequenceService = inject(SequenceService);
   /** Upload screen path: one capture (current flow) or a protocol sequence. */
   protected readonly uploadMode = signal<'single' | 'sequence'>('single');
   /** True while the viewer is showing a processed sequence. */
-  protected readonly sequenceActive = signal(false);
+  /**
+   * Modo sequência ligado. Público porque o fluxo de Análise Térmica precisa
+   * distinguir: hoje ele grava a análise avulsa, e a sequência exige as medições
+   * por captura, que só existem para a captura ativa.
+   */
+  readonly sequenceActive = signal(false);
   /** `processedRunId` of the sequence currently loaded in the viewer. */
   private loadedRunId: number | null = null;
   /** Index of the capture shown in the viewer (0 = baseline). */
@@ -369,8 +403,14 @@ export class ImageAnalyzerPage {
     () => this.activeSequenceCapture()?.timeSeconds ?? null,
   );
 
-  /** Every capture's joint ROIs, re-anchored per frame — feeds the curves. */
-  private readonly curveFrames = computed<CurveFrame[]>(() => {
+  /**
+   * Every capture's joint ROIs, re-anchored per frame — feeds the curves.
+   *
+   * Público porque o fluxo de Análise Térmica grava exatamente estes números: as
+   * medições persistidas passam a ser as mesmas que a curva desenhou, em vez de um
+   * segundo cálculo que poderia divergir.
+   */
+  readonly curveFrames = computed<CurveFrame[]>(() => {
     if (!this.sequenceActive()) {
       return [];
     }
@@ -379,19 +419,48 @@ export class ImageAnalyzerPage {
     return this.sequenceService.captures().map((capture) => ({
       timeSeconds: capture.timeSeconds,
       kind: capture.kind,
-      rois:
-        capture.alignment && capture.hands.length > 0 && capture.matrix.width > 0
-          ? captureJointRois(capture.hands, capture.matrix, capture.alignment, {
-              sizeScale,
-              skinTest:
-                ignoreBackground && capture.skinMask
-                  ? maskSkinTest(capture.skinMask, capture.matrix.width, capture.matrix.height)
-                  : undefined,
-              overrides: capture.jointOverrides,
-            })
-          : [],
+      rois: this.roisDaCaptura(capture, sizeScale, ignoreBackground),
     }));
   });
+
+  /**
+   * ROIs de uma captura: das medições gravadas quando a consulta foi reaberta, dos
+   * landmarks quando é sessão viva.
+   *
+   * A precedência é do gravado. Numa consulta reaberta não há landmarks — e não
+   * deveria haver: o que interessa é reproduzir o que foi medido, não medir de novo.
+   */
+  private roisDaCaptura(
+    capture: SequenceCapture,
+    sizeScale: number,
+    ignoreBackground: boolean,
+  ): readonly JointRoi[] {
+    if (!capture.alignment || capture.matrix.width === 0) {
+      return [];
+    }
+    const skinTest =
+      ignoreBackground && capture.skinMask
+        ? maskSkinTest(capture.skinMask, capture.matrix.width, capture.matrix.height)
+        : undefined;
+
+    if (capture.restoredJoints) {
+      return applyJointOverrides(
+        capture.restoredJoints,
+        capture.jointOverrides,
+        capture.matrix,
+        capture.alignment,
+        skinTest,
+      );
+    }
+    if (capture.hands.length === 0) {
+      return [];
+    }
+    return captureJointRois(capture.hands, capture.matrix, capture.alignment, {
+      sizeScale,
+      skinTest,
+      overrides: capture.jointOverrides,
+    });
+  }
 
   protected readonly rewarmingSeries = computed(() =>
     buildRewarmingSeries(this.curveFrames(), this.curveJointIds(), this.curveStatistic()),
@@ -399,7 +468,7 @@ export class ImageAnalyzerPage {
   protected readonly alphaPct = signal(50);
   protected readonly shape = signal<RoiShape>('circle');
   /** All user-drawn ROIs, in RGB pixel coordinates. */
-  protected readonly rois = signal<readonly RoiSelection[]>([]);
+  readonly rois = signal<readonly RoiSelection[]>([]);
   /** Id of the ROI currently selected for editing, if any. */
   protected readonly selectedRoiId = signal<number | null>(null);
   protected readonly alpha = computed(() => this.alphaPct() / 100);
@@ -456,13 +525,31 @@ export class ImageAnalyzerPage {
   private readonly jointOverrides = signal<ReadonlyMap<string, JointRoiOverride>>(new Map());
   /** Full-resolution RGB pixels of the current photo, for skin sampling. */
   private readonly rgbData = signal<ImageData | null>(null);
+  /** Medições gravadas, quando a página está mostrando uma consulta reaberta. */
+  readonly restoredJoints = signal<readonly JointRoi[] | null>(null);
 
   /** Joint temperatures, recomputed whenever the alignment or size changes. */
-  protected readonly jointRois = computed<readonly JointRoi[]>(() => {
+  readonly jointRois = computed<readonly JointRoi[]>(() => {
     const hands = this.detectedHands();
     const matrix = this.matrix();
     const alignment = this.activeMatrix();
-    if (!hands || !matrix || !alignment) {
+    if (!matrix || !alignment) {
+      return [];
+    }
+
+    // Consulta reaberta: a base são as medições gravadas, e mover uma ROI recalcula
+    // a estatística da matriz. Sem landmarks, e sem precisar deles.
+    const restauradas = this.activeSequenceCapture()?.restoredJoints ?? this.restoredJoints();
+    if (restauradas) {
+      return applyJointOverrides(
+        restauradas,
+        this.jointOverrides(),
+        matrix,
+        alignment,
+        this.skinTestAtual(alignment),
+      );
+    }
+    if (!hands) {
       return [];
     }
 
@@ -474,27 +561,37 @@ export class ImageAnalyzerPage {
     // With it off, every cell of the ROI footprint is measured (background too).
     // In sequence mode the active capture's baked mask replaces the live
     // sampling, so table and curve statistics agree exactly.
-    let skinTest: ((csvX: number, csvY: number) => boolean) | undefined;
-    if (this.ignoreBackground()) {
-      const capture = this.activeSequenceCapture();
-      const rgb = this.rgbData();
-      const toRgb = invertAffine(alignment);
-      if (capture?.skinMask) {
-        skinTest = maskSkinTest(capture.skinMask, capture.matrix.width, capture.matrix.height);
-      } else if (rgb && toRgb) {
-        skinTest = (csvX, csvY) => {
-          const p = applyAffine(toRgb, csvX, csvY);
-          return isSkinNeighborhood(rgb, p.x | 0, p.y | 0);
-        };
-      }
-    }
-
     return captureJointRois(hands, matrix, alignment, {
       sizeScale: this.jointSizePct() / 100,
-      skinTest,
+      skinTest: this.skinTestAtual(alignment),
       overrides: this.jointOverrides(),
     });
   });
+
+  /**
+   * Teste de pele em vigor: a máscara assada da captura ativa, ou amostragem viva
+   * do RGB. Extraído para os dois caminhos de ROI usarem exatamente o mesmo.
+   */
+  private skinTestAtual(
+    alignment: AffineMatrix,
+  ): ((csvX: number, csvY: number) => boolean) | undefined {
+    if (!this.ignoreBackground()) {
+      return undefined;
+    }
+    const capture = this.activeSequenceCapture();
+    if (capture?.skinMask) {
+      return maskSkinTest(capture.skinMask, capture.matrix.width, capture.matrix.height);
+    }
+    const rgb = this.rgbData();
+    const toRgb = invertAffine(alignment);
+    if (rgb && toRgb) {
+      return (csvX, csvY) => {
+        const p = applyAffine(toRgb, csvX, csvY);
+        return isSkinNeighborhood(rgb, p.x | 0, p.y | 0);
+      };
+    }
+    return undefined;
+  }
 
   /** Interactive joint ROIs for the overlay, converted to RGB pixel radii. */
   protected readonly overlayJoints = computed<readonly OverlayJointRoi[]>(() => {
@@ -598,6 +695,7 @@ export class ImageAnalyzerPage {
       const img = await loadImage(file);
       this.rgbImage.set(img);
       this.rgbFileName.set(file.name);
+      this.rgbFile.set(file);
       this.rgbFileSize.set(formatFileSize(file.size));
       this.afterSourceChange();
     } catch {
@@ -620,6 +718,7 @@ export class ImageAnalyzerPage {
       const matrix = parseThermalCsv(text);
       this.matrix.set(matrix);
       this.csvFileName.set(file.name);
+      this.csvFile.set(file);
       this.csvFileSize.set(formatFileSize(file.size));
       this.afterSourceChange();
     } catch (err) {
@@ -645,6 +744,7 @@ export class ImageAnalyzerPage {
       const img = await loadImage(file);
       this.jpegCanvas.set(imageToCanvas(img));
       this.jpegFileName.set(file.name);
+      this.jpegFile.set(file);
       this.jpegFileSize.set(formatFileSize(file.size));
       this.afterSourceChange();
     } catch {
@@ -732,6 +832,12 @@ export class ImageAnalyzerPage {
     // survive in the viewer (its frame is still on the canvas at this point).
     this.loadedRunId = runId;
     this.sequenceActive.set(true);
+    // Os arquivos avulsos retidos deixam de corresponder ao que está na tela. Se
+    // ficassem, o fluxo de Análise Térmica gravaria medições da sequência casadas
+    // com os arquivos da análise anterior.
+    this.rgbFile.set(null);
+    this.csvFile.set(null);
+    this.jpegFile.set(null);
     this.viewerTab.set('image');
     this.rois.set([]);
     this.rgbPoints.set([]);
@@ -785,6 +891,34 @@ export class ImageAnalyzerPage {
   }
 
   /** Loads one capture's assets into the viewer signals (the "active frame"). */
+  /**
+   * Hidrata a página com uma análise **gravada**, em vez de arquivos recém-lidos.
+   *
+   * É o que faz a consulta reaberta ser esta mesma tela, e não uma cópia dela: o
+   * alinhamento, as medições e os parâmetros vêm do banco, e `activateCapture`
+   * cuida do resto sem saber a diferença.
+   *
+   * `hands` vem vazio de propósito — landmarks não são persistidos, e as ROIs
+   * articulares já estão prontas em `restoredJoints`.
+   */
+  async restoreAnalysis(capturas: readonly SequenceCapture[]): Promise<void> {
+    if (capturas.length === 0) {
+      return;
+    }
+    this.sequenceService.reset();
+    this.sequenceService.captures.set(capturas);
+    this.uploadMode.set('sequence');
+    this.restoredJoints.set(null);
+    // `loadedRunId = null` força o caminho completo: capturas restauradas não
+    // passaram pelo processamento, então `processedRunId` continua em zero e o
+    // atalho de "mesma sessão já carregada" acharia que não há o que fazer.
+    this.loadedRunId = null;
+    // Delegar em vez de repetir: é este método que sabe abrir uma sequência no
+    // visualizador, incluindo o que o player precisa. Reimplementar parte dele foi
+    // o que quebrou a navegação entre capturas.
+    await this.enterSequenceAnalysis();
+  }
+
   private async activateCapture(index: number): Promise<void> {
     const capture = this.sequenceService.captures()[index];
     if (!capture) {
@@ -815,6 +949,12 @@ export class ImageAnalyzerPage {
     this.jointOverrides.set(new Map(capture.jointOverrides));
     this.selectedJointKey.set(null);
     this.selectedRoiId.set(null);
+    // Numa consulta gravada as ROIs manuais pertencem à captura, e trocar de captura
+    // troca as ROIs. Numa sessão viva não: o que foi desenhado continua na tela ao
+    // navegar pela linha do tempo, que é como as ROIs manuais sempre funcionaram.
+    if (this.fromSaved()) {
+      this.rois.set(capture.restoredRois ?? []);
+    }
     this.rgbData.set(null); // the baked skin mask replaces live sampling
     this.error.set(capture.issue);
     this.sequenceService.prefetch(index);
@@ -1086,10 +1226,17 @@ export class ImageAnalyzerPage {
       // New landmarks invalidate any manual adjustments to the previous ROIs.
       this.jointOverrides.set(new Map());
       this.selectedJointKey.set(null);
+      // Numa consulta reaberta, as medições gravadas têm precedência sobre os
+      // landmarks — é o que faz a tela mostrar os números do dia. Uma detecção
+      // pedida pelo médico é a exceção explícita: sem soltá-las, o botão rodaria
+      // o detector e não mudaria nada na tela. Nada é regravado, então o registro
+      // no banco continua intacto; quem quiser os números do dia recarrega.
+      this.restoredJoints.set(null);
       if (this.sequenceActive()) {
         this.sequenceService.updateCapture(this.activeCaptureIndex(), {
           hands,
           jointOverrides: new Map(),
+          restoredJoints: null,
         });
       }
       if (!this.rgbData()) {

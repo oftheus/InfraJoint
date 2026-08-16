@@ -1,5 +1,7 @@
 import { Routes } from '@angular/router';
 
+import { roleGuard } from '../../core/auth/auth.guard';
+
 /**
  * "Análise" section routes. Groups the analysis tools shown under the sidebar's
  * Análise menu. Add new analysis modules here as their own child route.
@@ -16,10 +18,13 @@ export const analysisRoutes: Routes = [
     loadChildren: () => import('./body-map/body-map.routes').then((m) => m.bodyMapRoutes),
   },
   {
+    // Esconder do menu não basta: a rota é alcançável digitando a URL. O guard
+    // é UX — a autorização real continua na RLS —, mas evita que um leitor
+    // atravesse metade de um fluxo clínico para bater em 403 no fim.
     path: 'analise-termica',
-    loadComponent: () =>
-      import('./pages/thermal-analysis-page/thermal-analysis-page').then(
-        (m) => m.ThermalAnalysisPage,
-      ),
+    canActivate: [roleGuard],
+    data: { roles: ['medico', 'admin'] },
+    loadChildren: () =>
+      import('./thermal-analysis/thermal-analysis.routes').then((m) => m.thermalAnalysisRoutes),
   },
 ];

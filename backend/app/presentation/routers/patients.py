@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, BackgroundTasks, Depends, Query, status
 
 from app.application.use_cases.encounters import CreateEncounter, GetPatientDetail
 from app.application.use_cases.patients import (
@@ -14,6 +14,7 @@ from app.application.use_cases.patients import (
 )
 from app.domain.entities import NewEncounter, NewPatient
 from app.presentation import deps
+from app.presentation.cleanup import schedule_orphan_cleanup
 from app.presentation.schemas import (
     EncounterCreate,
     EncounterOut,
@@ -34,13 +35,30 @@ async def list_patients(
     return [PatientOut.from_entity(patient) for patient in patients]
 
 
-@router.post("", response_model=PatientOut, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "",
+    response_model=PatientOut,
+    status_code=status.HTTP_201_CREATED,
+    summary="Cria o paciente; 409 com os homônimos quando já existe alguém com o nome.",
+)
 async def create_patient(
     payload: PatientCreate,
     user: deps.CurrentUser,
     use_case: Annotated[CreatePatient, Depends(deps.create_patient)],
+    allow_duplicate: Annotated[
+        bool,
+        Query(
+            description=(
+                "Confirma o cadastro mesmo havendo homônimo. É o segundo pedido, depois "
+                "de a tela mostrar quem já existe — nome e data de nascimento idênticos "
+                "continuam recusados pelo banco."
+            )
+        ),
+    ] = False,
 ) -> PatientOut:
-    patient = await use_case.execute(user, NewPatient(**payload.model_dump()))
+    patient = await use_case.execute(
+        user, NewPatient(**payload.model_dump()), allow_duplicate=allow_duplicate
+    )
     return PatientOut.from_entity(patient)
 
 
@@ -78,8 +96,11 @@ async def delete_patient(
     patient_id: UUID,
     user: deps.CurrentUser,
     use_case: Annotated[DeletePatient, Depends(deps.delete_patient)],
+    background: BackgroundTasks,
+    storage: deps.StorageOptional,
 ) -> None:
-    await use_case.execute(user, patient_id)
+    orfaos = await use_case.execute(user, patient_id)
+    schedule_orphan_cleanup(background, storage, orfaos, alvo=f"paciente {patient_id}")
 
 
 @router.post(

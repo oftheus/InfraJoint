@@ -120,11 +120,7 @@
       <section
         class="rounded-2xl border border-black/5 bg-surface p-5 shadow-[0_12px_40px_rgba(27,58,87,0.08)]"
       >
-        <app-disease-activity-score
-          [assessmentType]="config().assessmentType"
-          [tenderCount]="tenderCount()"
-          [swollenCount]="swollenCount()"
-        />
+        <app-disease-activity-score [assessmentType]="config().assessmentType" />
       </section>
 
       <!-- Legend -->

@@ -112,10 +112,14 @@ export class AuthShell {
           route: '/analise/mapa-corporal',
         },
         {
+          // As duas entradas acima são ferramentas abertas: qualquer um
+          // experimenta e nada é gravado. Esta é prontuário — grava consulta
+          // atrelada a paciente —, então segue a mesma regra de /pacientes.
           kind: 'link',
           label: 'Análise térmica',
           icon: 'thermometer',
           route: '/analise/analise-termica',
+          requiredRoles: ['medico', 'admin'],
         },
       ],
     },

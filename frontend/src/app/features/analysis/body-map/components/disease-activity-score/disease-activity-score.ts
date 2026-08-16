@@ -1,20 +1,15 @@
-import { ChangeDetectionStrategy, Component, computed, input, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, inject, input } from '@angular/core';
 
-import {
-  Das28AcutePhase,
-  DISEASE_ACTIVITY_META,
-  calculateCdai,
-  calculateDas28,
-  cdaiActivityLevel,
-  das28ActivityLevel,
-} from '../../disease-activity';
+import { Das28AcutePhase, DISEASE_ACTIVITY_META } from '../../disease-activity';
+import { JointAssessmentService } from '../../joint-assessment.service';
 
 /**
- * Computes and displays the CDAI or DAS28 disease-activity score.
+ * Displays the CDAI or DAS28 disease-activity score and collects its inputs.
  *
- * The 28-joint tender/swollen counts are fed automatically from the body map;
- * the clinician supplies the remaining parameters (global assessments and, for
- * DAS28, an acute-phase reactant). The score and activity category update live.
+ * The joint counts, the clinician-typed parameters and the arithmetic all live
+ * in {@link JointAssessmentService}. This component only renders them and pushes
+ * edits back — the findings have to be serializable by whoever owns the store,
+ * and a component's private signals cannot be read from outside.
  */
 @Component({
   selector: 'app-disease-activity-score',
@@ -23,49 +18,26 @@ import {
 })
 export class DiseaseActivityScore {
   readonly assessmentType = input.required<string>();
-  readonly tenderCount = input.required<number>();
-  readonly swollenCount = input.required<number>();
+  /**
+   * Índice de uma consulta gravada: os parâmetros viram leitura.
+   *
+   * Deixar os controles ativos permitiria mexer numa avaliação que já foi
+   * assinada e ver o escore mudar na tela sem que nada disso chegue ao banco.
+   */
+  readonly viewOnly = input(false);
+
+  private readonly store = inject(JointAssessmentService);
 
   protected readonly isCdai = computed(() => this.assessmentType() === 'CDAI');
 
-  // CDAI parameters (0–10 VAS).
-  protected readonly patientGlobal = signal(0);
-  protected readonly evaluatorGlobal = signal(0);
+  protected readonly tenderCount = this.store.tenderCount;
+  protected readonly swollenCount = this.store.swollenCount;
+  protected readonly parameters = this.store.parameters;
 
-  // DAS28 parameters.
-  protected readonly acutePhase = signal<Das28AcutePhase>('esr');
-  protected readonly acuteValue = signal<number | null>(null);
-  protected readonly globalHealth = signal(0); // 0–100 VAS
-
-  /** Raw score, or `null` when a required input is still missing (DAS28 lab). */
-  protected readonly score = computed<number | null>(() => {
-    const tenderCount = this.tenderCount();
-    const swollenCount = this.swollenCount();
-
-    if (this.isCdai()) {
-      return calculateCdai({
-        tenderCount,
-        swollenCount,
-        patientGlobal: this.patientGlobal(),
-        evaluatorGlobal: this.evaluatorGlobal(),
-      });
-    }
-
-    const acuteValue = this.acuteValue();
-    if (acuteValue === null || acuteValue < 0) {
-      return null;
-    }
-    return calculateDas28({
-      tenderCount,
-      swollenCount,
-      acutePhase: this.acutePhase(),
-      acuteValue,
-      patientGlobalHealth: this.globalHealth(),
-    });
-  });
+  private readonly outcome = computed(() => this.store.scoreFor(this.assessmentType()));
 
   protected readonly displayScore = computed(() => {
-    const score = this.score();
+    const { score } = this.outcome();
     if (score === null) {
       return null;
     }
@@ -73,28 +45,40 @@ export class DiseaseActivityScore {
   });
 
   protected readonly levelMeta = computed(() => {
-    const score = this.score();
-    if (score === null) {
-      return null;
-    }
-    const level = this.isCdai() ? cdaiActivityLevel(score) : das28ActivityLevel(score);
-    return DISEASE_ACTIVITY_META[level];
+    const level = this.outcome().level;
+    return level === null ? null : DISEASE_ACTIVITY_META[level];
   });
 
-  protected readonly acuteLabel = computed(() => (this.acutePhase() === 'esr' ? 'VHS' : 'PCR'));
-  protected readonly acuteUnit = computed(() => (this.acutePhase() === 'esr' ? 'mm/h' : 'mg/L'));
+  protected readonly acuteLabel = computed(() =>
+    this.parameters().acutePhase === 'esr' ? 'VHS' : 'PCR',
+  );
+  protected readonly acuteUnit = computed(() =>
+    this.parameters().acutePhase === 'esr' ? 'mm/h' : 'mg/L',
+  );
+
+  protected setPatientGlobal(value: number): void {
+    this.store.setParameter('patientGlobal', value);
+  }
+
+  protected setEvaluatorGlobal(value: number): void {
+    this.store.setParameter('evaluatorGlobal', value);
+  }
+
+  protected setGlobalHealth(value: number): void {
+    this.store.setParameter('globalHealth', value);
+  }
+
+  protected setAcutePhase(phase: Das28AcutePhase): void {
+    this.store.setParameter('acutePhase', phase);
+  }
 
   protected setAcuteValue(raw: string): void {
     const trimmed = raw.trim();
     if (trimmed === '') {
-      this.acuteValue.set(null);
+      this.store.setParameter('acuteValue', null);
       return;
     }
     const value = Number(trimmed);
-    this.acuteValue.set(Number.isFinite(value) && value >= 0 ? value : null);
-  }
-
-  protected setAcutePhase(phase: Das28AcutePhase): void {
-    this.acutePhase.set(phase);
+    this.store.setParameter('acuteValue', Number.isFinite(value) && value >= 0 ? value : null);
   }
 }

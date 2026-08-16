@@ -65,10 +65,68 @@
         </label>
       </div>
 
-      <div class="mt-6 flex justify-end">
-        <button type="submit" class="btn-primary h-11 px-6 text-sm" [disabled]="saving()">
-          {{ saving() ? 'Salvando…' : 'Salvar paciente' }}
-        </button>
+      <!-- Homônimo não é erro, é uma pergunta: quase sempre o médico queria abrir
+           quem já está cadastrado, e é por isso que a lista vem antes do botão. -->
+      @if (duplicates().length > 0) {
+        <section
+          role="alert"
+          class="mt-6 rounded-2xl border border-amber-200 bg-amber-50 p-5 text-sm text-amber-900"
+        >
+          <p class="font-semibold">
+            @if (duplicates().length === 1) {
+              Já existe um paciente com este nome no seu cadastro:
+            } @else {
+              Já existem {{ duplicates().length }} pacientes com este nome no seu cadastro:
+            }
+          </p>
+
+          <ul class="mt-3 space-y-2">
+            @for (existente of duplicates(); track existente.id) {
+              <li
+                class="flex flex-wrap items-center justify-between gap-3 rounded-xl bg-white/70 px-4 py-3"
+              >
+                <span>
+                  <span class="font-semibold text-primary">{{ existente.full_name }}</span>
+                  <span class="ml-2 text-xs text-amber-800">
+                    @if (existente.birth_date) {
+                      Nascimento {{ existente.birth_date | date: 'dd/MM/yyyy' }}
+                    } @else {
+                      Data de nascimento não informada
+                    }
+                  </span>
+                </span>
+                <a
+                  [routerLink]="['/pacientes', existente.id]"
+                  class="text-sm font-semibold text-accent hover:underline"
+                >
+                  Abrir este
+                </a>
+              </li>
+            }
+          </ul>
+
+          <p class="mt-3 text-xs">
+            Se for outra pessoa, confirme abaixo — mas ela precisa ter data de nascimento diferente,
+            senão não haveria como distinguir as duas depois.
+          </p>
+        </section>
+      }
+
+      <div class="mt-6 flex flex-wrap justify-end gap-3">
+        @if (duplicates().length > 0) {
+          <button
+            type="button"
+            class="btn-secondary h-11 px-6 text-sm"
+            [disabled]="saving()"
+            (click)="submit(true)"
+          >
+            {{ saving() ? 'Salvando…' : 'É outra pessoa, cadastrar assim mesmo' }}
+          </button>
+        } @else {
+          <button type="submit" class="btn-primary h-11 px-6 text-sm" [disabled]="saving()">
+            {{ saving() ? 'Salvando…' : 'Salvar paciente' }}
+          </button>
+        }
       </div>
     </form>
   }

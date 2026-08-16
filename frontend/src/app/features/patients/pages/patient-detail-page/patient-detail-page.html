@@ -67,11 +67,10 @@
           @if (encounters().length === 0) {
             Este paciente não tem consultas registradas.
           } @else if (encounters().length === 1) {
-            <strong>1 consulta</strong> registrada será apagada junto, com todas as análises
-            dela.
+            <strong>1 consulta</strong> registrada será apagada junto, com todas as análises dela.
           } @else {
-            <strong>{{ encounters().length }} consultas</strong> registradas serão apagadas
-            junto, com todas as análises delas.
+            <strong>{{ encounters().length }} consultas</strong> registradas serão apagadas junto,
+            com todas as análises delas.
           }
           Esta ação não pode ser desfeita.
         </p>
@@ -168,43 +167,21 @@
     <section class="mt-12">
       <div class="flex flex-wrap items-center justify-between gap-4">
         <h2 class="text-2xl font-bold tracking-tight text-primary">Consultas</h2>
-        <button type="button" class="btn-primary h-11 px-6 text-sm" (click)="toggleEncounterForm()">
-          <svg
-            [lucideIcon]="encounterFormOpen() ? 'x' : 'stethoscope'"
-            class="mr-2 h-4 w-4"
-            aria-hidden="true"
-          ></svg>
-          {{ encounterFormOpen() ? 'Cancelar' : 'Nova consulta' }}
-        </button>
-      </div>
-
-      @if (encounterFormOpen()) {
-        <form
-          [formGroup]="encounterForm"
-          (ngSubmit)="createEncounter()"
-          class="mt-6 rounded-2xl border border-gray-200 bg-surface p-6"
+        <!--
+          Não há formulário de consulta aqui de propósito. Consulta nasce de um
+          caminho só — o fluxo de Análise Térmica —, para que toda consulta tenha
+          a mesma origem e possa carregar body map e escores. Este botão apenas
+          abre o fluxo com o paciente já escolhido.
+        -->
+        <a
+          class="btn-primary inline-flex h-11 items-center px-6 text-sm"
+          [routerLink]="['/analise', 'analise-termica']"
+          [queryParams]="{ paciente: id() }"
         >
-          <label class="block">
-            <span class="mb-1.5 block text-sm font-medium text-secondary">Motivo</span>
-            <input class="auth-input" formControlName="reason" />
-          </label>
-
-          <label class="mt-4 block">
-            <span class="mb-1.5 block text-sm font-medium text-secondary">Notas clínicas</span>
-            <textarea class="auth-input min-h-24" formControlName="clinical_notes"></textarea>
-          </label>
-
-          <div class="mt-6 flex justify-end">
-            <button
-              type="submit"
-              class="btn-primary h-11 px-6 text-sm"
-              [disabled]="savingEncounter()"
-            >
-              {{ savingEncounter() ? 'Salvando…' : 'Registrar consulta' }}
-            </button>
-          </div>
-        </form>
-      }
+          <svg [lucideIcon]="'stethoscope'" class="mr-2 h-4 w-4" aria-hidden="true"></svg>
+          Nova consulta
+        </a>
+      </div>
 
       @if (encounters().length === 0) {
         <p class="empty-state mt-8">Nenhuma consulta registrada para este paciente.</p>
@@ -212,6 +189,12 @@
         <ul class="mt-6 space-y-3">
           @for (encounter of encounters(); track encounter.id) {
             <li class="rounded-2xl border border-gray-200 bg-surface p-5">
+              <a
+                [routerLink]="['/pacientes', 'consultas', encounter.id]"
+                class="float-right text-sm font-semibold text-accent hover:underline"
+              >
+                Abrir
+              </a>
               <p class="text-sm font-semibold text-primary">
                 {{ encounter.occurred_at | date: 'dd/MM/yyyy HH:mm' }}
               </p>
@@ -219,6 +202,51 @@
               @if (encounter.clinical_notes) {
                 <p class="mt-2 whitespace-pre-line text-sm text-muted">
                   {{ encounter.clinical_notes }}
+                </p>
+              }
+
+              <!-- Índices de atividade gravados no fluxo de Análise Térmica -->
+              @if (scoresOf(encounter); as indices) {
+                @if (indices.length > 0) {
+                  <div class="mt-4 flex flex-wrap gap-2">
+                    @for (index of indices; track index.label) {
+                      <span
+                        class="inline-flex items-center gap-2 rounded-xl px-3 py-2 text-sm"
+                        [style.color]="index.hex"
+                        [style.background-color]="index.hex + '1A'"
+                      >
+                        <span class="font-bold">{{ index.label }}</span>
+                        <span class="font-semibold">{{ index.value }}</span>
+                        <span class="text-xs opacity-80">{{ index.levelLabel }}</span>
+                      </span>
+                    }
+                  </div>
+                }
+              }
+
+              @if (analysisBadgeOf(encounter); as analise) {
+                <p
+                  class="mt-4 inline-flex items-center gap-2 rounded-xl px-3 py-2 text-sm"
+                  [class.bg-brand-50]="!analise.pending"
+                  [class.text-primary]="!analise.pending"
+                  [class.bg-amber-50]="analise.pending"
+                  [class.text-amber-800]="analise.pending"
+                >
+                  <svg
+                    [lucideIcon]="analise.pending ? 'triangle-alert' : 'camera'"
+                    class="h-4 w-4 shrink-0"
+                    aria-hidden="true"
+                  ></svg>
+                  {{ analise.label }}
+                </p>
+              }
+
+              @if (jointSummaryOf(encounter); as resumo) {
+                <p class="mt-3 text-sm text-secondary">
+                  <span class="font-semibold text-primary">{{ resumo.evaluated }}</span>
+                  articulações avaliadas ·
+                  <span class="font-semibold text-amber-600">{{ resumo.tender }}</span> dolorosas ·
+                  <span class="font-semibold text-red-600">{{ resumo.swollen }}</span> edemaciadas
                 </p>
               }
             </li>

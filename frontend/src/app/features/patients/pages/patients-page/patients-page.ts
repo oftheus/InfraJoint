@@ -1,10 +1,11 @@
 import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { DatePipe } from '@angular/common';
 import { NonNullableFormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { LucideDynamicIcon } from '@lucide/angular';
 
-import { messageFromError } from '../../data/api-error';
+import { duplicatesFromError, messageFromError } from '../../data/api-error';
 import { Patient, PatientCreate, SEX_OPTIONS, Sex } from '../../data/patient.model';
 import { PatientsService } from '../../data/patients.service';
 
@@ -23,6 +24,14 @@ export class PatientsPage {
   protected readonly saving = signal(false);
   protected readonly error = signal<string | null>(null);
   protected readonly formOpen = signal(false);
+  /**
+   * Homônimos que a API devolveu ao recusar o cadastro.
+   *
+   * Enquanto houver algum, o botão de salvar vira "cadastrar assim mesmo": é o
+   * segundo pedido, e só ele leva `allow_duplicate`. Não é estado do formulário —
+   * some assim que o nome muda, porque aí o aviso é sobre outra pessoa.
+   */
+  protected readonly duplicates = signal<readonly Patient[]>([]);
 
   protected readonly sexOptions = SEX_OPTIONS;
 
@@ -36,6 +45,10 @@ export class PatientsPage {
 
   constructor() {
     this.load();
+    // Mudou o nome, mudou a pergunta: o aviso anterior falava de outra pessoa.
+    this.form.controls.full_name.valueChanges
+      .pipe(takeUntilDestroyed())
+      .subscribe(() => this.duplicates.set([]));
   }
 
   protected load(): void {
@@ -56,9 +69,14 @@ export class PatientsPage {
   protected toggleForm(): void {
     this.formOpen.update((open) => !open);
     this.error.set(null);
+    this.duplicates.set([]);
   }
 
-  protected submit(): void {
+  /**
+   * Envia o cadastro. `confirmado` é o segundo clique, depois de a tela mostrar os
+   * homônimos — só ele autoriza a API a criar um paciente com nome repetido.
+   */
+  protected submit(confirmado = false): void {
     if (this.form.invalid || this.saving()) {
       this.form.markAllAsTouched();
       return;
@@ -67,15 +85,19 @@ export class PatientsPage {
     this.saving.set(true);
     this.error.set(null);
 
-    this.patientsService.create(this.toPayload()).subscribe({
+    this.patientsService.create(this.toPayload(), confirmado).subscribe({
       next: (created) => {
         this.patients.update((current) => [created, ...current]);
         this.form.reset();
+        this.duplicates.set([]);
         this.formOpen.set(false);
         this.saving.set(false);
       },
       error: (failure) => {
-        this.error.set(messageFromError(failure));
+        // Homônimo não é erro: é uma pergunta. O formulário fica como está, com a
+        // lista de quem já existe ao lado do botão que confirma.
+        this.duplicates.set(duplicatesFromError(failure) ?? []);
+        this.error.set(this.duplicates().length > 0 ? null : messageFromError(failure));
         this.saving.set(false);
       },
     });

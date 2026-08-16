@@ -1,17 +1,18 @@
-import {
-  ChangeDetectionStrategy,
-  Component,
-  effect,
-  inject,
-  input,
-  signal,
-} from '@angular/core';
+import { ChangeDetectionStrategy, Component, effect, inject, input, signal } from '@angular/core';
 import { DatePipe } from '@angular/common';
 import { NonNullableFormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
 import { LucideDynamicIcon } from '@lucide/angular';
 
 import { messageFromError } from '../../data/api-error';
+import {
+  AnalysisBadge,
+  JointSummary,
+  ScoreChip,
+  analysisBadgeOf,
+  jointSummaryOf,
+  scoresOf,
+} from '../../data/encounter-summary';
 import { Encounter, Patient, SEX_OPTIONS, Sex } from '../../data/patient.model';
 import { PatientsService } from '../../data/patients.service';
 
@@ -40,10 +41,8 @@ export class PatientDetailPage {
   protected readonly encounters = signal<readonly Encounter[]>([]);
   protected readonly loading = signal(true);
   protected readonly savingPatient = signal(false);
-  protected readonly savingEncounter = signal(false);
   protected readonly error = signal<string | null>(null);
   protected readonly editing = signal(false);
-  protected readonly encounterFormOpen = signal(false);
   protected readonly confirmingDelete = signal(false);
   protected readonly deleting = signal(false);
 
@@ -55,11 +54,6 @@ export class PatientDetailPage {
     sex: ['' as Sex | ''],
     phone: [''],
     primary_diagnosis: [''],
-  });
-
-  protected readonly encounterForm = this.formBuilder.group({
-    reason: [''],
-    clinical_notes: [''],
   });
 
   constructor() {
@@ -159,37 +153,19 @@ export class PatientDetailPage {
     });
   }
 
-  protected toggleEncounterForm(): void {
-    this.encounterFormOpen.update((open) => !open);
-    this.error.set(null);
+  /** Índices de atividade gravados na consulta, prontos para exibição. */
+  protected scoresOf(encounter: Encounter): readonly ScoreChip[] {
+    return scoresOf(encounter);
   }
 
-  protected createEncounter(): void {
-    if (this.savingEncounter()) {
-      return;
-    }
+  /** Resumo do body map da consulta, ou `null` se ela não tiver um. */
+  protected jointSummaryOf(encounter: Encounter): JointSummary | null {
+    return jointSummaryOf(encounter);
+  }
 
-    this.savingEncounter.set(true);
-    this.error.set(null);
-
-    const raw = this.encounterForm.getRawValue();
-    this.patientsService
-      .createEncounter(this.id(), {
-        reason: blankToNull(raw.reason),
-        clinical_notes: blankToNull(raw.clinical_notes),
-      })
-      .subscribe({
-        next: (created) => {
-          this.encounters.update((current) => [created, ...current]);
-          this.encounterForm.reset();
-          this.encounterFormOpen.set(false);
-          this.savingEncounter.set(false);
-        },
-        error: (failure) => {
-          this.error.set(messageFromError(failure));
-          this.savingEncounter.set(false);
-        },
-      });
+  /** Estado da análise de imagem, ou `null` se a consulta não tiver uma. */
+  protected analysisBadgeOf(encounter: Encounter): AnalysisBadge | null {
+    return analysisBadgeOf(encounter);
   }
 }
 

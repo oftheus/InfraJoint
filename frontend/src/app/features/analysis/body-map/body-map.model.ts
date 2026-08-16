@@ -7,6 +7,8 @@
  * by providing a different {@link AssessmentConfig} without touching the model.
  */
 
+import type { DiseaseActivityLevel } from './disease-activity';
+
 /** Stable, unique identifier for every joint the body map can render. */
 export type JointId =
   // Wrists
@@ -86,13 +88,50 @@ export interface AssessmentConfig {
 }
 
 /**
+ * Clinical parameters the physician supplies on top of the joint counts.
+ *
+ * They live in {@link JointAssessmentService} rather than inside the score
+ * component because they are *findings*, not view state: the Thermal Analysis
+ * flow has to serialize them, and a component's private signals cannot be read
+ * from outside. The standalone body map screen is unaffected — the store is
+ * still provided per page and thrown away with it.
+ */
+export interface ScoreParameters {
+  /** CDAI — patient global assessment, 0–10 VAS. */
+  readonly patientGlobal: number;
+  /** CDAI — evaluator (physician) global assessment, 0–10 VAS. */
+  readonly evaluatorGlobal: number;
+  /** DAS28 — which acute-phase reactant the lab value refers to. */
+  readonly acutePhase: 'esr' | 'crp';
+  /** DAS28 — ESR (mm/h) or CRP (mg/L); `null` until the clinician types it. */
+  readonly acuteValue: number | null;
+  /** DAS28 — patient global health, 0–100 VAS. */
+  readonly globalHealth: number;
+}
+
+export const DEFAULT_SCORE_PARAMETERS: ScoreParameters = {
+  patientGlobal: 0,
+  evaluatorGlobal: 0,
+  acutePhase: 'esr',
+  acuteValue: null,
+  globalHealth: 0,
+};
+
+/** A computed index: `null` on both sides while a required input is missing. */
+export interface ScoreOutcome {
+  readonly score: number | null;
+  readonly level: DiseaseActivityLevel | null;
+}
+
+/**
  * Serializable assessment result, ready to be consumed by the CDAI/DAS28
  * disease-activity calculation algorithms (or persisted via a future API).
  */
 export interface AssessmentResult {
-  readonly patientId?: number | string;
+  readonly patientId?: string;
   readonly assessmentType: string;
   readonly joints: Partial<Record<JointId, JointEvaluation>>;
+  readonly parameters: ScoreParameters;
 }
 
 /** Visual metadata for each joint status, shared by the 3D scene and the UI. */

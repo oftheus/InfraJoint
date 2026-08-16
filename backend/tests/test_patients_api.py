@@ -230,6 +230,204 @@ async def test_erro_inesperado_responde_500_com_cabecalho_de_cors(_seeded: None)
     assert response.headers.get("access-control-allow-origin") == origem
 
 
+# --- Fase 4: body map persistido ---------------------------------------------------
+#
+# O fluxo de Análise Térmica grava tudo ao finalizar: a consulta nasce já com o body
+# map e os escores, numa chamada só. Não existe passo intermediário no banco, então
+# abandonar o fluxo no meio não deixa consulta vazia no histórico.
+
+_ARTICULACOES = {
+    "RIGHT_KNEE": {"pain": True, "swelling": True},
+    "LEFT_KNEE": {"pain": False, "swelling": False},
+    "RIGHT_MCP_3": {"pain": True, "swelling": False},
+}
+_CDAI = {
+    "score": 12.5,
+    "level": "moderate",
+    "tender_count": 2,
+    "swollen_count": 1,
+    "patient_global": 5.0,
+    "evaluator_global": 4.5,
+}
+_DAS28 = {
+    "score": 4.21,
+    "level": "moderate",
+    "tender_count": 2,
+    "swollen_count": 1,
+    "acute_phase": "esr",
+    "acute_value": 25.0,
+    "patient_global_health": 40.0,
+}
+
+
+async def test_consulta_grava_body_map_e_escores_numa_chamada(client: tuple[Any, dict]) -> None:
+    """Critério de aceite: avaliar → salvar → recarregar → dados idênticos."""
+    http, acting = client
+    acting["user_id"] = MEDICO_A
+
+    paciente = await _criar_paciente(http, "API-TEST body map")
+    criada = await http.post(
+        f"/patients/{paciente['id']}/encounters",
+        json={
+            "reason": "avaliação de atividade",
+            "joint_evaluations": _ARTICULACOES,
+            "scores": {"CDAI": _CDAI, "DAS28": _DAS28},
+        },
+    )
+    assert criada.status_code == 201, criada.text
+
+    # Recarregar pelo detalhe do paciente devolve exatamente o que foi gravado.
+    detalhe = await http.get(f"/patients/{paciente['id']}")
+    (consulta,) = detalhe.json()["encounters"]
+
+    assert consulta["joint_evaluations"] == _ARTICULACOES
+    # Casing normalizado na fronteira: o frontend manda 'CDAI', o banco guarda 'cdai'.
+    assert set(consulta["scores"]) == {"cdai", "das28"}
+    assert consulta["scores"]["cdai"] == _CDAI
+    assert consulta["scores"]["das28"] == _DAS28
+
+
+async def test_consulta_sem_body_map_continua_valendo(client: tuple[Any, dict]) -> None:
+    """As duas etapas do fluxo são opcionais — cabe consulta sem body map."""
+    http, acting = client
+    acting["user_id"] = MEDICO_A
+
+    paciente = await _criar_paciente(http, "API-TEST sem body map")
+    criada = await http.post(f"/patients/{paciente['id']}/encounters", json={"reason": "retorno"})
+    assert criada.status_code == 201, criada.text
+
+    consulta = criada.json()
+    assert consulta["joint_evaluations"] is None
+    assert consulta["scores"] == {}, "o default do banco é objeto vazio, não null"
+
+
+async def test_body_map_sem_escore_fechado(client: tuple[Any, dict]) -> None:
+    """O DAS28 exige VHS/PCR; sem isso o body map ainda precisa poder ser salvo."""
+    http, acting = client
+    acting["user_id"] = MEDICO_A
+
+    paciente = await _criar_paciente(http, "API-TEST só articulações")
+    criada = await http.post(
+        f"/patients/{paciente['id']}/encounters",
+        json={"joint_evaluations": _ARTICULACOES},
+    )
+    assert criada.status_code == 201, criada.text
+    assert criada.json()["joint_evaluations"] == _ARTICULACOES
+    assert criada.json()["scores"] == {}
+
+
+async def test_escore_invalido_vira_422(client: tuple[Any, dict]) -> None:
+    """Escore fora de faixa é erro do cliente — não pode virar dado clínico gravado."""
+    http, acting = client
+    acting["user_id"] = MEDICO_A
+    paciente = await _criar_paciente(http, "API-TEST validação")
+    rota = f"/patients/{paciente['id']}/encounters"
+
+    casos = {
+        "tipo desconhecido": {"scores": {"SDAI": _CDAI}},
+        "cdai acima da faixa": {"scores": {"CDAI": {**_CDAI, "score": 999}}},
+        "contagem acima de 28": {"scores": {"CDAI": {**_CDAI, "tender_count": 29}}},
+        "faixa de atividade inválida": {"scores": {"CDAI": {**_CDAI, "level": "altíssima"}}},
+        "campo extra no escore": {"scores": {"CDAI": {**_CDAI, "chute": 1}}},
+        "reagente inválido": {"scores": {"DAS28": {**_DAS28, "acute_phase": "vhs"}}},
+        "id de articulação inválido": {"joint_evaluations": {"joelho direito": {"pain": True}}},
+        "achado incompleto": {"joint_evaluations": {"RIGHT_KNEE": {"pain": True}}},
+    }
+    for rotulo, payload in casos.items():
+        resposta = await http.post(rota, json=payload)
+        assert resposta.status_code == 422, f"{rotulo}: {resposta.status_code} {resposta.text[:90]}"
+
+
+async def test_medico_b_nao_le_body_map_de_a(client: tuple[Any, dict]) -> None:
+    """A RLS vale para o dado clínico novo como vale para o resto."""
+    http, acting = client
+
+    acting["user_id"] = MEDICO_A
+    paciente = await _criar_paciente(http, "API-TEST body map de A")
+    await http.post(
+        f"/patients/{paciente['id']}/encounters",
+        json={"joint_evaluations": _ARTICULACOES, "scores": {"CDAI": _CDAI}},
+    )
+
+    acting["user_id"] = MEDICO_B
+    assert (await http.get(f"/patients/{paciente['id']}")).status_code == 404
+
+
+async def test_homonimo_recusa_com_a_lista_e_passa_na_confirmacao(
+    client: tuple[Any, dict],
+) -> None:
+    """Avisar antes é o ponto: o médico quase sempre queria abrir quem já existe."""
+    http, acting = client
+    acting["user_id"] = MEDICO_A
+    existente = await _criar_paciente(http, "API-TEST Ana Souza")
+
+    # Acento, caixa e espaço não fazem pessoa nova — é o cadastro duplicado que mais
+    # acontece, alguém redigitando quem já está lá.
+    conflito = await http.post("/patients", json={"full_name": "  api-test  aná   sóuza "})
+    assert conflito.status_code == 409, conflito.text
+    assert [p["id"] for p in conflito.json()["duplicates"]] == [existente["id"]]
+
+    # Confirmado, com data de nascimento diferente: é outra pessoa, e entra.
+    confirmado = await http.post(
+        "/patients?allow_duplicate=true",
+        json={"full_name": "API-TEST Ana Souza", "birth_date": "1980-03-12"},
+    )
+    assert confirmado.status_code == 201, confirmado.text
+
+
+async def test_mesmo_nome_e_mesma_data_o_banco_recusa(client: tuple[Any, dict]) -> None:
+    """O limite do 'cadastrar assim mesmo': nem o médico distinguiria os dois depois."""
+    http, acting = client
+    acting["user_id"] = MEDICO_A
+    corpo = {"full_name": "API-TEST Ana Souza", "birth_date": "1980-03-12"}
+    assert (await http.post("/patients", json=corpo)).status_code == 201
+
+    negado = await http.post("/patients?allow_duplicate=true", json=corpo)
+    assert negado.status_code == 409, negado.text
+    assert "data de nascimento" in negado.json()["detail"]
+
+
+async def test_dois_sem_data_de_nascimento_tambem_colidem(client: tuple[Any, dict]) -> None:
+    """NULLS NOT DISTINCT: 'sem data' colide com 'sem data'.
+
+    Sem isso o índice deixaria passar justamente o par que ninguém consegue separar.
+    """
+    http, acting = client
+    acting["user_id"] = MEDICO_A
+    await _criar_paciente(http, "API-TEST Sem Data")
+
+    negado = await http.post(
+        "/patients?allow_duplicate=true", json={"full_name": "API-TEST Sem Data"}
+    )
+    assert negado.status_code == 409, negado.text
+
+
+async def test_homonimo_de_outro_medico_nao_atrapalha_nem_aparece(
+    client: tuple[Any, dict],
+) -> None:
+    """A unicidade é por dono — global, ela vazaria existência através da RLS."""
+    http, acting = client
+    acting["user_id"] = MEDICO_A
+    await _criar_paciente(http, "API-TEST Homônima")
+
+    acting["user_id"] = MEDICO_B
+    criado = await http.post("/patients", json={"full_name": "API-TEST Homônima"})
+    assert criado.status_code == 201, "o paciente do outro médico não pode barrar este"
+
+
+async def test_editar_para_o_nome_de_outro_paciente_vira_409(client: tuple[Any, dict]) -> None:
+    """A duplicata também chega pela edição, e o PATCH não pode responder 500."""
+    http, acting = client
+    acting["user_id"] = MEDICO_A
+    primeiro = await _criar_paciente(http, "API-TEST Primeira")
+    segunda = await _criar_paciente(http, "API-TEST Segunda")
+
+    resposta = await http.patch(
+        f"/patients/{segunda['id']}", json={"full_name": primeiro["full_name"]}
+    )
+    assert resposta.status_code == 409, resposta.text
+
+
 async def test_campo_desconhecido_vira_422(client: tuple[Any, dict]) -> None:
     http, acting = client
     acting["user_id"] = MEDICO_A

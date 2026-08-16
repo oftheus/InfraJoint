@@ -30,11 +30,34 @@
 
 <!-- Clinician-entered parameters -->
 <div class="mt-4 space-y-4 border-t border-black/5 pt-4">
-  @if (isCdai()) {
+  @if (viewOnly()) {
+    <!-- Os mesmos parâmetros, como foram gravados. -->
+    <dl class="space-y-3 text-xs">
+      @if (isCdai()) {
+        <div class="flex items-center justify-between gap-3">
+          <dt class="font-medium text-secondary">Avaliação global do paciente</dt>
+          <dd class="font-semibold text-primary">{{ parameters().patientGlobal.toFixed(1) }}</dd>
+        </div>
+        <div class="flex items-center justify-between gap-3">
+          <dt class="font-medium text-secondary">Avaliação global do médico</dt>
+          <dd class="font-semibold text-primary">{{ parameters().evaluatorGlobal.toFixed(1) }}</dd>
+        </div>
+      } @else {
+        <div class="flex items-center justify-between gap-3">
+          <dt class="font-medium text-secondary">{{ acuteLabel() }} ({{ acuteUnit() }})</dt>
+          <dd class="font-semibold text-primary">{{ parameters().acuteValue ?? '—' }}</dd>
+        </div>
+        <div class="flex items-center justify-between gap-3">
+          <dt class="font-medium text-secondary">Saúde global do paciente</dt>
+          <dd class="font-semibold text-primary">{{ parameters().globalHealth }}</dd>
+        </div>
+      }
+    </dl>
+  } @else if (isCdai()) {
     <div>
       <div class="flex items-center justify-between text-xs font-medium text-secondary">
         <label for="cdai-pga">Avaliação global do paciente</label>
-        <span class="font-semibold text-primary">{{ patientGlobal().toFixed(1) }}</span>
+        <span class="font-semibold text-primary">{{ parameters().patientGlobal.toFixed(1) }}</span>
       </div>
       <input
         #pga
@@ -43,8 +66,8 @@
         min="0"
         max="10"
         step="0.1"
-        [value]="patientGlobal()"
-        (input)="patientGlobal.set(+pga.value)"
+        [value]="parameters().patientGlobal"
+        (input)="setPatientGlobal(+pga.value)"
         class="mt-1 w-full accent-[#32B5FE]"
       />
     </div>
@@ -52,7 +75,9 @@
     <div>
       <div class="flex items-center justify-between text-xs font-medium text-secondary">
         <label for="cdai-ega">Avaliação global do médico</label>
-        <span class="font-semibold text-primary">{{ evaluatorGlobal().toFixed(1) }}</span>
+        <span class="font-semibold text-primary">{{
+          parameters().evaluatorGlobal.toFixed(1)
+        }}</span>
       </div>
       <input
         #ega
@@ -61,8 +86,8 @@
         min="0"
         max="10"
         step="0.1"
-        [value]="evaluatorGlobal()"
-        (input)="evaluatorGlobal.set(+ega.value)"
+        [value]="parameters().evaluatorGlobal"
+        (input)="setEvaluatorGlobal(+ega.value)"
         class="mt-1 w-full accent-[#32B5FE]"
       />
     </div>
@@ -74,10 +99,10 @@
           type="button"
           (click)="setAcutePhase('esr')"
           class="cursor-pointer rounded-full px-3 py-1 text-xs font-semibold transition-colors"
-          [class.bg-surface]="acutePhase() === 'esr'"
-          [class.text-primary]="acutePhase() === 'esr'"
-          [class.shadow-sm]="acutePhase() === 'esr'"
-          [class.text-secondary]="acutePhase() !== 'esr'"
+          [class.bg-surface]="parameters().acutePhase === 'esr'"
+          [class.text-primary]="parameters().acutePhase === 'esr'"
+          [class.shadow-sm]="parameters().acutePhase === 'esr'"
+          [class.text-secondary]="parameters().acutePhase !== 'esr'"
         >
           VHS
         </button>
@@ -85,10 +110,10 @@
           type="button"
           (click)="setAcutePhase('crp')"
           class="cursor-pointer rounded-full px-3 py-1 text-xs font-semibold transition-colors"
-          [class.bg-surface]="acutePhase() === 'crp'"
-          [class.text-primary]="acutePhase() === 'crp'"
-          [class.shadow-sm]="acutePhase() === 'crp'"
-          [class.text-secondary]="acutePhase() !== 'crp'"
+          [class.bg-surface]="parameters().acutePhase === 'crp'"
+          [class.text-primary]="parameters().acutePhase === 'crp'"
+          [class.shadow-sm]="parameters().acutePhase === 'crp'"
+          [class.text-secondary]="parameters().acutePhase !== 'crp'"
         >
           PCR
         </button>
@@ -106,7 +131,7 @@
         min="0"
         step="0.1"
         inputmode="decimal"
-        [value]="acuteValue() ?? ''"
+        [value]="parameters().acuteValue ?? ''"
         (input)="setAcuteValue(acute.value)"
         placeholder="Informe o valor"
         class="auth-input mt-1 py-2 text-sm"
@@ -116,7 +141,7 @@
     <div>
       <div class="flex items-center justify-between text-xs font-medium text-secondary">
         <label for="das28-gh">Saúde global do paciente</label>
-        <span class="font-semibold text-primary">{{ globalHealth() }}</span>
+        <span class="font-semibold text-primary">{{ parameters().globalHealth }}</span>
       </div>
       <input
         #gh
@@ -125,13 +150,13 @@
         min="0"
         max="100"
         step="1"
-        [value]="globalHealth()"
-        (input)="globalHealth.set(+gh.value)"
+        [value]="parameters().globalHealth"
+        (input)="setGlobalHealth(+gh.value)"
         class="mt-1 w-full accent-[#32B5FE]"
       />
     </div>
 
-    @if (score() === null) {
+    @if (displayScore() === null) {
       <p class="text-xs text-muted">Informe {{ acuteLabel() }} para calcular o DAS28.</p>
     }
   }

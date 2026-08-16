@@ -9,10 +9,17 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, RedirectResponse
 
 from app.core.config import get_settings
-from app.domain.errors import ForbiddenError, NotFoundError
+from app.domain.errors import (
+    ConflictError,
+    DuplicatePatientError,
+    ForbiddenError,
+    NotFoundError,
+)
 from app.infrastructure.auth import JwtVerifier
 from app.infrastructure.database import Database
-from app.presentation.routers import patients
+from app.infrastructure.storage import R2Storage
+from app.presentation.routers import encounters, patients
+from app.presentation.schemas import PatientOut
 
 logger = logging.getLogger(__name__)
 
@@ -31,6 +38,19 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         jwks_url=settings.supabase_jwks_url,
         issuer=settings.jwt_issuer,
         audience=settings.jwt_audience,
+    )
+    # Sem credencial de R2 a API sobe assim mesmo: só o upload de capturas fica
+    # indisponível, e responde 503 dizendo isso.
+    app.state.storage = (
+        R2Storage(
+            endpoint=settings.r2_endpoint,
+            bucket=settings.r2_bucket,
+            access_key_id=settings.r2_access_key_id,
+            secret_access_key=settings.r2_secret_access_key,
+            url_ttl_seconds=settings.r2_url_ttl_seconds,
+        )
+        if settings.r2_configured
+        else None
     )
     try:
         yield
@@ -96,6 +116,29 @@ def create_app() -> FastAPI:
     async def _forbidden(_: Request, exc: ForbiddenError) -> JSONResponse:
         return JSONResponse(status_code=403, content={"detail": str(exc)})
 
+    @app.exception_handler(ConflictError)
+    async def _conflict(_: Request, exc: ConflictError) -> JSONResponse:
+        # A mensagem sai para fora: ela diz o que falta subir, e é erro de fluxo do
+        # cliente, não detalhe interno.
+        return JSONResponse(status_code=409, content={"detail": str(exc)})
+
+    @app.exception_handler(DuplicatePatientError)
+    async def _duplicate_patient(_: Request, exc: DuplicatePatientError) -> JSONResponse:
+        """409 com os homônimos no corpo, para a tela poder oferecer abrir o existente.
+
+        Registrado além do handler de `ConflictError`, do qual herda: o Starlette
+        percorre a MRO da exceção e escolhe o mais específico.
+        """
+        return JSONResponse(
+            status_code=409,
+            content={
+                "detail": str(exc),
+                "duplicates": [
+                    PatientOut.from_entity(p).model_dump(mode="json") for p in exc.matches
+                ],
+            },
+        )
+
     if settings.docs_enabled:
 
         @app.get("/", include_in_schema=False)
@@ -108,6 +151,7 @@ def create_app() -> FastAPI:
         return {"status": "ok"}
 
     app.include_router(patients.router)
+    app.include_router(encounters.router)
     return app
 
 

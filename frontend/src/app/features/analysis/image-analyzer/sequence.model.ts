@@ -13,8 +13,8 @@
 
 import { SilhouetteAgreement } from './alignment-quality';
 import { FiducialCorrection } from './fiducial-markers';
-import { AffineMatrix, DetectedHand, ThermalMatrix } from './image-analyzer.model';
-import { JointRoiOverride } from './joint-rois';
+import { AffineMatrix, DetectedHand, RoiSelection, ThermalMatrix } from './image-analyzer.model';
+import { JointRoi, JointRoiOverride } from './joint-rois';
 
 export type CaptureKind = 'baseline' | 'dynamic';
 
@@ -67,6 +67,8 @@ export interface SequenceCapture {
   readonly timeSeconds: number;
   readonly optical: File;
   readonly thermal: File;
+  /** CSV de origem, retido para o upload da Fase 5. */
+  readonly matrixFile: File;
   /** Parsed temperature matrix (kept in memory; ≈2.4 MB per capture). */
   readonly matrix: ThermalMatrix;
   /** RGB→CSV alignment fitted for this capture, or null when it failed. */
@@ -93,6 +95,24 @@ export interface SequenceCapture {
   readonly thumbnail: string;
   /** Manual per-joint adjustments made on this capture. */
   readonly jointOverrides: ReadonlyMap<string, JointRoiOverride>;
+  /**
+   * Medições vindas do banco, numa consulta reaberta.
+   *
+   * Quando presentes, substituem a detecção por landmarks como base das ROIs
+   * articulares — `hands` fica vazio porque os landmarks não são persistidos, e
+   * não precisam ser: o resultado deles já está aqui. É isto que faz a consulta
+   * reaberta mostrar os números do dia, e não uma segunda detecção.
+   */
+  readonly restoredJoints?: readonly JointRoi[] | null;
+  /**
+   * ROIs manuais gravadas, numa consulta reaberta.
+   *
+   * São da captura, não da sessão: foram desenhadas sobre esta foto. `null` quando
+   * não houve nenhuma — a mesma distinção de `restoredJoints` entre "não tem" e
+   * "tem zero". As estatísticas não voltam com elas: a página as recalcula da
+   * matriz, e por serem a mesma matriz e o mesmo alinhamento, dão os mesmos números.
+   */
+  readonly restoredRois?: readonly RoiSelection[] | null;
   /** Human-readable processing problem, or null when the capture is healthy. */
   readonly issue: string | null;
 }

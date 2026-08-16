@@ -10,6 +10,9 @@ dependencies = [
     "pyjwt[crypto]>=2.9",
     "pydantic>=2.9",
     "pydantic-settings>=2.6",
+    # Só para assinar PUTs do R2 (S3-compatível). Escrever a cadeia SigV4 à mão é o
+    # tipo de código que parece simples e falha em silêncio.
+    "boto3>=1.35",
 ]
 
 [project.optional-dependencies]

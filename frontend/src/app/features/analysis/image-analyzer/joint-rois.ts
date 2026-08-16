@@ -148,3 +148,36 @@ export function captureJointRois(
   }
   return rois;
 }
+
+/**
+ * Aplica ajustes manuais sobre ROIs articulares **já calculadas**.
+ *
+ * Existe para o caminho em que as posições não vêm de landmarks: a consulta
+ * reaberta parte das medições gravadas, e mover uma ROI é mudar o centro e
+ * recalcular a estatística da matriz — sem redetectar mão nenhuma.
+ *
+ * `captureJointRois` continua sendo o caminho da sessão viva, onde há landmarks.
+ */
+export function applyJointOverrides(
+  base: readonly JointRoi[],
+  overrides: ReadonlyMap<string, JointRoiOverride>,
+  matrix: ThermalMatrix,
+  alignment: AffineMatrix,
+  skinTest?: (csvX: number, csvY: number) => boolean,
+): readonly JointRoi[] {
+  if (overrides.size === 0) {
+    return base;
+  }
+  return base.map((roi) => {
+    const ajuste = overrides.get(roi.key);
+    if (!ajuste) {
+      return roi;
+    }
+    const rgb = ajuste.rgb ?? roi.rgb;
+    const rxCsv = ajuste.rxCsv ?? roi.rxCsv;
+    const ryCsv = ajuste.ryCsv ?? roi.ryCsv;
+    const csv = applyAffine(alignment, rgb.x, rgb.y);
+    const stats = computeRoiStats(matrix, roi.shape, csv.x, csv.y, rxCsv, ryCsv, skinTest);
+    return { ...roi, rgb, csv, rxCsv, ryCsv, stats, edited: true };
+  });
+}
