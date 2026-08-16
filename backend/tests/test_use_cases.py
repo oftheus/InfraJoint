@@ -115,7 +115,6 @@ class FakeEncounterRepository:
             scores=data.scores or {},
             analysis_status=None,
             capture_count=0,
-            created_by=uuid4(),
             created_at=NOW,
             updated_at=NOW,
         )
@@ -187,6 +186,32 @@ async def test_consulta_em_paciente_invisivel_vira_not_found() -> None:
         )
 
     assert encounters.created == [], "não pode ter tentado inserir"
+
+
+async def test_admin_nao_registra_consulta_no_paciente_de_outro_medico() -> None:
+    """Consulta é do dono do paciente: o admin supervisiona, não assina por ele.
+
+    O admin **enxerga** o paciente alheio, então o 404 de invisibilidade não o pega —
+    é esta guarda que impede a escrita virar erro de policy lá embaixo.
+    """
+    do_medico = _patient(MEDICO.id)
+    patients = FakePatientRepository([do_medico])
+    encounters = FakeEncounterRepository()
+
+    with pytest.raises(ForbiddenError):
+        await CreateEncounter(patients, encounters).execute(
+            ADMIN, do_medico.id, NewEncounter(reason="supervisão")
+        )
+    assert encounters.created == []
+
+
+async def test_medico_registra_consulta_no_proprio_paciente() -> None:
+    meu = _patient(MEDICO.id)
+    encounters = FakeEncounterRepository()
+    await CreateEncounter(FakePatientRepository([meu]), encounters).execute(
+        MEDICO, meu.id, NewEncounter(reason="retorno")
+    )
+    assert [pid for pid, _ in encounters.created] == [meu.id]
 
 
 async def test_leitor_nao_cria_consulta_e_nem_consulta_o_paciente() -> None:

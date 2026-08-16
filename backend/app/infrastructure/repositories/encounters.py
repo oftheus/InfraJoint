@@ -11,7 +11,7 @@ from app.domain.entities import AnalysisStatus, Encounter, NewEncounter
 
 _COLUMNS = """
     id, patient_id, owner_id, occurred_at, reason, clinical_notes,
-    joint_evaluations, scores, analysis_status, created_by, created_at, updated_at
+    joint_evaluations, scores, analysis_status, created_at, updated_at
 """
 
 
@@ -44,7 +44,6 @@ def _to_entity(row: asyncpg.Record) -> Encounter:
             AnalysisStatus(row["analysis_status"]) if row["analysis_status"] else None
         ),
         capture_count=row.get("capture_count") or 0,
-        created_by=row["created_by"],
         created_at=row["created_at"],
         updated_at=row["updated_at"],
     )
@@ -53,13 +52,6 @@ def _to_entity(row: asyncpg.Record) -> Encounter:
 class PostgresEncounterRepository:
     def __init__(self, connection: asyncpg.Connection) -> None:
         self._connection = connection
-
-    # Whitelist das colunas de análise que o POST de capturas pode gravar. Mesma razão
-    # do _UPDATABLE de pacientes: o SQL é montado por interpolação, então a lista dos
-    # nomes válidos precisa existir aqui, na única camada que conhece colunas.
-    _ANALYSIS_FIELDS = frozenset(
-        {"subject_label", "trial_label", "capture_interval_seconds", "analysis_params"}
-    )
 
     async def get(self, encounter_id: UUID) -> Encounter | None:
         # `capture_count` sai da mesma subconsulta da listagem: a consulta reaberta
@@ -77,30 +69,20 @@ class PostgresEncounterRepository:
         )
         return _to_entity(row) if row else None
 
-    async def set_analysis(self, encounter_id: UUID, fields: Mapping[str, Any]) -> Encounter | None:
-        desconhecidos = set(fields) - self._ANALYSIS_FIELDS
-        if desconhecidos:
-            raise ValueError(f"colunas não editáveis: {sorted(desconhecidos)}")
+    async def start_analysis(self, encounter_id: UUID) -> Encounter | None:
+        """Marca a consulta como tendo análise de imagem em envio.
 
-        # `analysis_status` nasce 'uploading' aqui: as linhas existem, os bytes não.
-        atribuicoes = ["analysis_status = 'uploading'"]
-        valores: list[Any] = []
-        for coluna, valor in fields.items():
-            if coluna == "analysis_params":
-                valores.append(None if valor is None else json.dumps(valor))
-                atribuicoes.append(f"{coluna} = COALESCE(${len(valores) + 1}::jsonb, '{{}}')")
-            else:
-                valores.append(valor)
-                atribuicoes.append(f"{coluna} = ${len(valores) + 1}")
-
+        Sobrou só isto: os rótulos da sessão e os parâmetros saíram do schema, e o que
+        resta é a transição de estado. `analysis_status` nasce 'uploading' porque as
+        linhas das capturas existem e os bytes ainda não.
+        """
         row = await self._connection.fetchrow(
             f"""
-            UPDATE public.encounters SET {", ".join(atribuicoes)}
+            UPDATE public.encounters SET analysis_status = 'uploading'
              WHERE id = $1
             RETURNING {_COLUMNS}
             """,
             encounter_id,
-            *valores,
         )
         return _to_entity(row) if row else None
 
@@ -136,7 +118,8 @@ class PostgresEncounterRepository:
 
     async def create(self, patient_id: UUID, data: NewEncounter) -> Encounter:
         # owner_id vem do trigger app.inherit_owner(), que copia do paciente lendo-o
-        # sob a RLS de quem escreve. created_by tem DEFAULT auth.uid().
+        # sob a RLS de quem escreve — e a policy de escrita exige que ele seja o
+        # próprio autor, então a consulta é sempre de quem a registrou.
         #
         # O fluxo de Análise Térmica grava tudo numa instrução só: a consulta nasce
         # já com o body map e os escores. Não há passo intermediário no banco, então

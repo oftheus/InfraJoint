@@ -117,10 +117,6 @@ export interface CaptureFileDeclaration {
  * Não há discriminador — a cardinalidade é a diferença, no frontend como no banco.
  */
 export interface AnalysisCreate {
-  subject_label?: string | null;
-  trial_label?: string | null;
-  capture_interval_seconds?: number | null;
-  analysis_params?: Record<string, unknown> | null;
   captures: readonly Record<string, unknown>[];
 }
 
@@ -176,7 +172,6 @@ export interface CaptureDetail {
   readonly agreement: Record<string, unknown> | null;
   readonly fiducial_correction: Record<string, unknown> | null;
   readonly measurements: readonly Record<string, unknown>[];
-  readonly manual_rois: readonly Record<string, unknown>[];
   readonly issue: string | null;
   readonly files: Readonly<Record<string, CaptureFileDetail>>;
 }

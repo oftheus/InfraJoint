@@ -1,4 +1,11 @@
-import { ChangeDetectionStrategy, Component, computed, effect, inject, signal } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  computed,
+  effect,
+  inject,
+  signal,
+} from '@angular/core';
 
 import { BodySide, JointId } from '../../../body-map/body-map.model';
 import { JOINT_BY_ID } from '../../../body-map/joint-catalog.data';

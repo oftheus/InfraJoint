@@ -9,10 +9,9 @@
 import {
   AlignmentMethod,
   CaptureFilesPayload,
-  RoiStatsFn,
   captureFromSingle,
 } from '../../image-analyzer/analysis-payload';
-import { AffineMatrix, RoiSelection, ThermalMatrix } from '../../image-analyzer/image-analyzer.model';
+import { AffineMatrix, ThermalMatrix } from '../../image-analyzer/image-analyzer.model';
 import { SilhouetteAgreement } from '../../image-analyzer/alignment-quality';
 import { FiducialCorrection } from '../../image-analyzer/fiducial-markers';
 import { JointRoi } from '../../image-analyzer/joint-rois';
@@ -27,7 +26,6 @@ export interface AnalyzerReadout {
   readonly agreement: SilhouetteAgreement | null;
   readonly correction: FiducialCorrection | null;
   readonly jointRois: readonly JointRoi[];
-  readonly rois: readonly RoiSelection[];
   readonly opticalFile: File | null;
   readonly thermalFile: File | null;
   readonly matrixFile: File | null;
@@ -73,7 +71,6 @@ export interface SequenceReadout {
  */
 export function collectSequenceAnalysis(
   capturas: readonly SequenceReadout[],
-  sessao: { readonly subjectLabel?: string; readonly trialLabel?: string; readonly intervalSeconds?: number },
 ): CollectedAnalysis | null {
   if (capturas.length === 0) {
     return null;
@@ -113,23 +110,12 @@ export function collectSequenceAnalysis(
       agreement: captura.agreement,
       fiducial_correction: captura.correction,
       measurements: captura.jointRois,
-      // ROIs manuais são desenhadas sobre a captura ativa e o analisador as limpa ao
-      // carregar uma sequência — não há o que atribuir por captura.
-      manual_rois: [],
       issue: captura.issue,
       files: declarados,
     } as unknown as Record<string, unknown>;
   });
 
-  return {
-    payload: {
-      subject_label: sessao.subjectLabel ?? null,
-      trial_label: sessao.trialLabel ?? null,
-      capture_interval_seconds: sessao.intervalSeconds ?? null,
-      captures: payloads,
-    },
-    files: arquivos,
-  };
+  return { payload: { captures: payloads }, files: arquivos };
 }
 
 /**
@@ -138,10 +124,7 @@ export function collectSequenceAnalysis(
  * Sem matriz ou sem alinhamento não existe medição — e gravar uma análise vazia
  * deixaria a consulta presa em `analysis_status='uploading'` para sempre.
  */
-export function collectSingleAnalysis(
-  readout: AnalyzerReadout,
-  stats: RoiStatsFn,
-): CollectedAnalysis | null {
+export function collectSingleAnalysis(readout: AnalyzerReadout): CollectedAnalysis | null {
   if (!readout.matrix || !readout.activeMatrix) {
     return null;
   }
@@ -167,20 +150,16 @@ export function collectSingleAnalysis(
     return null;
   }
 
-  const [captura] = captureFromSingle(
-    {
-      matrix: readout.matrix,
-      alignment: readout.activeMatrix,
-      mode: readout.mode,
-      autoMethod: readout.autoMethod,
-      agreement: readout.agreement,
-      correction: readout.correction,
-      jointRois: readout.jointRois,
-      rois: readout.rois,
-      files: declarados as CaptureFilesPayload,
-    },
-    stats,
-  );
+  const [captura] = captureFromSingle({
+    matrix: readout.matrix,
+    alignment: readout.activeMatrix,
+    mode: readout.mode,
+    autoMethod: readout.autoMethod,
+    agreement: readout.agreement,
+    correction: readout.correction,
+    jointRois: readout.jointRois,
+    files: declarados as CaptureFilesPayload,
+  });
 
   return {
     payload: { captures: [captura as unknown as Record<string, unknown>] },

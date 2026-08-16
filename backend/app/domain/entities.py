@@ -80,7 +80,6 @@ class Encounter:
     # a consulta; nos caminhos de escrita vale 0, o que é verdade neles: a consulta
     # acabou de nascer, ou as capturas ainda não foram inseridas.
     capture_count: int
-    created_by: UUID
     created_at: datetime
     updated_at: datetime
 
@@ -122,8 +121,8 @@ class CaptureFile:
 class Capture:
     """Uma captura gravada, com o que basta para assinar suas URLs.
 
-    Os resultados (`measurements`, `manual_rois`, alinhamento) não voltam aqui: eles
-    são gravados e lidos pela tela de detalhe, não por este fluxo.
+    Os resultados (`measurements`, alinhamento) não voltam aqui: eles são gravados e
+    lidos pela tela de detalhe, não por este fluxo.
     """
 
     id: UUID

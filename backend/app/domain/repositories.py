@@ -53,8 +53,8 @@ class EncounterRepository(Protocol):
 
     async def create(self, patient_id: UUID, data: NewEncounter) -> Encounter: ...
 
-    async def set_analysis(self, encounter_id: UUID, fields: Mapping[str, Any]) -> Encounter | None:
-        """Grava os campos de análise na consulta. `None` se ela não for visível."""
+    async def start_analysis(self, encounter_id: UUID) -> Encounter | None:
+        """Marca a consulta como tendo análise em envio. `None` se ela não for visível."""
         ...
 
     async def set_analysis_status(self, encounter_id: UUID, status: str) -> bool: ...

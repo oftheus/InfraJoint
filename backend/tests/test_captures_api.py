@@ -59,7 +59,6 @@ def _captura(indice: int, *, phase: str | None = None) -> dict[str, Any]:
         "alignment_method": "silhouette",
         "agreement": {"normalized": 0.87, "dice": 0.61, "ceiling": 0.70},
         "measurements": [{"label": "Punho", "stats": {"mean": 33.2}}],
-        "manual_rois": [{"id": 1, "mean": 34.1}],
         "files": {"optical": {"size": 1000}, "matrix": {"size": 2000}},
     }
 
@@ -220,6 +219,21 @@ async def test_medico_b_nao_anexa_captura_a_consulta_de_a(client_com_storage: tu
     assert r.status_code == 404, "consulta invisível some, não é recusada"
 
 
+async def test_admin_nao_grava_analise_na_consulta_de_outro(client_com_storage: tuple) -> None:
+    """A análise segue a consulta: quem não a registrou não a preenche."""
+    from tests.conftest import ADMIN
+
+    http, acting, _ = client_com_storage
+    acting["user_id"] = MEDICO_A
+    eid = await _consulta_de(http, "API-TEST análise de A")
+
+    acting["user_id"] = ADMIN
+    negado = await http.post(f"/encounters/{eid}/captures", json={"captures": [_captura(0)]})
+    assert negado.status_code == 403, negado.text
+    # A consulta continua visível para ele — é autoria que falta, não acesso.
+    assert (await http.get(f"/encounters/{eid}")).status_code == 200
+
+
 async def test_leitor_recebe_403(client_com_storage: tuple) -> None:
     http, acting, _ = client_com_storage
     acting["user_id"] = MEDICO_A
@@ -378,12 +392,7 @@ async def test_reabrir_consulta_devolve_tudo_identico(client_com_storage: tuple)
     eid = criada.json()["id"]
     await http.post(
         f"/encounters/{eid}/captures",
-        json={
-            "subject_label": "V051",
-            "trial_label": "T1",
-            "capture_interval_seconds": 15,
-            "captures": [_captura(0, phase="baseline"), _captura(1, phase="dynamic")],
-        },
+        json={"captures": [_captura(0, phase="baseline"), _captura(1, phase="dynamic")]},
     )
     storage.existentes.update(storage.assinadas)
     assert (await http.patch(f"/encounters/{eid}/analysis-status")).status_code == 204

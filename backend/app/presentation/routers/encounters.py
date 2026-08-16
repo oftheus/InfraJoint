@@ -38,10 +38,6 @@ async def create_captures(
     user: deps.CurrentUser,
     use_case: Annotated[CreateCaptures, Depends(deps.create_captures)],
 ) -> AnalysisCreatedOut:
-    analysis = payload.model_dump(
-        include={"subject_label", "trial_label", "capture_interval_seconds", "analysis_params"},
-        exclude_none=True,
-    )
     captures = []
     for captura in payload.captures:
         linha = captura.model_dump(exclude={"files"})
@@ -50,7 +46,7 @@ async def create_captures(
         linha["files"] = {k: v.model_dump() for k, v in captura.files.items()}
         captures.append(linha)
 
-    criada = await use_case.execute(user, encounter_id, analysis, captures)
+    criada = await use_case.execute(user, encounter_id, captures)
     return AnalysisCreatedOut(
         encounter_id=encounter_id,
         uploads=[

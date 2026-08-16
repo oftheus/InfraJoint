@@ -261,7 +261,6 @@ class CaptureIn(BaseModel):
     agreement: dict[str, Any] | None = None
     fiducial_correction: dict[str, Any] | None = None
     measurements: list[dict[str, Any]] = Field(default_factory=list)
-    manual_rois: list[dict[str, Any]] = Field(default_factory=list)
     # Problema de processamento desta captura — uma sequência de 21 pode ter uma
     # falha isolada, e perder esse registro esconderia por que ela não tem medição.
     issue: str | None = Field(default=None, max_length=300)
@@ -288,10 +287,6 @@ class AnalysisCreate(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    subject_label: str | None = Field(default=None, max_length=60)
-    trial_label: str | None = Field(default=None, max_length=60)
-    capture_interval_seconds: int | None = Field(default=None, ge=0, le=3600)
-    analysis_params: dict[str, Any] | None = None
     captures: list[CaptureIn] = Field(min_length=1, max_length=MAX_CAPTURES)
 
     @field_validator("captures")
@@ -363,7 +358,6 @@ class CaptureDetailOut(BaseModel):
     agreement: dict[str, Any] | None
     fiducial_correction: dict[str, Any] | None
     measurements: list[dict[str, Any]]
-    manual_rois: list[dict[str, Any]]
     issue: str | None
     files: dict[str, CaptureFileOut]
 

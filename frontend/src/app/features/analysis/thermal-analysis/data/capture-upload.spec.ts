@@ -1,9 +1,4 @@
-import {
-  PendingUpload,
-  UploadFailedError,
-  describeTimings,
-  uploadAll,
-} from './capture-upload';
+import { PendingUpload, UploadFailedError, describeTimings, uploadAll } from './capture-upload';
 
 function item(nome: string, bytes = 1): PendingUpload {
   return {

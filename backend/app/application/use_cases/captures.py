@@ -54,7 +54,6 @@ class CreateCaptures:
         self,
         user: AuthenticatedUser,
         encounter_id: UUID,
-        analysis: Mapping[str, Any],
         captures: Sequence[Mapping[str, Any]],
     ) -> CreatedAnalysis:
         if not user.is_clinician:
@@ -66,10 +65,16 @@ class CreateCaptures:
         if encounter is None:
             raise NotFoundError("consulta não encontrada")
 
+        # Mesma regra da criação da consulta: a análise é de quem atendeu. O admin
+        # enxerga a consulta alheia, então o 404 acima não o pega — e sem esta guarda
+        # ele receberia 500 vindo da policy de escrita das capturas.
+        if encounter.owner_id != user.id:
+            raise ForbiddenError("apenas o médico responsável pela consulta grava a análise")
+
         if await self.captures.list_for_encounter(encounter_id):
             raise ConflictError("esta consulta já tem uma análise de imagem")
 
-        if await self.encounters.set_analysis(encounter_id, analysis) is None:
+        if await self.encounters.start_analysis(encounter_id) is None:
             raise NotFoundError("consulta não encontrada")
 
         gravadas = await self.captures.create_many(encounter_id, captures)
