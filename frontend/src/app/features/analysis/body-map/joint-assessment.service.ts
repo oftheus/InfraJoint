@@ -1,10 +1,20 @@
 import { Injectable, computed, signal } from '@angular/core';
 
 import {
+  calculateCdai,
+  calculateDas28,
+  cdaiActivityLevel,
+  das28ActivityLevel,
+} from './disease-activity';
+
+import {
   AssessmentResult,
+  DEFAULT_SCORE_PARAMETERS,
   JointEvaluation,
   JointId,
   JointStatus,
+  ScoreOutcome,
+  ScoreParameters,
   statusFromEvaluation,
 } from './body-map.model';
 
@@ -20,6 +30,10 @@ import {
 export class JointAssessmentService {
   private readonly evaluationsSig = signal<ReadonlyMap<JointId, JointEvaluation>>(new Map());
   private readonly activeJointsSig = signal<readonly JointId[]>([]);
+  private readonly parametersSig = signal<ScoreParameters>(DEFAULT_SCORE_PARAMETERS);
+
+  /** Clinical parameters the physician types in (globals and the acute-phase lab). */
+  readonly parameters = this.parametersSig.asReadonly();
 
   /** Current per-joint evaluations (only joints the physician has touched). */
   readonly evaluations = this.evaluationsSig.asReadonly();
@@ -88,18 +102,75 @@ export class JointAssessmentService {
     }
   }
 
-  /** Clears every evaluation. */
+  /**
+   * Repõe um body map inteiro de uma vez — o caminho de volta de {@link toResult}.
+   *
+   * Existe para a consulta reaberta: sem ele, restaurar seria uma sequência de
+   * `setEvaluation`/`setParameter`, e cada chamada publicaria um estado
+   * intermediário que nunca foi avaliado por ninguém.
+   */
+  restore(joints: ReadonlyMap<JointId, JointEvaluation>, parameters: ScoreParameters): void {
+    this.evaluationsSig.set(new Map([...joints].map(([id, e]) => [id, { ...e }])));
+    this.parametersSig.set({ ...parameters });
+  }
+
+  /** Clears every evaluation and the typed-in parameters. */
   reset(): void {
     this.evaluationsSig.set(new Map());
+    this.parametersSig.set(DEFAULT_SCORE_PARAMETERS);
+  }
+
+  /** Replaces one clinical parameter, leaving the others untouched. */
+  setParameter<K extends keyof ScoreParameters>(key: K, value: ScoreParameters[K]): void {
+    this.parametersSig.set({ ...this.parametersSig(), [key]: value });
+  }
+
+  /**
+   * Score and activity band for one index, or `null` while an input is missing.
+   *
+   * A method rather than a `computed` because the active index is the caller's
+   * state, not the store's: the Thermal Analysis flow serializes CDAI *and*
+   * DAS28 from the same findings, so it asks for both. Reading signals inside
+   * keeps it reactive when called from a `computed`.
+   */
+  scoreFor(assessmentType: string): ScoreOutcome {
+    const tenderCount = this.tenderCount();
+    const swollenCount = this.swollenCount();
+    const parameters = this.parametersSig();
+
+    if (assessmentType === 'CDAI') {
+      const score = calculateCdai({
+        tenderCount,
+        swollenCount,
+        patientGlobal: parameters.patientGlobal,
+        evaluatorGlobal: parameters.evaluatorGlobal,
+      });
+      return { score, level: cdaiActivityLevel(score) };
+    }
+
+    const { acuteValue } = parameters;
+    if (acuteValue === null || acuteValue < 0) {
+      // DAS28 sem VHS/PCR não existe. Devolver null é o que deixa a etapa do body
+      // map ser salva sem escore fechado, em vez de gravar um número inventado.
+      return { score: null, level: null };
+    }
+    const score = calculateDas28({
+      tenderCount,
+      swollenCount,
+      acutePhase: parameters.acutePhase,
+      acuteValue,
+      patientGlobalHealth: parameters.globalHealth,
+    });
+    return { score, level: das28ActivityLevel(score) };
   }
 
   /** Serializes the current state for the disease-activity algorithms / API. */
-  toResult(assessmentType: string, patientId?: number | string): AssessmentResult {
+  toResult(assessmentType: string, patientId?: string): AssessmentResult {
     const joints: Partial<Record<JointId, JointEvaluation>> = {};
     for (const [id, evaluation] of this.evaluationsSig()) {
       joints[id] = { ...evaluation };
     }
-    return { patientId, assessmentType, joints };
+    return { patientId, assessmentType, joints, parameters: this.parametersSig() };
   }
 
   private countWhere(predicate: (evaluation: JointEvaluation) => boolean): number {

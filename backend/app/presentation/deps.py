@@ -15,7 +15,16 @@ import asyncpg
 from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
-from app.application.use_cases.encounters import CreateEncounter, GetPatientDetail
+from app.application.use_cases.captures import (
+    CreateCaptures,
+    GetEncounterDetail,
+    MarkAnalysisReady,
+)
+from app.application.use_cases.encounters import (
+    CreateEncounter,
+    DeleteEncounter,
+    GetPatientDetail,
+)
 from app.application.use_cases.patients import (
     CreatePatient,
     DeletePatient,
@@ -23,9 +32,15 @@ from app.application.use_cases.patients import (
     UpdatePatient,
 )
 from app.domain.entities import AuthenticatedUser, UserRole
-from app.domain.repositories import EncounterRepository, PatientRepository
+from app.domain.repositories import (
+    CaptureRepository,
+    EncounterRepository,
+    ObjectStorage,
+    PatientRepository,
+)
 from app.infrastructure.auth import InvalidTokenError, JwtVerifier
 from app.infrastructure.database import Database
+from app.infrastructure.repositories.captures import PostgresCaptureRepository
 from app.infrastructure.repositories.encounters import PostgresEncounterRepository
 from app.infrastructure.repositories.patients import PostgresPatientRepository
 
@@ -83,6 +98,38 @@ async def get_current_user(
     return AuthenticatedUser(id=user_id, role=UserRole(role))
 
 
+def get_storage(request: Request) -> ObjectStorage:
+    """503 em vez de 500 quando o R2 não está configurado.
+
+    A API sobe sem credencial de bucket de propósito — pacientes, consultas e body map
+    funcionam sem ela. Só o upload de capturas depende do R2, e falhar aqui diz que é
+    configuração faltando, não bug.
+    """
+    storage = getattr(request.app.state, "storage", None)
+    if storage is None:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="armazenamento de imagens não configurado",
+        )
+    return storage
+
+
+def get_storage_optional(request: Request) -> ObjectStorage | None:
+    """Variante que devolve `None` em vez de 503.
+
+    Apagar paciente não pode depender do R2 estar configurado: a exclusão do
+    prontuário é a operação que o usuário pediu, e a limpeza do bucket é
+    consequência. Sem storage, os objetos ficam órfãos — e isso é registrado.
+    """
+    return getattr(request.app.state, "storage", None)
+
+
+def get_capture_repository(
+    connection: Annotated[asyncpg.Connection, Depends(get_connection)],
+) -> CaptureRepository:
+    return PostgresCaptureRepository(connection)
+
+
 def get_patient_repository(
     connection: Annotated[asyncpg.Connection, Depends(get_connection)],
 ) -> PatientRepository:
@@ -97,6 +144,9 @@ def get_encounter_repository(
 
 PatientRepo = Annotated[PatientRepository, Depends(get_patient_repository)]
 EncounterRepo = Annotated[EncounterRepository, Depends(get_encounter_repository)]
+CaptureRepo = Annotated[CaptureRepository, Depends(get_capture_repository)]
+Storage = Annotated[ObjectStorage, Depends(get_storage)]
+StorageOptional = Annotated[ObjectStorage | None, Depends(get_storage_optional)]
 CurrentUser = Annotated[AuthenticatedUser, Depends(get_current_user)]
 
 
@@ -114,8 +164,8 @@ def update_patient(repo: PatientRepo) -> UpdatePatient:
     return UpdatePatient(repo)
 
 
-def delete_patient(repo: PatientRepo) -> DeletePatient:
-    return DeletePatient(repo)
+def delete_patient(repo: PatientRepo, captures: CaptureRepo) -> DeletePatient:
+    return DeletePatient(repo, captures)
 
 
 def get_patient_detail(patients: PatientRepo, encounters: EncounterRepo) -> GetPatientDetail:
@@ -124,3 +174,29 @@ def get_patient_detail(patients: PatientRepo, encounters: EncounterRepo) -> GetP
 
 def create_encounter(patients: PatientRepo, encounters: EncounterRepo) -> CreateEncounter:
     return CreateEncounter(patients, encounters)
+
+
+def delete_encounter(encounters: EncounterRepo, captures: CaptureRepo) -> DeleteEncounter:
+    return DeleteEncounter(encounters, captures)
+
+
+def create_captures(
+    encounters: EncounterRepo, captures: CaptureRepo, storage: Storage
+) -> CreateCaptures:
+    return CreateCaptures(encounters, captures, storage)
+
+
+def mark_analysis_ready(
+    encounters: EncounterRepo, captures: CaptureRepo, storage: Storage
+) -> MarkAnalysisReady:
+    return MarkAnalysisReady(encounters, captures, storage)
+
+
+def get_encounter_detail(
+    encounters: EncounterRepo,
+    patients: PatientRepo,
+    captures: CaptureRepo,
+    storage: StorageOptional,
+) -> GetEncounterDetail:
+    """Storage opcional: sem R2 a consulta abre igual, só sem as imagens."""
+    return GetEncounterDetail(encounters, patients, captures, storage)

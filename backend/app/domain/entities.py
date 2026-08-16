@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import date, datetime
 from enum import StrEnum
+from typing import Any
 from uuid import UUID
 
 
@@ -69,13 +71,84 @@ class Encounter:
     occurred_at: datetime
     reason: str | None
     clinical_notes: str | None
+    joint_evaluations: Mapping[str, Any] | None
+    scores: Mapping[str, Any]
+    # `None` = consulta sem análise de imagem. Distingue "não tem" de "tem e ainda
+    # está subindo", que na tela são coisas bem diferentes.
+    analysis_status: AnalysisStatus | None
+    # Quantas capturas a consulta tem. Contado na listagem por paciente e ao abrir
+    # a consulta; nos caminhos de escrita vale 0, o que é verdade neles: a consulta
+    # acabou de nascer, ou as capturas ainda não foram inseridas.
+    capture_count: int
     created_by: UUID
     created_at: datetime
     updated_at: datetime
 
 
+class FileKind(StrEnum):
+    """Os três arquivos de uma captura.
+
+    É enum, e não texto livre, porque este valor entra na chave do objeto no R2 —
+    texto livre permitiria `../` e escapar do prefixo do dono.
+    """
+
+    OPTICAL = "optical"
+    THERMAL = "thermal"
+    MATRIX = "matrix"
+
+
+class AnalysisStatus(StrEnum):
+    """Onde o upload está. `None` na coluna significa consulta sem análise."""
+
+    UPLOADING = "uploading"
+    READY = "ready"
+
+
+@dataclass(frozen=True, slots=True)
+class CaptureFile:
+    """Endereço de um arquivo de captura, em termos de domínio.
+
+    A porta de armazenamento recebe isto e deriva a chave sozinha — assim a
+    aplicação nunca precisa saber como o R2 organiza objetos.
+    """
+
+    owner_id: UUID
+    encounter_id: UUID
+    capture_id: UUID
+    kind: FileKind
+
+
+@dataclass(frozen=True, slots=True)
+class Capture:
+    """Uma captura gravada, com o que basta para assinar suas URLs.
+
+    Os resultados (`measurements`, `manual_rois`, alinhamento) não voltam aqui: eles
+    são gravados e lidos pela tela de detalhe, não por este fluxo.
+    """
+
+    id: UUID
+    encounter_id: UUID
+    owner_id: UUID
+    capture_index: int
+    files: Mapping[str, Any]
+
+
 @dataclass(frozen=True, slots=True)
 class NewEncounter:
+    """O que o fluxo de Análise Térmica grava ao finalizar.
+
+    `joint_evaluations` e `scores` são opcionais porque as duas etapas do fluxo são
+    opcionais: uma consulta pode existir sem body map, e um body map pode existir sem
+    escore fechado (o DAS28 precisa de VHS/PCR, que nem sempre está em mãos).
+
+    As duas ficam como Mapping e não como dataclass de domínio de propósito. O
+    catálogo de articulações e as fórmulas dos índices vivem no frontend; replicá-los
+    aqui criaria duas fontes da verdade que divergem em silêncio. A validação de
+    forma e faixa acontece na borda, em presentation/schemas.py.
+    """
+
     occurred_at: datetime | None = None
     reason: str | None = None
     clinical_notes: str | None = None
+    joint_evaluations: Mapping[str, Any] | None = None
+    scores: Mapping[str, Any] | None = None

@@ -1,8 +1,5 @@
 import { provideHttpClient } from '@angular/common/http';
-import {
-  HttpTestingController,
-  provideHttpClientTesting,
-} from '@angular/common/http/testing';
+import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
 
 import { environment } from '../../../../environments/environment';
@@ -48,6 +45,18 @@ describe('PatientsService', () => {
     request.flush({});
   });
 
+  it('só manda allow_duplicate quando o médico confirma o homônimo', () => {
+    service.create({ full_name: 'Ana' }).subscribe();
+    const primeira = controller.expectOne((request) => request.url === base);
+    expect(primeira.request.params.has('allow_duplicate')).toBe(false);
+    primeira.flush({});
+
+    service.create({ full_name: 'Ana' }, true).subscribe();
+    const segunda = controller.expectOne((request) => request.url === base);
+    expect(segunda.request.params.get('allow_duplicate')).toBe('true');
+    segunda.flush({});
+  });
+
   it('edita com PATCH, enviando só o que mudou', () => {
     service.update('abc', { phone: '11999' }).subscribe();
     const request = controller.expectOne(`${base}/abc`);
@@ -68,5 +77,12 @@ describe('PatientsService', () => {
     const request = controller.expectOne(`${base}/abc/encounters`);
     expect(request.request.method).toBe('POST');
     request.flush({});
+  });
+
+  it('exclui consulta pela rota de consultas, não pela do paciente', () => {
+    service.deleteEncounter('e1').subscribe();
+    const request = controller.expectOne(`${environment.apiBaseUrl}/encounters/e1`);
+    expect(request.request.method).toBe('DELETE');
+    request.flush(null, { status: 204, statusText: 'No Content' });
   });
 });

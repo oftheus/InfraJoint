@@ -85,6 +85,39 @@ async def client(_seeded: None) -> AsyncIterator[tuple[object, dict[str, UUID]]]
             yield http, acting_as
 
 
+@pytest.fixture
+async def client_com_storage(
+    _seeded: None,
+) -> AsyncIterator[tuple[object, dict[str, UUID], object]]:
+    """Como `client`, mas com o R2 substituído por um duplo.
+
+    Assinar de verdade exigiria credencial de bucket e testaria o boto3. O que
+    interessa provar aqui é o SQL, os triggers e as policies — e esses são reais.
+    """
+    from httpx import ASGITransport, AsyncClient
+
+    from app.main import create_app
+    from app.presentation import deps
+    from tests.test_captures_api import FakeStorage
+
+    app = create_app()
+    acting: dict[str, UUID] = {"user_id": MEDICO_A}
+    storage = FakeStorage()
+
+    async def _fake_user_id() -> UUID:
+        return acting["user_id"]
+
+    app.dependency_overrides[deps.get_user_id] = _fake_user_id
+    app.dependency_overrides[deps.get_storage] = lambda: storage
+    # A rota de exclusão usa a variante opcional; sem substituí-la também, a
+    # limpeza do bucket seria pulada e o teste passaria por engano.
+    app.dependency_overrides[deps.get_storage_optional] = lambda: storage
+
+    async with app.router.lifespan_context(app):
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as http:
+            yield http, acting, storage
+
+
 @pytest.fixture(autouse=True)
 async def _cleanup() -> AsyncIterator[None]:
     yield

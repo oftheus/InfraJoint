@@ -4,9 +4,9 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from uuid import UUID
 
-from app.domain.entities import AuthenticatedUser, Encounter, NewEncounter, Patient
+from app.domain.entities import AuthenticatedUser, CaptureFile, Encounter, NewEncounter, Patient
 from app.domain.errors import ForbiddenError, NotFoundError
-from app.domain.repositories import EncounterRepository, PatientRepository
+from app.domain.repositories import CaptureRepository, EncounterRepository, PatientRepository
 
 
 @dataclass(frozen=True, slots=True)
@@ -55,3 +55,32 @@ class CreateEncounter:
             raise NotFoundError("paciente não encontrado")
 
         return await self.encounters.create(patient_id, data)
+
+
+@dataclass(frozen=True, slots=True)
+class DeleteEncounter:
+    encounters: EncounterRepository
+    captures: CaptureRepository
+
+    async def execute(self, user: AuthenticatedUser, encounter_id: UUID) -> Sequence[CaptureFile]:
+        """Apaga a consulta e, em cascata, a análise de imagem dela.
+
+        Mesma forma de `DeletePatient`, e pelas mesmas razões: o papel é checado
+        antes de tocar no banco, para o leitor receber 403 (o papel dele é o
+        problema) em vez de 404 (que sugeriria consulta inexistente); os arquivos
+        são coletados ANTES do DELETE, porque depois não há linha de onde derivar as
+        chaves; e quem apaga do bucket é o chamador, depois do commit — se a
+        transação falhasse no fim, os objetos já teriam ido embora e a consulta
+        continuaria viva apontando para imagens que não existem mais.
+
+        O paciente não é lido: a RLS já esconde consulta de outro médico, e o DELETE
+        que não acha linha vira o mesmo 404 — sem um SELECT a mais para descobrir o
+        que já se sabe.
+        """
+        if not user.is_clinician:
+            raise ForbiddenError("apenas médicos e administradores excluem consultas")
+
+        orfaos = await self.captures.list_files_for_encounter(encounter_id)
+        if not await self.encounters.delete(encounter_id):
+            raise NotFoundError("consulta não encontrada")
+        return orfaos

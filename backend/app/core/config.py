@@ -10,7 +10,18 @@ class Settings(BaseSettings):
     # ENV_FILE escolhe o ambiente sem editar arquivo nenhum:
     #   ENV_FILE=.env.local  → Supabase e Postgres do Docker  (desenvolvimento)
     #   (padrão .env)        → projeto hospedado              (verificação)
-    model_config = SettingsConfigDict(env_file=os.getenv("ENV_FILE", ".env"), extra="ignore")
+    #
+    # `.env.secrets` é lido DEPOIS e vence o anterior. Ele existe por um motivo
+    # específico: `.env.local` é versionado — traz só as credenciais fixas e públicas
+    # do Supabase CLI — então segredo real não pode entrar nele. Sem este segundo
+    # arquivo, testar upload em desenvolvimento exigiria ou exportar variável na mão a
+    # cada vez, ou colocar chave do R2 num arquivo que vai para o git.
+    #
+    # Ele é opcional: não existindo, é ignorado em silêncio.
+    model_config = SettingsConfigDict(
+        env_file=(os.getenv("ENV_FILE", ".env"), ".env.secrets"),
+        extra="ignore",
+    )
 
     database_url: str
     supabase_url: str
@@ -25,6 +36,27 @@ class Settings(BaseSettings):
     # /docs e /openapi.json publicam o mapa da API — rotas, campos e enums de dado
     # clínico. Útil no desenvolvimento, reconhecimento gratuito em produção.
     docs_enabled: bool = True
+
+    # Cloudflare R2. Opcionais: sem elas a API sobe e tudo funciona menos o upload de
+    # capturas, que responde 503. É o que permite rodar a suíte e o desenvolvimento de
+    # pacientes/consultas sem credencial de bucket.
+    r2_endpoint: str = ""
+    r2_bucket: str = ""
+    r2_access_key_id: str = ""
+    r2_secret_access_key: str = ""
+
+    #  Uma hora, como o plano especifica: tempo de sobra para ~100 MB numa rede ruim,
+    #  e curto o bastante para uma URL vazada não valer muito.
+    r2_url_ttl_seconds: int = 3600
+
+    @property
+    def r2_configured(self) -> bool:
+        return bool(
+            self.r2_endpoint
+            and self.r2_bucket
+            and self.r2_access_key_id
+            and self.r2_secret_access_key
+        )
 
     @property
     def cors_origin_list(self) -> list[str]:

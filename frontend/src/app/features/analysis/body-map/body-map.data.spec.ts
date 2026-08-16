@@ -25,7 +25,6 @@ describe('joint catalog', () => {
     expect(count('pip')).toBe(10);
     expect(count('knee')).toBe(2);
   });
-
 });
 
 describe('body & hand hotspots', () => {
