@@ -173,6 +173,42 @@ end $$;
 commit;
 
 -- ─────────────────────────────────────────────────────────────────────────────
+\echo '5b. Admin lê a consulta de A, mas não escreve nela'
+-- ─────────────────────────────────────────────────────────────────────────────
+-- Consulta é do dono do paciente. O admin supervisiona (a policy _read continua com
+-- can_access) e não assina no lugar de quem atendeu (a _write exige owner_id =
+-- auth.uid()). Sem esta separação, a consulta nascia com owner do médico e
+-- created_by do admin — um registro clínico assinado por quem não atendeu.
+begin;
+set local role authenticated;
+select set_config('request.jwt.claims',
+  '{"sub":"dddddddd-0000-0000-0000-000000000004","role":"authenticated"}', true);
+do $$
+declare n int;
+begin
+  select count(*) into n from public.encounters
+   where id = '22222222-aaaa-0000-0000-000000000001';
+  assert n = 1, 'admin deveria continuar LENDO a consulta de A';
+
+  begin
+    insert into public.encounters (patient_id, reason)
+    values ('11111111-aaaa-0000-0000-000000000001', 'RLS-TEST consulta do admin');
+    raise exception 'FALHA: admin registrou consulta no paciente de A';
+  exception when insufficient_privilege then
+    null;  -- encounters_write exige owner_id = auth.uid()
+  end;
+
+  begin
+    update public.encounters set reason = 'RLS-TEST editada pelo admin'
+     where id = '22222222-aaaa-0000-0000-000000000001';
+    assert not found, 'FALHA: admin editou a consulta de A';
+  exception when insufficient_privilege then
+    null;
+  end;
+end $$;
+commit;
+
+-- ─────────────────────────────────────────────────────────────────────────────
 \echo '6. A não consegue reparentar a própria consulta para o paciente de B'
 -- ─────────────────────────────────────────────────────────────────────────────
 -- Regressão: com o trigger só em BEFORE INSERT, este UPDATE passava. O owner_id

@@ -27,15 +27,12 @@ _INSERT_COLUMNS = (
     "agreement",
     "fiducial_correction",
     "measurements",
-    "manual_rois",
     "files",
     "issue",
 )
 
 # Colunas jsonb: o asyncpg não converte dict/list sozinho, o SQL faz o cast.
-_JSON_COLUMNS = frozenset(
-    {"agreement", "fiducial_correction", "measurements", "manual_rois", "files"}
-)
+_JSON_COLUMNS = frozenset({"agreement", "fiducial_correction", "measurements", "files"})
 
 
 def _to_entity(row: asyncpg.Record) -> Capture:

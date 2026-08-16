@@ -19,7 +19,6 @@ import { PatientsService } from '../../../../patients/data/patients.service';
 import { messageFromError } from '../../../../patients/data/api-error';
 import { AssessedIndex, toEncounterCreate } from '../../thermal-analysis.model';
 import { ImageAnalyzerPage } from '../../../pages/image-analyzer-page/image-analyzer-page';
-import { computeRoiStats } from '../../../image-analyzer/roi-stats';
 import {
   CollectedAnalysis,
   collectSequenceAnalysis,
@@ -240,22 +239,18 @@ export class ThermalAnalysisPage {
     }
     return analisador.sequenceActive()
       ? this.coletarSequencia(analisador)
-      : collectSingleAnalysis(
-          {
-            matrix: analisador.matrix(),
-            activeMatrix: analisador.activeMatrix(),
-            mode: analisador.mode(),
-            autoMethod: analisador.autoMethod(),
-            agreement: analisador.agreement(),
-            correction: analisador.correction(),
-            jointRois: analisador.jointRois(),
-            rois: analisador.rois(),
-            opticalFile: analisador.rgbFile(),
-            thermalFile: analisador.jpegFile(),
-            matrixFile: analisador.csvFile(),
-          },
-          computeRoiStats,
-        );
+      : collectSingleAnalysis({
+          matrix: analisador.matrix(),
+          activeMatrix: analisador.activeMatrix(),
+          mode: analisador.mode(),
+          autoMethod: analisador.autoMethod(),
+          agreement: analisador.agreement(),
+          correction: analisador.correction(),
+          jointRois: analisador.jointRois(),
+          opticalFile: analisador.rgbFile(),
+          thermalFile: analisador.jpegFile(),
+          matrixFile: analisador.csvFile(),
+        });
   }
 
   /**
@@ -277,7 +272,6 @@ export class ThermalAnalysisPage {
       return null;
     }
 
-    const review = analisador.sequenceService.selectedReview();
     return collectSequenceAnalysis(
       capturas.map((captura, i) => ({
         index: captura.index,
@@ -295,11 +289,6 @@ export class ThermalAnalysisPage {
         thermalFile: captura.thermal,
         matrixFile: captura.matrixFile,
       })),
-      {
-        subjectLabel: review?.subject,
-        trialLabel: review?.trial,
-        intervalSeconds: analisador.sequenceService.intervalSeconds(),
-      },
     );
   }
 

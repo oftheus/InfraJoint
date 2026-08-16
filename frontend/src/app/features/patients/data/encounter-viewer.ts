@@ -15,7 +15,7 @@ import { JointRoi } from '../../analysis/image-analyzer/joint-rois';
 import { SequenceCapture } from '../../analysis/image-analyzer/sequence.model';
 import { decodeThermalCsv, parseThermalCsv } from '../../analysis/image-analyzer/thermal-csv';
 import { ThermalMatrix } from '../../analysis/image-analyzer/image-analyzer.model';
-import { alignmentOf, manualRoisOf } from './encounter-reconstruct';
+import { alignmentOf } from './encounter-reconstruct';
 import { CaptureDetail } from './patient.model';
 
 /** Mesma largura que o analisador usa ao processar uma sequência. */
@@ -87,9 +87,6 @@ async function restaurarCaptura(detail: CaptureDetail): Promise<SequenceCapture 
       detail.measurements.length > 0
         ? (detail.measurements as unknown as readonly JointRoi[])
         : null,
-    // As ROIs que o médico desenhou. Eram gravadas e não voltavam: a consulta
-    // reaberta mostrava as articulares e perdia as manuais, sem dizer que existiram.
-    restoredRois: manualRoisOf(detail),
   };
 }
 

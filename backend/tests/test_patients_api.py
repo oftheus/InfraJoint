@@ -428,6 +428,25 @@ async def test_editar_para_o_nome_de_outro_paciente_vira_409(client: tuple[Any, 
     assert resposta.status_code == 409, resposta.text
 
 
+async def test_admin_ve_mas_nao_registra_consulta_no_paciente_de_outro(
+    client: tuple[Any, dict],
+) -> None:
+    """O admin perde a autoria, não a supervisão."""
+    http, acting = client
+    acting["user_id"] = MEDICO_A
+    paciente = await _criar_paciente(http, "API-TEST paciente de A")
+
+    acting["user_id"] = ADMIN
+    assert (await http.get(f"/patients/{paciente['id']}")).status_code == 200, "leitura continua"
+
+    negado = await http.post(f"/patients/{paciente['id']}/encounters", json={"reason": "auditoria"})
+    assert negado.status_code == 403, negado.text
+
+    # E nada foi gravado: o dono continua sem consulta nenhuma.
+    acting["user_id"] = MEDICO_A
+    assert (await http.get(f"/patients/{paciente['id']}")).json()["encounters"] == []
+
+
 async def test_campo_desconhecido_vira_422(client: tuple[Any, dict]) -> None:
     http, acting = client
     acting["user_id"] = MEDICO_A

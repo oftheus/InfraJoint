@@ -11,7 +11,12 @@
  * fazê-las gravar precisa adicionar um import, o que aparece em revisão.
  */
 
-import { AssessmentResult, JointId, ScoreParameters, ScoreOutcome } from '../body-map/body-map.model';
+import {
+  AssessmentResult,
+  JointId,
+  ScoreParameters,
+  ScoreOutcome,
+} from '../body-map/body-map.model';
 import {
   CdaiScoreDto,
   Das28ScoreDto,

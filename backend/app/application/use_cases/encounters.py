@@ -51,8 +51,17 @@ class CreateEncounter:
         # médico" em 404. Sem esta leitura, o insert falharia no trigger de posse com
         # um erro de banco — que vaza detalhe interno e não distingue inexistente de
         # invisível.
-        if await self.patients.get(patient_id) is None:
+        patient = await self.patients.get(patient_id)
+        if patient is None:
             raise NotFoundError("paciente não encontrado")
+
+        # Consulta é do dono do paciente. Para o médico errado o paciente já teria
+        # sumido acima; quem cai aqui é o admin, que **enxerga** o paciente de todo
+        # mundo. Sem esta guarda ele bateria na policy de escrita e receberia 500 por
+        # uma recusa que é de autorização — e 403 é a resposta certa, porque a
+        # identidade não é segredo para ele: o que falta é o papel de responsável.
+        if patient.owner_id != user.id:
+            raise ForbiddenError("apenas o médico responsável pelo paciente registra consultas")
 
         return await self.encounters.create(patient_id, data)
 

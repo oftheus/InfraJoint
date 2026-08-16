@@ -949,12 +949,6 @@ export class ImageAnalyzerPage {
     this.jointOverrides.set(new Map(capture.jointOverrides));
     this.selectedJointKey.set(null);
     this.selectedRoiId.set(null);
-    // Numa consulta gravada as ROIs manuais pertencem à captura, e trocar de captura
-    // troca as ROIs. Numa sessão viva não: o que foi desenhado continua na tela ao
-    // navegar pela linha do tempo, que é como as ROIs manuais sempre funcionaram.
-    if (this.fromSaved()) {
-      this.rois.set(capture.restoredRois ?? []);
-    }
     this.rgbData.set(null); // the baked skin mask replaces live sampling
     this.error.set(capture.issue);
     this.sequenceService.prefetch(index);

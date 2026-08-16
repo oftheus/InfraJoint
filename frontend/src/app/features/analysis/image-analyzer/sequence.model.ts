@@ -13,7 +13,7 @@
 
 import { SilhouetteAgreement } from './alignment-quality';
 import { FiducialCorrection } from './fiducial-markers';
-import { AffineMatrix, DetectedHand, RoiSelection, ThermalMatrix } from './image-analyzer.model';
+import { AffineMatrix, DetectedHand, ThermalMatrix } from './image-analyzer.model';
 import { JointRoi, JointRoiOverride } from './joint-rois';
 
 export type CaptureKind = 'baseline' | 'dynamic';
@@ -104,15 +104,6 @@ export interface SequenceCapture {
    * reaberta mostrar os números do dia, e não uma segunda detecção.
    */
   readonly restoredJoints?: readonly JointRoi[] | null;
-  /**
-   * ROIs manuais gravadas, numa consulta reaberta.
-   *
-   * São da captura, não da sessão: foram desenhadas sobre esta foto. `null` quando
-   * não houve nenhuma — a mesma distinção de `restoredJoints` entre "não tem" e
-   * "tem zero". As estatísticas não voltam com elas: a página as recalcula da
-   * matriz, e por serem a mesma matriz e o mesmo alinhamento, dão os mesmos números.
-   */
-  readonly restoredRois?: readonly RoiSelection[] | null;
   /** Human-readable processing problem, or null when the capture is healthy. */
   readonly issue: string | null;
 }
