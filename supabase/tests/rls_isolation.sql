@@ -64,19 +64,21 @@ values ('22222222-aaaa-0000-0000-000000000001',
         '11111111-aaaa-0000-0000-000000000001',
         'bbbbbbbb-0000-0000-0000-000000000002', 'RLS-TEST consulta');
 
+-- `owner_id` carrega os dois fatos de uma vez: de quem é o prontuário e quem
+-- registrou. Houve uma coluna `created_by` separada, e ela tinha um assert próprio
+-- aqui; a migration `consulta_e_do_dono` passou a exigir owner_id = auth.uid() na
+-- escrita, o que tornou as duas sempre iguais, e `drop_created_by` removeu a coluna.
 do $$
-declare dono uuid; dono_enc uuid; autor uuid;
+declare dono uuid; dono_enc uuid;
 begin
   select owner_id into dono     from public.patients   where full_name = 'RLS-TEST paciente de A';
-  select owner_id, created_by into dono_enc, autor
-    from public.encounters where id = '22222222-aaaa-0000-0000-000000000001';
+  select owner_id into dono_enc from public.encounters
+   where id = '22222222-aaaa-0000-0000-000000000001';
 
   assert dono = 'aaaaaaaa-0000-0000-0000-000000000001',
     format('own_row deveria ter forçado o dono para A, veio %s', dono);
   assert dono_enc = 'aaaaaaaa-0000-0000-0000-000000000001',
     format('inherit_owner deveria ter copiado o dono do paciente, veio %s', dono_enc);
-  assert autor = 'aaaaaaaa-0000-0000-0000-000000000001',
-    format('created_by deveria vir de auth.uid(), veio %s', autor);
 end $$;
 commit;
 
@@ -177,8 +179,9 @@ commit;
 -- ─────────────────────────────────────────────────────────────────────────────
 -- Consulta é do dono do paciente. O admin supervisiona (a policy _read continua com
 -- can_access) e não assina no lugar de quem atendeu (a _write exige owner_id =
--- auth.uid()). Sem esta separação, a consulta nascia com owner do médico e
--- created_by do admin — um registro clínico assinado por quem não atendeu.
+-- auth.uid()). Antes dessa separação a consulta nascia com o owner do médico e a
+-- autoria do admin — um registro clínico assinado por quem não atendeu. Fechado o
+-- caso, a coluna de autoria virou cópia de owner_id e saiu do schema.
 begin;
 set local role authenticated;
 select set_config('request.jwt.claims',
