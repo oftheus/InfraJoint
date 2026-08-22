@@ -54,8 +54,9 @@ function executar(fixture: { nativeElement: HTMLElement; detectChanges(): void }
 
 describe('AlgorithmPanel', () => {
   it('não executa sem articulação medida, e diz o que fazer', async () => {
-    // A pré-condição comum a todos os algoritmos mora aqui, e é por isso que nenhum
-    // `run()` precisa da guarda. O teste dela veio junto com a responsabilidade.
+    // A pré-condição comum a todos os algoritmos mora aqui: evitar a execução
+    // inútil é da tela. Cada `run()` ainda trata entrada vazia por conta própria —
+    // a guarda de lá é da assinatura, não desta tela.
     const fixture = await montar();
     const semMedicao = inputCom(33.8, 32.4);
     fixture.componentRef.setInput('algorithmInput', {

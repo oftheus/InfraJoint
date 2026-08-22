@@ -149,9 +149,42 @@ describe('thermalAsymmetry — sequência carregada', () => {
     expect(result.values[0].value).toBeCloseTo(1.4, 5);
   });
 
+  it('skips leading captures that have no measurement, and says which it used', () => {
+    // Basal com alinhamento falho entra como frame vazio. Usar `frames[0]` aqui
+    // relatava "nada detectado nas duas mãos" sobre uma sequência medida.
+    const vazia: AlgorithmFrame = { ...frame([], 0), captureIndex: 0 };
+    const medida: AlgorithmFrame = { ...frame(sequencia[0].joints, 15), captureIndex: 1 };
+
+    const result = thermalAsymmetry.run(input([vazia, medida]));
+
+    expect(result.status).toBe('ok');
+    expect(result.values[0].value).toBeCloseTo(1.4, 5);
+    // O relatório não pode chamar de "primeira captura" uma que não é.
+    expect(result.summary).not.toContain('primeira captura');
+    expect(result.summary).toContain('índice 1');
+    expect(result.summary).toContain('a anterior não tem');
+  });
+
+  it('reports nothing detected when no capture has a measurement', () => {
+    const result = thermalAsymmetry.run(input([frame([], 0), frame([], 15)]));
+
+    expect(result.status).toBe('insufficient-data');
+    expect(result.summary).toContain('sem par correspondente');
+  });
+
   it('says nothing about the origin when there is only one capture', () => {
     const result = thermalAsymmetry.run(input([sequencia[0]]));
 
     expect(result.summary).not.toContain('primeira captura');
+  });
+});
+
+describe('thermalAsymmetry — entrada degenerada', () => {
+  it('answers instead of throwing when there is no capture at all', () => {
+    // O painel não chama `run` assim; a garantia é da assinatura, não do painel.
+    const result = thermalAsymmetry.run(input([]));
+
+    expect(result.status).toBe('insufficient-data');
+    expect(result.values).toEqual([]);
   });
 });
