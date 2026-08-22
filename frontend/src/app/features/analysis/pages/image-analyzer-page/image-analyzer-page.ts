@@ -181,8 +181,20 @@ export class ImageAnalyzerPage {
    * querem a mesma coisa. O fluxo de Análise Térmica tem o painel na etapa 4 e
    * desliga este para não repetir; a consulta reaberta não tem etapa nenhuma, e sem
    * ele ficaria sem algoritmos.
+   *
+   * **O `transform` não é enfeite.** Esta página é componente de rota, e o
+   * `withComponentInputBinding()` do router percorre *todos* os inputs declarados
+   * chamando `setInput(nome, data[nome])` — passando `undefined` para os que a rota
+   * não fornece. Como `/analise/analisador-de-imagens` não fornece nenhum, o padrão
+   * `true` era sobrescrito por `undefined` e o painel sumia justamente na tela solta,
+   * enquanto continuava aparecendo onde a página é embutida e os inputs vêm do
+   * template. `embedded` e `fromSaved` escapam por acaso: o padrão deles é `false`, e
+   * `undefined` é falso do mesmo jeito. Um input de padrão verdadeiro aqui precisa
+   * disto.
    */
-  readonly showAlgorithms = input(true);
+  readonly showAlgorithms = input(true, {
+    transform: (mostrar: boolean | undefined) => mostrar ?? true,
+  });
 
   /**
    * A página está mostrando uma consulta **gravada**, não uma sessão nova.
