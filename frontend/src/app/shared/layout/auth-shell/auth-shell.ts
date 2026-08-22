@@ -125,14 +125,6 @@ export class AuthShell {
     },
     {
       kind: 'group',
-      label: 'Pesquisa',
-      icon: 'chart-no-axes-combined',
-      children: [
-        { kind: 'link', label: 'Algoritmos', icon: 'workflow', route: '/pesquisa/algoritmos' },
-      ],
-    },
-    {
-      kind: 'group',
       label: 'Administração',
       icon: 'shield',
       requiredRoles: ['admin'],

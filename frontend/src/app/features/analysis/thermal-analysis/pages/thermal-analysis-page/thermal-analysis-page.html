@@ -14,6 +14,7 @@
         { id: 'patient', label: '1. Paciente' },
         { id: 'body-map', label: '2. Mapa corporal' },
         { id: 'analyzer', label: '3. Analisador' },
+        { id: 'algorithms', label: '4. Algoritmo' },
       ];
       track item.id
     ) {
@@ -76,7 +77,29 @@
   -->
   @if (patient()) {
     <div [hidden]="step() !== 'analyzer'">
-      <app-image-analyzer-page [embedded]="true" />
+      <app-image-analyzer-page [embedded]="true" [showAlgorithms]="false" />
+    </div>
+
+    <!--
+      Etapa 4 fica montada pelo mesmo motivo da etapa 3: sair dela e voltar não pode
+      custar re-executar o algoritmo. O painel já limpa o resultado sozinho quando as
+      medições mudam — ir ao analisador, mexer numa ROI e voltar mostra a tela limpa,
+      e não um achado de outras medições.
+    -->
+    <div [hidden]="step() !== 'algorithms'">
+      <app-algorithm-panel
+        [algorithmInput]="algorithmInput()"
+        (resultChange)="algorithmResult.set($event)"
+      />
+
+      @if (algorithmResult(); as resultado) {
+        @if (resultado.status === 'ok') {
+          <p class="mt-3 rounded-xl bg-brand-50 px-4 py-3 text-sm text-secondary">
+            O resultado é exibido aqui, mas ainda <strong>não é gravado</strong> com a consulta — a
+            persistência dos algoritmos é a próxima fase.
+          </p>
+        }
+      }
     </div>
   }
 
@@ -99,21 +122,6 @@
         placeholder="Ex.: reavaliação de atividade da doença"
         class="auth-input mt-1 max-w-xl py-2 text-sm"
       />
-
-      <p class="mt-4 text-sm text-secondary">
-        Será gravado:
-        <span class="font-semibold text-primary">{{ evaluatedCount() }}</span> articulações
-        @if (closedIndexes().length > 0) {
-          e os índices
-          <span class="font-semibold text-primary">
-            @for (index of closedIndexes(); track index.assessmentType) {
-              {{ index.assessmentType }}{{ $last ? '' : ', ' }}
-            }
-          </span>
-        } @else {
-          e nenhum índice fechado
-        }
-      </p>
 
       <!-- Sem isto o envio de dezenas de MB fica num "Gravando…" opaco, e não há
            como distinguir "está progredindo" de "travou". -->
@@ -180,6 +188,15 @@
             class="cursor-pointer rounded-lg border border-black/10 px-5 py-2.5 text-sm font-semibold text-primary hover:bg-brand-50"
           >
             Ir para o analisador
+          </button>
+        }
+        @if (step() === 'analyzer' && analysisReady()) {
+          <button
+            type="button"
+            (click)="goTo('algorithms')"
+            class="cursor-pointer rounded-lg border border-black/10 px-5 py-2.5 text-sm font-semibold text-primary hover:bg-brand-50"
+          >
+            Ir para os algoritmos
           </button>
         }
         @if (canFinish() || step() !== 'analyzer') {
