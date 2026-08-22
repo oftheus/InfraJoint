@@ -13,7 +13,7 @@
 
 import { RoiStats } from '../image-analyzer/image-analyzer.model';
 import { JointRoi } from '../image-analyzer/joint-rois';
-import { AlgorithmFrame, AlgorithmInput, AlgorithmJoint, SubjectSex } from './algorithm.model';
+import { AlgorithmFrame, AlgorithmInput, AlgorithmJoint } from './algorithm.model';
 
 /** Uma captura como a página a expõe, antes da conversão. */
 export interface ReadoutFrame {
@@ -24,13 +24,6 @@ export interface ReadoutFrame {
   readonly agreementNormalized: number | null;
   readonly issue: string | null;
   readonly jointRois: readonly JointRoi[];
-}
-
-/** O que a conversão lê. A página satisfaz isto sem depender deste módulo. */
-export interface AlgorithmReadout {
-  readonly frames: readonly ReadoutFrame[];
-  readonly subject: { readonly ageYears: number | null; readonly sex: SubjectSex | null };
-  readonly clinical: AlgorithmInput['clinical'];
 }
 
 /**
@@ -67,8 +60,8 @@ function toJoint(roi: JointRoi): AlgorithmJoint {
 }
 
 /** Monta a entrada. Os frames saem ordenados por tempo, com os sem tempo ao final. */
-export function toAlgorithmInput(readout: AlgorithmReadout): AlgorithmInput {
-  const frames: AlgorithmFrame[] = readout.frames.map((frame) => ({
+export function toAlgorithmInput(leitura: readonly ReadoutFrame[]): AlgorithmInput {
+  const frames: AlgorithmFrame[] = leitura.map((frame) => ({
     captureIndex: frame.captureIndex,
     phase: frame.phase,
     timeSeconds: frame.timeSeconds,
@@ -82,10 +75,5 @@ export function toAlgorithmInput(readout: AlgorithmReadout): AlgorithmInput {
 
   frames.sort((a, b) => (a.timeSeconds ?? Infinity) - (b.timeSeconds ?? Infinity));
 
-  return {
-    schemaVersion: 1,
-    subject: readout.subject,
-    frames,
-    clinical: readout.clinical,
-  };
+  return { frames };
 }

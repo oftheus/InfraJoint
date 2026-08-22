@@ -1,18 +1,20 @@
 /**
  * Contratos dos algoritmos de pesquisa.
  *
- * Um algoritmo recebe as medições que o analisador produziu e devolve um texto. Só
- * isso — a estrutura da resposta é do algoritmo, não deste contrato. `status` existe
- * por um motivo único: a tela precisa saber, sem ler o texto, se desenha um resultado
- * ou um aviso.
+ * Um algoritmo recebe as medições que o analisador produziu e devolve **dados**: uma
+ * frase e uma lista de números com nome. Ele não formata nada — quem decide que 1.4
+ * aparece como "1,4 °C", e que a lista vira tabela, é a tela, uma vez só, igual para
+ * todos.
+ *
+ * Uma versão anterior devolvia markdown, e cada algoritmo montava a própria tabela com
+ * `|`. Isso era o algoritmo fazendo o trabalho da tela: ~40 linhas de formatação
+ * reescritas por algoritmo, números virando texto sem volta, e testes presos à
+ * redação das frases.
  *
  * O desenho e as alternativas descartadas estão em `Algoritmos.MD`, na raiz do repo.
  */
 
 import { HandSide } from '../image-analyzer/image-analyzer.model';
-
-/** Sexo do paciente, como o backend o guarda. Nulo no analisador avulso. */
-export type SubjectSex = 'F' | 'M' | 'O' | 'N';
 
 /** Uma articulação medida, com a confiabilidade da medida ao lado do número. */
 export interface AlgorithmJoint {
@@ -54,22 +56,21 @@ export interface AlgorithmFrame {
 }
 
 /** O que todo algoritmo recebe. Uma análise avulsa é uma sequência de um frame. */
+/**
+ * O que todo algoritmo recebe: as capturas medidas. Uma análise avulsa é uma
+ * sequência de um frame.
+ *
+ * Já carregou `subject` (idade, sexo) e `clinical` (body map, escores). Saíram porque
+ * nenhum algoritmo os lia, e alimentá-los custava ~43 linhas na página do fluxo
+ * térmico. Voltam junto com o primeiro algoritmo que normalize por idade ou cruze com
+ * o body map — é um campo a mais aqui, e o resto nasce com o leitor.
+ *
+ * Continua sendo um objeto de um campo só, e não `AlgorithmFrame[]` direto, porque é
+ * ele a costura: crescer o tipo não muda a assinatura de nenhum algoritmo já escrito.
+ */
 export interface AlgorithmInput {
-  readonly schemaVersion: 1;
-  /** Sem identificação: idade e sexo bastam para qualquer normalização. */
-  readonly subject: {
-    readonly ageYears: number | null;
-    readonly sex: SubjectSex | null;
-  };
   /** Ordenados por tempo. */
   readonly frames: readonly AlgorithmFrame[];
-  /** O body map da consulta, quando houve. Nulo no analisador avulso. */
-  readonly clinical: {
-    readonly jointEvaluations: Readonly<
-      Record<string, { readonly pain: boolean; readonly swelling: boolean }>
-    > | null;
-    readonly scores: Readonly<Record<string, unknown>>;
-  } | null;
 }
 
 /**
@@ -79,11 +80,27 @@ export interface AlgorithmInput {
  * tela teria que interpretar o texto para saber se mostra um achado ou uma
  * justificativa de por que não houve achado.
  */
+/** Uma linha do resultado: um número com nome, e a unidade quando houver. */
+export interface AlgorithmValue {
+  readonly label: string;
+  readonly value: number;
+  /** Ausente quando o número não tem unidade — uma contagem, uma proporção. */
+  readonly unit?: string;
+}
+
 export interface AlgorithmResult {
   /** `insufficient-data` é resposta legítima, não erro: sequência ruim é caso comum. */
-  readonly status: 'ok' | 'insufficient-data' | 'error';
-  /** Markdown: parágrafo, lista, tabela, negrito. Nada além disso é validado. */
-  readonly report: string;
+  readonly status: 'ok' | 'insufficient-data';
+  /**
+   * O achado em prosa, texto puro. Uma ou duas frases — para vários algoritmos é a
+   * resposta inteira.
+   */
+  readonly summary: string;
+  /**
+   * Os números do resultado. Vazio quando o achado não é numérico (uma classificação,
+   * um veredito), e aí a tela mostra só o `summary`.
+   */
+  readonly values: readonly AlgorithmValue[];
 }
 
 /**
@@ -91,19 +108,9 @@ export interface AlgorithmResult {
  * é o único padrão de projeto envolvido, e é o próprio conceito de "plugar".
  */
 export interface ResearchAlgorithm {
-  /** Identidade estável; vai gravada junto do resultado. */
+  /** Identidade estável, usada para selecionar o algoritmo na tela. */
   readonly slug: string;
   readonly title: string;
   readonly description: string;
-  /**
-   * O que ele exige da entrada.
-   *
-   * Existe para a tela poder desabilitar o algoritmo e dizer por quê, antes do
-   * clique — em vez de cada `run()` falhar do seu próprio jeito.
-   */
-  readonly requires: {
-    readonly minFrames: number;
-    readonly needsBaseline: boolean;
-  };
   run(input: AlgorithmInput): AlgorithmResult;
 }

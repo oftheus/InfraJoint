@@ -525,17 +525,10 @@ export class ImageAnalyzerPage {
     ];
   });
 
-  /** Entrada dos algoritmos na tela solta: sem paciente, porque ela não tem um. */
+  /** Entrada dos algoritmos, montada a partir dos frames desta análise. */
   readonly algorithmInput = computed<AlgorithmInput | null>(() => {
     const frames = this.algorithmFrames();
-    if (frames.length === 0) {
-      return null;
-    }
-    return toAlgorithmInput({
-      frames,
-      subject: { ageYears: null, sex: null },
-      clinical: null,
-    });
+    return frames.length === 0 ? null : toAlgorithmInput(frames);
   });
 
   protected readonly rewarmingSeries = computed(() =>
@@ -724,9 +717,7 @@ export class ImageAnalyzerPage {
   );
 
   /** Whether hand joints have been detected (drives the articular empty state). */
-  protected readonly jointsDetected = computed(
-    () => (this.detectedHands()?.length ?? 0) > 0,
-  );
+  protected readonly jointsDetected = computed(() => (this.detectedHands()?.length ?? 0) > 0);
 
   // --- Manual calibration --------------------------------------------------
   protected readonly calibrating = signal(false);
@@ -748,13 +739,12 @@ export class ImageAnalyzerPage {
     }));
   });
 
-  protected readonly pairedCount = computed(
-    () => Math.min(this.rgbPoints().length, this.thermalPointsCsv().length),
+  protected readonly pairedCount = computed(() =>
+    Math.min(this.rgbPoints().length, this.thermalPointsCsv().length),
   );
   protected readonly canApplyCalibration = computed(
     () =>
-      this.rgbPoints().length >= 3 &&
-      this.rgbPoints().length === this.thermalPointsCsv().length,
+      this.rgbPoints().length >= 3 && this.rgbPoints().length === this.thermalPointsCsv().length,
   );
 
   // --- File loading --------------------------------------------------------
@@ -1379,10 +1369,7 @@ export class ImageAnalyzerPage {
     this.info.set(null);
     // Thermal points are stored in CSV cells, so the fitted matrix is
     // RGB → CSV, same convention as the Python pipeline.
-    const matrix = estimateSimilarityTransform(
-      [...this.rgbPoints()],
-      [...this.thermalPointsCsv()],
-    );
+    const matrix = estimateSimilarityTransform([...this.rgbPoints()], [...this.thermalPointsCsv()]);
     if (!matrix) {
       this.error.set('Não foi possível calcular o alinhamento com os pontos informados.');
       return;
@@ -1451,9 +1438,7 @@ function formatCelsius(value: number): string {
 
 /** CSV-cell figure for the correction breakdown, at the precision it is checked in. */
 function cells(value: number | undefined): string {
-  return value !== undefined && Number.isFinite(value)
-    ? value.toFixed(2).replace('.', ',')
-    : '—';
+  return value !== undefined && Number.isFinite(value) ? value.toFixed(2).replace('.', ',') : '—';
 }
 
 function dropLast<T>(items: readonly T[]): readonly T[] {

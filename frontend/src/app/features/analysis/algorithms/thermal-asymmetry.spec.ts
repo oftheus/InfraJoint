@@ -36,10 +36,7 @@ function frame(
 
 function input(frames: readonly AlgorithmFrame[]): AlgorithmInput {
   return {
-    schemaVersion: 1,
-    subject: { ageYears: null, sex: null },
     frames,
-    clinical: null,
   };
 }
 
@@ -57,11 +54,12 @@ describe('thermalAsymmetry — análise avulsa', () => {
     );
 
     expect(result.status).toBe('ok');
-    expect(result.report).toContain('**MCP 3**');
-    expect(result.report).toContain('1,4 °C');
-    expect(result.report).toContain('esquerda mais quente');
-    // Com uma captura só, as duas temperaturas cabem na tabela.
-    expect(result.report).toContain('| Articulação | Esquerda | Direita | Diferença |');
+    // Asserção sobre o número, e não sobre a frase: mudar a redação do resumo não
+    // pode quebrar o teste da conta.
+    expect(result.values[0].label).toBe('MCP 3');
+    expect(result.values[0].value).toBeCloseTo(1.4, 5);
+    expect(result.values[0].unit).toBe('°C');
+    expect(result.summary).toContain('esquerda mais quente');
   });
 
   it('orders the table from the largest difference down', () => {
@@ -76,7 +74,7 @@ describe('thermalAsymmetry — análise avulsa', () => {
       ]),
     );
 
-    expect(result.report.indexOf('| MCP 3 |')).toBeLessThan(result.report.indexOf('| #5 |'));
+    expect(result.values.map((v) => v.label)).toEqual(['MCP 3', '#5']);
   });
 
   it('reports symmetric hands as a near-zero difference, not as a failure', () => {
@@ -85,7 +83,7 @@ describe('thermalAsymmetry — análise avulsa', () => {
     );
 
     expect(result.status).toBe('ok');
-    expect(result.report).toContain('0,0 °C');
+    expect(result.values[0].value).toBe(0);
   });
 
   it('cannot answer with a single hand, and says why', () => {
@@ -94,7 +92,8 @@ describe('thermalAsymmetry — análise avulsa', () => {
     );
 
     expect(result.status).toBe('insufficient-data');
-    expect(result.report).toContain('sem par correspondente');
+    expect(result.summary).toContain('sem par correspondente');
+    expect(result.values).toEqual([]);
   });
 
   it('drops a pair whose skin coverage is too low, and counts it in the report', () => {
@@ -110,8 +109,9 @@ describe('thermalAsymmetry — análise avulsa', () => {
     );
 
     expect(result.status).toBe('ok');
-    expect(result.report).toContain('1 par foi descartado');
-    expect(result.report).not.toContain('| #5 |');
+    expect(result.summary).toContain('1 descartado');
+    // O par descartado não pode ter entrado nos números.
+    expect(result.values.map((v) => v.label)).toEqual(['MCP 3']);
   });
 
   it('cannot answer when every pair is below the coverage threshold', () => {
@@ -120,7 +120,7 @@ describe('thermalAsymmetry — análise avulsa', () => {
     );
 
     expect(result.status).toBe('insufficient-data');
-    expect(result.report).toContain('cobertura de pele');
+    expect(result.summary).toContain('cobertura de pele');
   });
 
   it('ignores a measurement that has no temperature at all', () => {
@@ -129,10 +129,6 @@ describe('thermalAsymmetry — análise avulsa', () => {
     );
 
     expect(result.status).toBe('insufficient-data');
-  });
-
-  it('cannot answer without any capture', () => {
-    expect(thermalAsymmetry.run(input([])).status).toBe('insufficient-data');
   });
 });
 
@@ -143,20 +139,19 @@ describe('thermalAsymmetry — sequência carregada', () => {
   ];
 
   it('uses only the first capture, and says so', () => {
-    // O nome do algoritmo já avisa; o relatório repete para quem só lê o resultado.
+    // O nome do algoritmo já avisa; o resumo repete para quem só lê o resultado.
     const result = thermalAsymmetry.run(input(sequencia));
 
     expect(result.status).toBe('ok');
-    expect(result.report).toContain('primeira captura');
-    expect(result.report).toContain('das 2 carregadas');
-    // 1,4 é da primeira captura; 4,0 seria da segunda, que ele não usa.
-    expect(result.report).toContain('1,4 °C');
-    expect(result.report).not.toContain('4,0');
+    expect(result.summary).toContain('primeira captura');
+    expect(result.summary).toContain('das 2 carregadas');
+    // 1,4 é da primeira captura; 4 seria da segunda, que ele não usa.
+    expect(result.values[0].value).toBeCloseTo(1.4, 5);
   });
 
   it('says nothing about the origin when there is only one capture', () => {
     const result = thermalAsymmetry.run(input([sequencia[0]]));
 
-    expect(result.report).not.toContain('primeira captura');
+    expect(result.summary).not.toContain('primeira captura');
   });
 });

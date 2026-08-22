@@ -19,8 +19,6 @@ function inputCom(meanEsquerda: number, meanDireita: number): AlgorithmInput {
   });
 
   return {
-    schemaVersion: 1,
-    subject: { ageYears: null, sex: null },
     frames: [
       {
         captureIndex: 0,
@@ -30,7 +28,6 @@ function inputCom(meanEsquerda: number, meanDireita: number): AlgorithmInput {
         joints: [joint('Esquerda', meanEsquerda), joint('Direita', meanDireita)],
       },
     ],
-    clinical: null,
   };
 }
 
@@ -56,7 +53,26 @@ function executar(fixture: { nativeElement: HTMLElement; detectChanges(): void }
 }
 
 describe('AlgorithmPanel', () => {
-  it('mostra o relatório depois de executar', async () => {
+  it('não executa sem articulação medida, e diz o que fazer', async () => {
+    // A pré-condição comum a todos os algoritmos mora aqui, e é por isso que nenhum
+    // `run()` precisa da guarda. O teste dela veio junto com a responsabilidade.
+    const fixture = await montar();
+    const semMedicao = inputCom(33.8, 32.4);
+    fixture.componentRef.setInput('algorithmInput', {
+      ...semMedicao,
+      frames: [{ ...semMedicao.frames[0], joints: [] }],
+    });
+    fixture.detectChanges();
+
+    const botao = [...fixture.nativeElement.querySelectorAll('button')].find(
+      (b: HTMLButtonElement) => b.textContent?.includes('Executar'),
+    ) as HTMLButtonElement;
+
+    expect(botao.disabled).toBe(true);
+    expect(fixture.nativeElement.textContent).toContain('Detecte as articulações');
+  });
+
+  it('mostra o resultado depois de executar', async () => {
     // Regressão: `limpar()` lia `result()` dentro do effect, o que tornava `result`
     // dependência dele — executar disparava o effect, que zerava o resultado no mesmo
     // ciclo. A tela ficava igual, como se o botão não fizesse nada.
@@ -64,7 +80,7 @@ describe('AlgorithmPanel', () => {
 
     executar(fixture);
 
-    const relatorio = fixture.nativeElement.querySelector('.algorithm-report');
+    const relatorio = fixture.nativeElement.querySelector('.algorithm-result');
     expect(relatorio).toBeTruthy();
     expect(relatorio.textContent).toContain('MCP 3');
   });
@@ -75,11 +91,11 @@ describe('AlgorithmPanel', () => {
     const fixture = await montar();
 
     executar(fixture);
-    expect(fixture.nativeElement.querySelector('.algorithm-report')).toBeTruthy();
+    expect(fixture.nativeElement.querySelector('.algorithm-result')).toBeTruthy();
 
     fixture.componentRef.setInput('algorithmInput', inputCom(33.0, 33.0));
     fixture.detectChanges();
 
-    expect(fixture.nativeElement.querySelector('.algorithm-report')).toBeNull();
+    expect(fixture.nativeElement.querySelector('.algorithm-result')).toBeNull();
   });
 });

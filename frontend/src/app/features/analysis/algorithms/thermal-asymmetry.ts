@@ -33,8 +33,6 @@ const COBERTURA_MINIMA = 0.4;
 
 interface Par {
   readonly label: string;
-  readonly esquerda: number;
-  readonly direita: number;
   /** E − D: positivo significa mão esquerda mais quente. */
   readonly assinada: number;
 }
@@ -42,14 +40,6 @@ interface Par {
 /** Uma medição serve para comparar? Sem pele suficiente, o número não se sustenta. */
 function confiavel(joint: AlgorithmJoint): boolean {
   return Number.isFinite(joint.mean) && joint.skinCoverage >= COBERTURA_MINIMA;
-}
-
-function numero(valor: number): string {
-  return valor.toFixed(1).replace('.', ',');
-}
-
-function plural(n: number, singular: string, plural: string): string {
-  return n === 1 ? singular : plural;
 }
 
 /** Pareia as articulações da captura, separando o que não dá para comparar. */
@@ -78,45 +68,12 @@ function parear(joints: readonly AlgorithmJoint[]): {
     }
     pares.push({
       label: esquerda.label,
-      esquerda: esquerda.mean,
-      direita: direita.mean,
       assinada: esquerda.mean - direita.mean,
     });
   }
 
   pares.sort((a, b) => Math.abs(b.assinada) - Math.abs(a.assinada));
   return { pares, descartados };
-}
-
-function relatorio(pares: readonly Par[], descartados: readonly string[]): string {
-  const maior = pares[0];
-  const media = pares.reduce((soma, par) => soma + Math.abs(par.assinada), 0) / pares.length;
-
-  const linhas = pares.map(
-    (par) =>
-      `| ${par.label} | ${numero(par.esquerda)} | ${numero(par.direita)} | ${numero(Math.abs(par.assinada))} |`,
-  );
-
-  const partes = [
-    `A maior diferença entre lados foi na **${maior.label}**: ${numero(Math.abs(maior.assinada))} °C, ` +
-      `com a mão ${maior.assinada >= 0 ? 'esquerda' : 'direita'} mais quente.`,
-    [
-      '| Articulação | Esquerda | Direita | Diferença |',
-      '| --- | ---: | ---: | ---: |',
-      ...linhas,
-    ].join('\n'),
-    `Média das diferenças: **${numero(media)} °C** em ${pares.length} ` +
-      `${plural(pares.length, 'par comparado', 'pares comparados')}.`,
-  ];
-
-  if (descartados.length > 0) {
-    partes.push(
-      `${descartados.length} ${plural(descartados.length, 'par foi descartado', 'pares foram descartados')} ` +
-        `por cobertura de pele abaixo de ${COBERTURA_MINIMA * 100}%: ${descartados.join(', ')}.`,
-    );
-  }
-
-  return partes.join('\n\n');
 }
 
 /**
@@ -133,7 +90,7 @@ function origem(frame: AlgorithmFrame, total: number): string | null {
     frame.timeSeconds === null ? `de índice ${frame.captureIndex}` : `do instante inicial`;
   return (
     `Calculado sobre a primeira captura ${identificacao}, das ${total} carregadas: ` +
-    'esta é uma leitura estática, não a evolução do reaquecimento.'
+    'é uma leitura estática, não a evolução do reaquecimento.'
   );
 }
 
@@ -141,27 +98,49 @@ export const thermalAsymmetry: ResearchAlgorithm = {
   slug: 'assimetria-termica-estatica',
   title: 'Assimetria térmica (imagem estática)',
   description:
-    'Compara cada articulação com a correspondente do outro lado numa imagem estática — as mãos num instante, em repouso — e reporta as diferenças de temperatura da maior para a menor. Numa sequência, usa a primeira captura.',
-  requires: { minFrames: 1, needsBaseline: false },
+    'Compara cada articulação com a correspondente do outro lado numa imagem estática, as mãos num instante, em repouso, e reporta as diferenças de temperatura da maior para a menor. Numa sequência, usa a primeira captura.',
 
   run(input: AlgorithmInput): AlgorithmResult {
+    // Sem guarda de "não há captura": o painel não chama `run` sem medição. A
+    // pré-condição é única para todos os algoritmos, então mora em quem chama.
     const frame = input.frames[0];
-    if (!frame) {
-      return { status: 'insufficient-data', report: 'Nenhuma captura foi analisada.' };
-    }
-
     const { pares, descartados } = parear(frame.joints);
 
     if (pares.length === 0) {
-      const motivo =
-        descartados.length > 0
-          ? `As ${descartados.length} articulações pareadas têm cobertura de pele abaixo de ${COBERTURA_MINIMA * 100}%, insuficiente para comparar.`
-          : 'Não há articulação detectada nas duas mãos — sem par correspondente, não há assimetria a calcular.';
-      return { status: 'insufficient-data', report: motivo };
+      return {
+        status: 'insufficient-data',
+        summary:
+          descartados.length > 0
+            ? `As ${descartados.length} articulações pareadas têm cobertura de pele abaixo de ${COBERTURA_MINIMA * 100}%, insuficiente para comparar.`
+            : 'Não há articulação detectada nas duas mãos: sem par correspondente, não há assimetria a calcular.',
+        values: [],
+      };
     }
 
+    const maior = pares[0];
+    // Só contagens no texto — nenhum número com casa decimal, porque formatar é
+    // trabalho da tela. Os valores vão em `values`, como números.
+    const frases = [
+      `Maior diferença na ${maior.label}, com a mão ${maior.assinada >= 0 ? 'esquerda' : 'direita'} mais quente.`,
+      `${pares.length} ${pares.length === 1 ? 'par comparado' : 'pares comparados'}` +
+        (descartados.length > 0
+          ? `; ${descartados.length} descartado${descartados.length === 1 ? '' : 's'} por cobertura de pele insuficiente (${descartados.join(', ')}).`
+          : '.'),
+    ];
+
     const aviso = origem(frame, input.frames.length);
-    const corpo = relatorio(pares, descartados);
-    return { status: 'ok', report: aviso ? `${aviso}\n\n${corpo}` : corpo };
+    if (aviso) {
+      frases.push(aviso);
+    }
+
+    return {
+      status: 'ok',
+      summary: frases.join(' '),
+      values: pares.map((par) => ({
+        label: par.label,
+        value: Math.abs(par.assinada),
+        unit: '°C',
+      })),
+    };
   },
 };

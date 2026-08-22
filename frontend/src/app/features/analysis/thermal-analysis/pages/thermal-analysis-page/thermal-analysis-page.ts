@@ -19,7 +19,7 @@ import { PatientsService } from '../../../../patients/data/patients.service';
 import { messageFromError } from '../../../../patients/data/api-error';
 import { AssessedIndex, toEncounterCreate } from '../../thermal-analysis.model';
 import { toAlgorithmInput } from '../../../algorithms/algorithm-input';
-import { AlgorithmInput, AlgorithmResult } from '../../../algorithms/algorithm.model';
+import { AlgorithmInput } from '../../../algorithms/algorithm.model';
 import { AlgorithmPanel } from '../../../algorithms/components/algorithm-panel/algorithm-panel';
 import { ImageAnalyzerPage } from '../../../pages/image-analyzer-page/image-analyzer-page';
 import {
@@ -34,29 +34,6 @@ import { PatientStep } from '../../steps/patient-step/patient-step';
 
 /** Etapas do fluxo, na ordem em que acontecem. */
 type Step = 'patient' | 'body-map' | 'analyzer' | 'algorithms';
-
-/**
- * Idade em anos completos, ou null quando não há data.
- *
- * É o único dado do paciente que chega ao algoritmo junto do sexo — nome e id não
- * vão, para a mesma entrada servir de linha de dataset sem uma segunda passagem de
- * anonimização.
- */
-function idadeEmAnos(birthDate: string | null): number | null {
-  if (!birthDate) {
-    return null;
-  }
-  const nascimento = new Date(birthDate);
-  if (Number.isNaN(nascimento.getTime())) {
-    return null;
-  }
-  const hoje = new Date();
-  const idade = hoje.getFullYear() - nascimento.getFullYear();
-  const antesDoAniversario =
-    hoje.getMonth() < nascimento.getMonth() ||
-    (hoje.getMonth() === nascimento.getMonth() && hoje.getDate() < nascimento.getDate());
-  return antesDoAniversario ? idade - 1 : idade;
-}
 
 /**
  * Fluxo de Análise Térmica: paciente → mapa corporal → analisador → gravar.
@@ -136,50 +113,15 @@ export class ThermalAnalysisPage {
   });
 
   /**
-   * Resultado do algoritmo da etapa 4.
+   * Entrada dos algoritmos.
    *
-   * Fica em memória: a persistência é a Fase 2 e ainda não existe endpoint. A tela
-   * diz isso ao usuário em vez de deixá-lo supor que "Finalizar" o grava.
-   */
-  protected readonly algorithmResult = signal<AlgorithmResult | null>(null);
-
-  /**
-   * Entrada dos algoritmos: os frames do analisador, com o paciente que só o fluxo
-   * conhece. A tela solta monta a sua com paciente nulo — a conversão é a mesma.
+   * Idêntica à da tela solta, e é de propósito: a conversão é a mesma função, e o
+   * fluxo não acrescenta nada. Já acrescentou paciente e body map — saíram porque
+   * nenhum algoritmo os lia.
    */
   protected readonly algorithmInput = computed<AlgorithmInput | null>(() => {
     const frames = this.analyzer()?.algorithmFrames() ?? [];
-    if (frames.length === 0) {
-      return null;
-    }
-    const chosen = this.patient();
-    const evaluations = this.store.evaluations();
-    const indexes = this.closedIndexes();
-
-    return toAlgorithmInput({
-      frames,
-      subject: {
-        ageYears: chosen ? idadeEmAnos(chosen.birth_date) : null,
-        sex: chosen?.sex ?? null,
-      },
-      clinical:
-        evaluations.size === 0 && indexes.length === 0
-          ? null
-          : {
-              jointEvaluations:
-                evaluations.size > 0
-                  ? Object.fromEntries(
-                      [...evaluations].map(([id, evaluation]) => [
-                        id,
-                        { pain: evaluation.pain, swelling: evaluation.swelling },
-                      ]),
-                    )
-                  : null,
-              scores: Object.fromEntries(
-                indexes.map((index) => [index.assessmentType.toLowerCase(), index.outcome]),
-              ),
-            },
-    });
+    return frames.length === 0 ? null : toAlgorithmInput(frames);
   });
 
   /** Sequência carregada. O fluxo ainda só grava a análise avulsa. */

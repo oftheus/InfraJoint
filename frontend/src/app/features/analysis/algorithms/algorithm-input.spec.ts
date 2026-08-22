@@ -1,5 +1,5 @@
 import { JointRoi } from '../image-analyzer/joint-rois';
-import { AlgorithmReadout, ReadoutFrame, toAlgorithmInput } from './algorithm-input';
+import { ReadoutFrame, toAlgorithmInput } from './algorithm-input';
 
 function roi(side: JointRoi['side'], landmarkId: number, mean: number): JointRoi {
   return {
@@ -31,22 +31,17 @@ function frame(overrides: Partial<ReadoutFrame> = {}): ReadoutFrame {
   };
 }
 
-function readout(frames: readonly ReadoutFrame[]): AlgorithmReadout {
-  return { frames, subject: { ageYears: null, sex: null }, clinical: null };
-}
-
 describe('toAlgorithmInput', () => {
   it('turns a single analysis into one frame with no position in time', () => {
-    const input = toAlgorithmInput(readout([frame()]));
+    const input = toAlgorithmInput([frame()]);
 
-    expect(input.schemaVersion).toBe(1);
     expect(input.frames).toHaveLength(1);
     expect(input.frames[0].phase).toBeNull();
     expect(input.frames[0].timeSeconds).toBeNull();
   });
 
   it('flattens each ROI into a joint, keeping the reliability fields', () => {
-    const [joint] = toAlgorithmInput(readout([frame()])).frames[0].joints;
+    const [joint] = toAlgorithmInput([frame()]).frames[0].joints;
 
     expect(joint.key).toBe('Esquerda:9');
     expect(joint.mean).toBe(33);
@@ -56,13 +51,11 @@ describe('toAlgorithmInput', () => {
   });
 
   it('sorts frames by time even when they arrive out of order', () => {
-    const input = toAlgorithmInput(
-      readout([
-        frame({ captureIndex: 2, timeSeconds: 30, phase: 'dynamic' }),
-        frame({ captureIndex: 0, timeSeconds: 0, phase: 'baseline' }),
-        frame({ captureIndex: 1, timeSeconds: 15, phase: 'dynamic' }),
-      ]),
-    );
+    const input = toAlgorithmInput([
+      frame({ captureIndex: 2, timeSeconds: 30, phase: 'dynamic' }),
+      frame({ captureIndex: 0, timeSeconds: 0, phase: 'baseline' }),
+      frame({ captureIndex: 1, timeSeconds: 15, phase: 'dynamic' }),
+    ]);
 
     expect(input.frames.map((f) => f.timeSeconds)).toEqual([0, 15, 30]);
     expect(input.frames[0].phase).toBe('baseline');
@@ -71,19 +64,17 @@ describe('toAlgorithmInput', () => {
   it('keeps a failed capture as an empty frame instead of dropping it', () => {
     // Sumir com ela esconderia por que a sequência tem um buraco — mesma razão pela
     // qual `collectSequenceAnalysis` a mantém no que é gravado.
-    const input = toAlgorithmInput(
-      readout([
-        frame({ captureIndex: 0, timeSeconds: 0, phase: 'baseline' }),
-        frame({
-          captureIndex: 1,
-          timeSeconds: 15,
-          phase: 'dynamic',
-          jointRois: [],
-          issue: 'alinhamento falhou',
-          agreementNormalized: null,
-        }),
-      ]),
-    );
+    const input = toAlgorithmInput([
+      frame({ captureIndex: 0, timeSeconds: 0, phase: 'baseline' }),
+      frame({
+        captureIndex: 1,
+        timeSeconds: 15,
+        phase: 'dynamic',
+        jointRois: [],
+        issue: 'alinhamento falhou',
+        agreementNormalized: null,
+      }),
+    ]);
 
     expect(input.frames).toHaveLength(2);
     expect(input.frames[1].joints).toEqual([]);
@@ -97,9 +88,8 @@ describe('toAlgorithmInput', () => {
     delete antiga['skinCoverage'];
     antiga['stats'] = { mean: 32 };
 
-    const [joint] = toAlgorithmInput(
-      readout([frame({ jointRois: [antiga as unknown as JointRoi] })]),
-    ).frames[0].joints;
+    const [joint] = toAlgorithmInput([frame({ jointRois: [antiga as unknown as JointRoi] })])
+      .frames[0].joints;
 
     expect(joint.skinCoverage).toBe(0);
     expect(joint.sampleCount).toBe(0);
