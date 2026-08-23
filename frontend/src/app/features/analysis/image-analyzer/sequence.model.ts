@@ -1,8 +1,9 @@
 /**
  * Domain types for the temporal sequence analysis (rewarming protocol).
  *
- * A capture session ("V051_T1") holds one resting baseline (`Est`, t₀ = 0) and
- * ~20 dynamic captures (`Din01`…`DinNN`) taken at a fixed interval during the
+ * A capture session ("V051_T1") holds one resting baseline (`Est`, taken before
+ * the cooling and off the rewarming axis — see `rewarming-curve.ts`) and ~20
+ * dynamic captures (`Din01`…`DinNN`) taken at a fixed interval during the
  * hands' rewarming after cold stress. Each capture is the same triplet the
  * individual analysis uses: optical photo (`*_DAR.jpeg`), thermal render
  * (`*_IR.jpeg`) and temperature matrix (`*.csv`).
@@ -63,7 +64,11 @@ export interface SequenceCapture {
   readonly kind: CaptureKind;
   readonly index: number;
   readonly label: string;
-  /** Seconds on the rewarming axis: baseline = 0, DinNN = NN × interval. */
+  /**
+   * Seconds on the rewarming axis: `DinNN` = NN × interval. The baseline keeps
+   * 0, which is not a position on that axis — nothing reads it as an instant;
+   * `kind`/`phase` is what identifies it. See `rewarming-curve.ts`.
+   */
   readonly timeSeconds: number;
   readonly optical: File;
   readonly thermal: File;

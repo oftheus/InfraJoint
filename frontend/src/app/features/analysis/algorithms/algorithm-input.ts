@@ -73,6 +73,8 @@ export function toAlgorithmInput(leitura: readonly ReadoutFrame[]): AlgorithmInp
     joints: frame.jointRois.map(toJoint),
   }));
 
+  // A basal ordena em primeiro lugar com o seu 0, que não é um instante do eixo:
+  // quem ajusta curva filtra por `phase`, não pela posição. Ver `AlgorithmFrame`.
   frames.sort((a, b) => (a.timeSeconds ?? Infinity) - (b.timeSeconds ?? Infinity));
 
   return { frames };

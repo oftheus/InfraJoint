@@ -97,9 +97,14 @@ function origem(frame: AlgorithmFrame, posicao: number, total: number): string |
       `articulação medida. Com a ressalva, ${estatica}`
     );
   }
+  // Nomeia a captura pelo que ela é, não por um instante: a basal fica fora do eixo
+  // de reaquecimento (ver `rewarming-curve.ts`), e chamá-la de "instante inicial"
+  // contradiria a curva e a linha do tempo, que já não lhe dão posição no tempo.
   const identificacao =
-    frame.timeSeconds === null ? `de índice ${frame.captureIndex}` : `do instante inicial`;
-  return `Calculado sobre a primeira captura ${identificacao}, das ${total} carregadas: ${estatica}`;
+    frame.phase === 'baseline'
+      ? 'a captura basal'
+      : `a primeira captura, de índice ${frame.captureIndex},`;
+  return `Calculado sobre ${identificacao} das ${total} carregadas: ${estatica}`;
 }
 
 export const thermalAsymmetry: ResearchAlgorithm = {

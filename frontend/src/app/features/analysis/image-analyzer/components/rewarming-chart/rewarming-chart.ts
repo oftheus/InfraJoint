@@ -39,9 +39,14 @@ interface LinePoint {
 
 /**
  * Rewarming curve (temperature × time) rendered with Chart.js: one line per
- * (side, joint) series, a dashed reference at each series' baseline value and
- * a vertical playhead synced with the timeline. Clicking the plot emits the
- * nearest capture time so the viewer can jump to that frame.
+ * (side, joint) series, colour for the hand and `borderDash` for the joint,
+ * plus a vertical playhead synced with the timeline. Clicking the plot emits
+ * the nearest capture time so the viewer can jump to that frame.
+ *
+ * The plot carries the dynamic captures and nothing else. A resting-level line
+ * per series was tried and dropped: it doubled the strokes on a plot that
+ * already spends colour and dash on two variables, and the resting value is
+ * read from the baseline capture itself, in the timeline.
  */
 @Component({
   selector: 'app-rewarming-chart',
@@ -61,8 +66,6 @@ export class RewarmingChart {
   private chart: Chart<'line', LinePoint[]> | null = null;
   /** Read by the playhead plugin at draw time (closure state). */
   private playheadTime: number | null = null;
-  /** Dataset indexes that are baseline references (hidden from the legend). */
-  private referenceIndexes = new Set<number>();
 
   constructor() {
     effect(() => {
@@ -83,8 +86,7 @@ export class RewarmingChart {
     if (!canvas) {
       return;
     }
-    const { datasets, referenceIndexes } = this.buildDatasets(series);
-    this.referenceIndexes = referenceIndexes;
+    const datasets = this.buildDatasets(series);
     // The canvas lives inside an @if: when it is re-created, the old chart
     // instance points at a detached element and must be rebuilt.
     if (this.chart && this.chart.canvas !== canvas) {
@@ -98,12 +100,8 @@ export class RewarmingChart {
     this.chart.update('none');
   }
 
-  private buildDatasets(series: readonly RewarmingSeries[]): {
-    datasets: ChartDataset<'line', LinePoint[]>[];
-    referenceIndexes: Set<number>;
-  } {
+  private buildDatasets(series: readonly RewarmingSeries[]): ChartDataset<'line', LinePoint[]>[] {
     const datasets: ChartDataset<'line', LinePoint[]>[] = [];
-    const referenceIndexes = new Set<number>();
     const jointOrder = [...new Set(series.map((s) => s.landmarkId))];
 
     for (const s of series) {
@@ -112,6 +110,9 @@ export class RewarmingChart {
       datasets.push({
         label: s.label,
         data: s.points.map((p) => ({ x: p.timeSeconds, y: p.value })),
+        // O primeiro e o último ponto ficam exatamente na borda da área de
+        // plotagem; sem isto, o Chart.js corta metade de cada um.
+        clip: false,
         borderColor: color,
         backgroundColor: color,
         borderDash: [...dash],
@@ -121,26 +122,8 @@ export class RewarmingChart {
         spanGaps: false,
         tension: 0.25,
       });
-      // Dashed reference at the series' baseline (t₀) temperature.
-      if (Number.isFinite(s.baselineValue) && s.points.length > 1) {
-        const first = s.points[0].timeSeconds;
-        const last = s.points[s.points.length - 1].timeSeconds;
-        referenceIndexes.add(datasets.length);
-        datasets.push({
-          label: `${s.label} (baseline)`,
-          data: [
-            { x: first, y: s.baselineValue },
-            { x: last, y: s.baselineValue },
-          ],
-          borderColor: `${color}55`,
-          borderDash: [4, 4],
-          borderWidth: 1.5,
-          pointRadius: 0,
-          pointHitRadius: 0,
-        });
-      }
     }
-    return { datasets, referenceIndexes };
+    return datasets;
   }
 
   private createChart(canvas: HTMLCanvasElement): Chart<'line', LinePoint[]> {
@@ -179,7 +162,7 @@ export class RewarmingChart {
         animation: false,
         interaction: { mode: 'nearest', axis: 'x', intersect: false },
         onClick: (_event, elements, chart) => {
-          const hit = elements.find((e) => !this.referenceIndexes.has(e.datasetIndex));
+          const hit = elements[0];
           if (!hit) {
             return;
           }
@@ -189,7 +172,19 @@ export class RewarmingChart {
         scales: {
           x: {
             type: 'linear',
-            title: { display: true, text: 'Tempo de reaquecimento' },
+            // `bounds: 'data'` porque o padrão ('ticks') arredonda o mínimo para
+            // baixo até um número redondo: com a primeira dinâmica em 15 s, a
+            // escala ia até 0 e abria um vazio no lugar exato de onde a basal
+            // saiu — que é justamente a leitura de "captura faltando" que tirar
+            // a basal do eixo veio evitar. Assim as pontas do eixo são a
+            // primeira e a última captura, e os rótulos das pontas dizem isso.
+            //
+            // Sem `grace`: ele não é margem, é aumento da escala — e com
+            // `bounds: 'data'` os extremos esticados viram os rótulos das
+            // pontas (0:12, 5:03), instantes que não existem. A folga para o
+            // ponto da borda não ser cortado vem do `clip: false` do dataset.
+            bounds: 'data',
+            title: { display: true, text: 'Tempo desde o fim do resfriamento' },
             ticks: { callback: (value) => formatSeconds(Number(value)) },
           },
           y: {
@@ -198,12 +193,7 @@ export class RewarmingChart {
           },
         },
         plugins: {
-          legend: {
-            labels: {
-              usePointStyle: true,
-              filter: (item) => !this.referenceIndexes.has(item.datasetIndex ?? -1),
-            },
-          },
+          legend: { labels: { usePointStyle: true } },
           tooltip: {
             callbacks: {
               title: (items) =>
@@ -211,7 +201,6 @@ export class RewarmingChart {
               label: (item) =>
                 `${item.dataset.label}: ${(item.parsed.y ?? NaN).toFixed(2).replace('.', ',')} °C`,
             },
-            filter: (item) => !this.referenceIndexes.has(item.datasetIndex),
           },
         },
       },

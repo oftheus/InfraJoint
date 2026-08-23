@@ -254,7 +254,7 @@ describe('quadrosDaCurva', () => {
 });
 
 describe('curvasPorMao', () => {
-  it('faz a média das articulações de cada mão em cada instante', () => {
+  it('faz a média das articulações de cada mão em cada instante dinâmico', () => {
     const frames = quadrosDaCurva([
       captura({
         phase: 'baseline',
@@ -277,7 +277,8 @@ describe('curvasPorMao', () => {
 
     expect(curvas).toHaveLength(1);
     expect(curvas[0].side).toBe('Esquerda');
-    expect(curvas[0].points.map((p) => p.value)).toEqual([31, 33]);
+    // Só a dinâmica: a basal é nível de referência, não ponto do eixo.
+    expect(curvas[0].points.map((p) => p.value)).toEqual([33]);
   });
 
   it('ignora a articulação ausente na média em vez de contá-la como zero', () => {
@@ -298,7 +299,7 @@ describe('curvasPorMao', () => {
       }),
     ]);
 
-    expect(curvasPorMao(frames)[0].points.map((p) => p.value)).toEqual([31, 34]);
+    expect(curvasPorMao(frames)[0].points.map((p) => p.value)).toEqual([34]);
   });
 
   it('sem quadros, não há curva', () => {

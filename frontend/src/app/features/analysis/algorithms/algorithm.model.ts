@@ -44,7 +44,21 @@ export interface AlgorithmFrame {
   readonly captureIndex: number;
   /** Nulo na análise avulsa, onde não se sabe se a captura é basal. */
   readonly phase: 'baseline' | 'dynamic' | null;
-  /** Segundos no eixo de reaquecimento. Nulo na avulsa, onde não há eixo. */
+  /**
+   * Segundos no eixo de reaquecimento. Nulo na avulsa, onde não há eixo.
+   *
+   * **A basal chega com 0, e esse 0 não pertence ao eixo.** Ela é registrada
+   * antes do resfriamento, a uma distância que o protocolo não mede (~177 s numa
+   * sessão real, contra os 120 s de ventilador previstos, e variável por
+   * operador). Como `toAlgorithmInput` ordena por tempo, ela ordena em primeiro
+   * lugar e fica indistinguível do início da curva: um ajuste que a inclua lê a
+   * queda do resfriamento como se fosse reaquecimento e devolve uma inclinação
+   * errada sem sintoma nenhum — sem erro, sem NaN, só um número plausível.
+   *
+   * Quem for calcular taxa filtra `phase === 'dynamic'` antes de ajustar. A
+   * basal se usa como valor de referência, nunca como instante: é a mesma
+   * decisão que a curva tomou ao deixá-la fora do eixo (`rewarming-curve.ts`).
+   */
   readonly timeSeconds: number | null;
   readonly quality: {
     readonly alignmentMethod: 'silhouette' | 'fiducial' | 'manual' | null;

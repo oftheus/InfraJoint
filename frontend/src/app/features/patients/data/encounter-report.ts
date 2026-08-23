@@ -662,7 +662,10 @@ function termografia(detail: EncounterDetail, recursos: RecursosDoRelatorio): Co
       margin: [0, 12, 0, 0],
     });
     blocos.push({
-      text: 'Média das articulações de cada mão ao longo do reaquecimento.',
+      text:
+        'Média das articulações de cada mão nas capturas dinâmicas. O eixo conta desde o ' +
+        'fim do resfriamento e começa na primeira captura dinâmica, não em 0:00. A basal, ' +
+        'registrada antes do resfriamento, está na tabela abaixo.',
       style: 'nota',
       margin: [0, 3, 0, 0],
     });

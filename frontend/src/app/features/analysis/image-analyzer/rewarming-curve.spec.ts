@@ -12,19 +12,30 @@ describe('buildRewarmingSeries', () => {
     { timeSeconds: 30, kind: 'dynamic', rois: [roi('Esquerda', 9, 27), roi('Direita', 9, 26)] },
   ];
 
-  it('builds one series per side with the baseline at t₀', () => {
+  it('plots the dynamic captures only, leaving the baseline off the axis', () => {
     const series = buildRewarmingSeries(frames, [9], 'mean');
     expect(series.map((s) => s.key)).toEqual(['Esquerda:9', 'Direita:9']);
     const left = series[0];
     expect(left.label).toBe('E MCP 3');
-    expect(left.points.map((p) => p.timeSeconds)).toEqual([0, 15, 30]);
-    expect(left.points.map((p) => p.value)).toEqual([32, 24, 27]);
-    expect(left.baselineValue).toBe(32);
+    expect(left.points.map((p) => p.timeSeconds)).toEqual([15, 30]);
+    expect(left.points.map((p) => p.value)).toEqual([24, 27]);
   });
 
   it('honors the selected statistic', () => {
     const series = buildRewarmingSeries(frames, [9], 'max');
-    expect(series[0].points[0].value).toBe(33); // mean 32 + 1
+    expect(series[0].points[0].value).toBe(25); // Din01 mean 24 + 1
+  });
+
+  it('drops a hand that only ever appeared in the baseline', () => {
+    const baselineOnly: CurveFrame[] = [
+      frames[0],
+      { ...frames[1], rois: frames[1].rois.filter((r) => r.side === 'Esquerda') },
+      { ...frames[2], rois: frames[2].rois.filter((r) => r.side === 'Esquerda') },
+    ];
+    // 'Direita' is in the baseline but in no dynamic capture: no rewarming to plot.
+    expect(buildRewarmingSeries(baselineOnly, [9], 'mean').map((s) => s.side)).toEqual([
+      'Esquerda',
+    ]);
   });
 
   it('turns missing joints into gaps (NaN) and drops absent hands', () => {
@@ -35,7 +46,7 @@ describe('buildRewarmingSeries', () => {
     ];
     const series = buildRewarmingSeries(withHole, [9], 'mean');
     expect(series).toHaveLength(2);
-    expect(Number.isNaN(series[0].points[1].value)).toBe(true);
+    expect(Number.isNaN(series[0].points[0].value)).toBe(true); // Din01 is now the first
 
     // A hand that never appears yields no series at all.
     const leftOnly = frames.map((f) => ({ ...f, rois: f.rois.filter((r) => r.side === 'Esquerda') }));
@@ -44,7 +55,6 @@ describe('buildRewarmingSeries', () => {
 
   it('sorts frames by time regardless of input order', () => {
     const series = buildRewarmingSeries([frames[2], frames[0], frames[1]], [9], 'mean');
-    expect(series[0].points.map((p) => p.timeSeconds)).toEqual([0, 15, 30]);
-    expect(series[0].baselineValue).toBe(32);
+    expect(series[0].points.map((p) => p.timeSeconds)).toEqual([15, 30]);
   });
 });

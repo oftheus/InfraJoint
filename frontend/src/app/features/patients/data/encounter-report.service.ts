@@ -219,6 +219,7 @@ export class EncounterReportService {
         datasets: curvas.map((curva) => ({
           label: `Mão ${curva.side.toLowerCase()}`,
           data: curva.points.map((p) => ({ x: p.timeSeconds, y: p.value })),
+          clip: false,
           borderColor: CORES[curva.side],
           backgroundColor: CORES[curva.side],
           borderWidth: 3,
@@ -236,7 +237,16 @@ export class EncounterReportService {
         scales: {
           x: {
             type: 'linear',
-            title: { display: true, text: 'Tempo de reaquecimento', font: { size: 18 } },
+            // Mesma razão do gráfico da tela (`rewarming-chart.ts`): sem isto a
+            // escala arredonda o mínimo até 0 e abre um vazio antes da primeira
+            // dinâmica, no lugar de onde a basal saiu. A margem das pontas vem
+            // do `clip: false` do dataset, não de `grace` — ver o comentário lá.
+            bounds: 'data',
+            title: {
+              display: true,
+              text: 'Tempo desde o fim do resfriamento',
+              font: { size: 18 },
+            },
             ticks: { callback: (v) => formatSeconds(Number(v)), font: { size: 16 } },
           },
           y: {

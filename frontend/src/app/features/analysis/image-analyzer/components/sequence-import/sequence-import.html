@@ -162,8 +162,9 @@
         </p>
       } @else if (!hasBaseline()) {
         <p class="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-700">
-          ⚠ Baseline (Est) não encontrada: a curva de reaquecimento ficará sem a referência de
-          repouso.
+          ⚠ Baseline (Est) não encontrada: a análise ficará sem a temperatura de repouso, e o
+          relatório vai comparar o desfecho com a primeira captura dinâmica. A curva de
+          reaquecimento não é afetada, porque traça só as dinâmicas.
         </p>
       }
 
@@ -235,7 +236,7 @@
             [value]="sequence.intervalSeconds()"
             (input)="onIntervalInput($event)"
             class="mt-1 block w-32 rounded-xl border border-gray-200 px-3 py-2 text-sm tabular-nums text-ink-strong"
-            title="Segundos entre as capturas dinâmicas (baseline é t₀ = 0)"
+            title="Segundos entre as capturas dinâmicas, contados do fim do resfriamento"
           />
         </label>
         <button
