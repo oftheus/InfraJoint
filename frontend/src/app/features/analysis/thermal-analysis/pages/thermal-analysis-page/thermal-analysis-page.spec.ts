@@ -309,6 +309,56 @@ describe('ThermalAnalysisPage — retomada do envio', () => {
     m.controller.verify();
   });
 
+  it('não oferece recuperação enquanto o envio ainda está em curso', async () => {
+    // O erro que este teste existe para impedir: `consultaSalva()` fica verdadeiro
+    // assim que o createEncounter responde, ou seja ANTES de o upload começar. A tela
+    // passava o envio inteiro — minutos, numa sequência — mostrando uma mensagem de
+    // recuperação ("tentar de novo retoma de onde parou") enquanto nada tinha falhado.
+    const m = await montar(coleta('optical'));
+
+    // Segura o PUT no ar para inspecionar a tela no meio do envio.
+    let liberar!: (r: Response) => void;
+    m.fetchFalso.mockReturnValue(
+      new Promise<Response>((resolve) => {
+        liberar = resolve;
+      }),
+    );
+
+    botao(m.fixture, 'Finalizar e gravar').click();
+    await assentar(m.fixture);
+    m.controller.expectOne(`${API}/patients/p1/encounters`).flush(CONSULTA_CRIADA);
+    await assentar(m.fixture);
+    m.controller.expectOne(`${API}/encounters/e1/captures`).flush({
+      encounter_id: 'e1',
+      uploads: [
+        { capture_id: 'c1', capture_index: 0, kind: 'optical', url: 'https://bucket.local/o' },
+      ],
+    });
+    await assentar(m.fixture);
+
+    // Estamos no meio do upload: o PUT saiu e não voltou.
+    expect(m.fetchFalso).toHaveBeenCalledTimes(1);
+    const tela = m.fixture.nativeElement.textContent as string;
+
+    expect(tela).toContain('Enviando');
+    // Nada de recuperação: não falhou nada ainda. Vale para o texto E para os botões —
+    // um botão desabilitado ainda ocupa a tela oferecendo saída de um problema que não
+    // existe.
+    expect(tela).not.toContain('Tentar enviar novamente');
+    expect(tela).not.toContain('Ver a consulta salva');
+    expect(tela).not.toContain('retoma');
+    expect(tela).not.toContain('já estão salvos');
+    // E nem as dicas de "o que gravar", que a consulta gravada já respondeu.
+    expect(tela).not.toContain('Marque ao menos uma articulação');
+    expect(tela).not.toContain('para poder finalizar');
+
+    liberar({ ok: true, status: 200 } as Response);
+    await assentar(m.fixture);
+    m.controller.expectOne(`${API}/encounters/e1/analysis-status`).flush(null);
+    drenarListas(m.controller);
+    m.controller.verify();
+  });
+
   it('reenvia só o arquivo que faltou, não os que já subiram', async () => {
     const m = await montar(coleta('optical', 'thermal'));
 

@@ -463,9 +463,11 @@ export class ThermalAnalysisPage {
           // botão de retomar, aqui, resolve sem criar consulta nova.
           this.uploadFailed.set(failed.map((f) => f.describe));
           this.saving.set(false);
+          // Primeiro o que tranquiliza, depois o que falta. A instrução some: o
+          // botão logo abaixo já diz "Tentar enviar novamente".
           this.error.set(
-            `${failed.length} de ${desteEnvio} arquivos não subiram. ` +
-              'A consulta e o mapa corporal foram salvos; tente enviar novamente.',
+            'A consulta e o mapa corporal já estão salvos. ' +
+              `Faltaram ${failed.length} de ${desteEnvio} arquivos.`,
           );
           return;
         }
@@ -480,7 +482,7 @@ export class ThermalAnalysisPage {
       this.saving.set(false);
       const motivo = messageFromError(cause).replace(/[.\s]+$/, '');
       this.error.set(
-        `A consulta e o mapa corporal foram salvos, mas as imagens não subiram: ${motivo}.`,
+        `A consulta e o mapa corporal já estão salvos, mas as imagens não subiram: ${motivo}.`,
       );
     }
   }
