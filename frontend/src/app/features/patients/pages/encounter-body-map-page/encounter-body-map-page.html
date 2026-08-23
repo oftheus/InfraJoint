@@ -30,7 +30,7 @@
     } @else {
       <p class="mt-5 max-w-2xl text-sm text-secondary">
         Achados registrados nesta consulta. Clique em uma região para ver a avaliação de cada
-        articulação; clique em uma das mãos para abrir a visão detalhada.
+        articulação. Clique em uma das mãos para abrir a visão detalhada.
       </p>
 
       @if (recordedTypes().length > 1) {
@@ -131,7 +131,7 @@
           </section>
 
           <!-- Disease-activity score. Sem índice fechado não há card: o mapa pode
-               ter sido gravado sem os parâmetros, e um "—" grande não diz por quê. -->
+               ter sido gravado sem os parâmetros, e um traço grande não diz por quê. -->
           @if (recordedTypes().length > 0) {
             <section
               class="rounded-2xl border border-black/5 bg-surface p-5 shadow-[0_12px_40px_rgba(27,58,87,0.08)]"

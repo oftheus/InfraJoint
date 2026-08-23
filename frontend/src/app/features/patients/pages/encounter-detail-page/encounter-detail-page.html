@@ -43,12 +43,6 @@
       </div>
     </div>
 
-    @if (consulta.clinical_notes) {
-      <p class="mt-4 max-w-2xl whitespace-pre-line text-sm text-secondary">
-        {{ consulta.clinical_notes }}
-      </p>
-    }
-
     @if (confirmingDelete()) {
       <section
         role="alertdialog"
@@ -82,7 +76,7 @@
             </li>
           }
           @if (!jointSummary() && !analysisBadge()) {
-            <li>nenhum achado — esta consulta está vazia</li>
+            <li>nenhum achado, esta consulta está vazia</li>
           }
         </ul>
         <p class="mt-3 text-sm text-red-700">
@@ -218,8 +212,8 @@
             <h3 class="mt-4 text-lg font-bold text-amber-900">Análise de imagens</h3>
             <p class="mt-1 text-sm text-amber-800">
               <span class="font-semibold">Envio de imagens incompleto.</span>
-              As capturas foram gravadas, mas os arquivos não foram confirmados no armazenamento —
-              as medições não podem ser exibidas.
+              As capturas foram gravadas, mas os arquivos não foram confirmados no armazenamento,
+              então as medições não podem ser exibidas.
             </p>
           </div>
         }

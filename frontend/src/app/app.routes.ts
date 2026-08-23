@@ -53,15 +53,6 @@ export const appRoutes: Routes = [
           import('./features/analysis/analysis.routes').then((m) => m.analysisRoutes),
       },
       {
-        path: 'administracao',
-        canActivate: [roleGuard],
-        data: { roles: ['admin'] },
-        loadChildren: () =>
-          import('./features/administration/administration.routes').then(
-            (m) => m.administrationRoutes,
-          ),
-      },
-      {
         path: 'perfil',
         loadChildren: () =>
           import('./features/profile/profile.routes').then((m) => m.profileRoutes),

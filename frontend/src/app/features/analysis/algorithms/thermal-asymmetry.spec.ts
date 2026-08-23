@@ -56,10 +56,31 @@ describe('thermalAsymmetry — análise avulsa', () => {
     expect(result.status).toBe('ok');
     // Asserção sobre o número, e não sobre a frase: mudar a redação do resumo não
     // pode quebrar o teste da conta.
-    expect(result.values[0].label).toBe('MCP 3');
+    expect(result.values[0].label).toBe('MCP 3 (esquerda mais quente)');
     expect(result.values[0].value).toBeCloseTo(1.4, 5);
     expect(result.values[0].unit).toBe('°C');
     expect(result.summary).toContain('esquerda mais quente');
+  });
+
+  it('carries the warmer side on every row, not just the largest', () => {
+    // O valor é magnitude, então sem o lado no rótulo as linhas de baixo viravam
+    // um número sem direção.
+    const result = thermalAsymmetry.run(
+      input([
+        frame([
+          joint('Esquerda', 9, 33.8),
+          joint('Direita', 9, 32.4),
+          joint('Esquerda', 5, 32.0),
+          joint('Direita', 5, 33.0),
+        ]),
+      ]),
+    );
+
+    expect(result.values.map((v) => v.label)).toEqual([
+      'MCP 3 (esquerda mais quente)',
+      '#5 (direita mais quente)',
+    ]);
+    expect(result.values[1].value).toBeCloseTo(1.0, 5);
   });
 
   it('orders the table from the largest difference down', () => {
@@ -74,7 +95,10 @@ describe('thermalAsymmetry — análise avulsa', () => {
       ]),
     );
 
-    expect(result.values.map((v) => v.label)).toEqual(['MCP 3', '#5']);
+    expect(result.values.map((v) => v.label)).toEqual([
+      'MCP 3 (esquerda mais quente)',
+      '#5 (esquerda mais quente)',
+    ]);
   });
 
   it('reports symmetric hands as a near-zero difference, not as a failure', () => {
@@ -84,6 +108,10 @@ describe('thermalAsymmetry — análise avulsa', () => {
 
     expect(result.status).toBe('ok');
     expect(result.values[0].value).toBe(0);
+    // Empate não tem lado mais quente, e dizer "esquerda" por causa de `>= 0` seria
+    // inventar uma direção que a medição não mostra.
+    expect(result.values[0].label).toBe('MCP 3 (sem diferença)');
+    expect(result.summary).toContain('Nenhuma diferença');
   });
 
   it('cannot answer with a single hand, and says why', () => {
@@ -109,9 +137,9 @@ describe('thermalAsymmetry — análise avulsa', () => {
     );
 
     expect(result.status).toBe('ok');
-    expect(result.summary).toContain('1 descartado');
+    expect(result.summary).toContain('1 descartado por cobertura de pele abaixo de 40%');
     // O par descartado não pode ter entrado nos números.
-    expect(result.values.map((v) => v.label)).toEqual(['MCP 3']);
+    expect(result.values.map((v) => v.label)).toEqual(['MCP 3 (esquerda mais quente)']);
   });
 
   it('cannot answer when every pair is below the coverage threshold', () => {
@@ -129,6 +157,29 @@ describe('thermalAsymmetry — análise avulsa', () => {
     );
 
     expect(result.status).toBe('insufficient-data');
+    // Sem temperatura não é cobertura baixa: eram contados juntos e relatados
+    // sempre como cobertura, o que mandava conferir o enquadramento de uma ROI
+    // que nem chegou a medir.
+    expect(result.summary).toContain('medição sem temperatura');
+    expect(result.summary).not.toContain('cobertura de pele');
+  });
+
+  it('separates the two discard reasons when both happen', () => {
+    const result = thermalAsymmetry.run(
+      input([
+        frame([
+          joint('Esquerda', 9, NaN),
+          joint('Direita', 9, 32.4),
+          joint('Esquerda', 5, 33.0, 0.1),
+          joint('Direita', 5, 32.0),
+        ]),
+      ]),
+    );
+
+    expect(result.status).toBe('insufficient-data');
+    expect(result.summary).toContain('2 descartados');
+    expect(result.summary).toContain('1 por cobertura de pele abaixo de 40% (#5)');
+    expect(result.summary).toContain('1 por medição sem temperatura (MCP 3)');
   });
 });
 

@@ -10,8 +10,6 @@
  * `|`. Isso era o algoritmo fazendo o trabalho da tela: ~40 linhas de formatação
  * reescritas por algoritmo, números virando texto sem volta, e testes presos à
  * redação das frases.
- *
- * O desenho e as alternativas descartadas estão em `Algoritmos.MD`, na raiz do repo.
  */
 
 import { HandSide } from '../image-analyzer/image-analyzer.model';

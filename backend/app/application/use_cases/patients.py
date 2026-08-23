@@ -102,12 +102,33 @@ class UpdatePatient:
     async def execute(
         self, user: AuthenticatedUser, patient_id: UUID, changes: Mapping[str, Any]
     ) -> Patient:
+        """Edita o cadastro. Só o médico dono edita — nem o admin.
+
+        Espelha `patients_update` no banco, que é a fronteira real. A regra é a mesma
+        de `consulta_e_do_dono`, agora estendida ao paciente: o admin administra o
+        acervo e não assina no lugar de quem atendeu. Editar cadastro alheio gravaria
+        conteúdo dele sob o nome de outro médico, sem nada na tela denunciando.
+
+        Apagar continua sendo do admin (ver `DeletePatient`), e a assimetria é
+        deliberada: remover não falsifica, editar sim.
+        """
         if not user.is_clinician:
             raise ForbiddenError("apenas médicos e administradores editam pacientes")
-        if not changes:
-            return await GetPatient(self.patients).execute(patient_id)
 
-        patient = await self.patients.update(patient_id, changes)
-        if patient is None:
+        # Resolver antes de escrever, mesma razão de `CreateEncounter`: para o médico
+        # errado o paciente já sumiu na RLS e isto vira 404. Quem cai na guarda é o
+        # admin, que ENXERGA o paciente de todo mundo — sem ela ele bateria na policy
+        # de UPDATE e receberia 404 por um paciente que a listagem dele acabou de
+        # mostrar. 403 é a resposta honesta: a identidade não é segredo para ele, o
+        # que falta é ser o responsável.
+        patient = await GetPatient(self.patients).execute(patient_id)
+        if patient.owner_id != user.id:
+            raise ForbiddenError("apenas o médico responsável edita o cadastro do paciente")
+
+        if not changes:
+            return patient
+
+        atualizado = await self.patients.update(patient_id, changes)
+        if atualizado is None:
             raise NotFoundError("paciente não encontrado")
-        return patient
+        return atualizado

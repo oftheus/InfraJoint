@@ -11,7 +11,7 @@ function paciente(id: string, created_at: string, partial: Partial<Patient> = {}
   return {
     id,
     full_name: `Paciente ${id}`,
-    birth_date: null,
+    birth_date: '1970-01-01',
     sex: null,
     phone: null,
     primary_diagnosis: null,

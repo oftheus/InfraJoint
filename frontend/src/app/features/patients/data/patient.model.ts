@@ -25,12 +25,25 @@ export const SEX_OPTIONS: readonly { readonly value: Sex; readonly label: string
 export interface Patient {
   readonly id: string;
   readonly full_name: string;
-  readonly birth_date: string | null;
+  /**
+   * Obrigatória. Sem documento e sem número de prontuário, é o único campo que
+   * distingue dois homônimos — por isso o banco a exige (`birth_date_obrigatoria`).
+   */
+  readonly birth_date: string;
   readonly sex: Sex | null;
   readonly phone: string | null;
   readonly primary_diagnosis: string | null;
   readonly created_at: string;
   readonly updated_at: string;
+  /**
+   * Nome do médico dono, e `null` para quem não é admin.
+   *
+   * Quem decide se ele vem preenchido é o banco, não a tela: um médico comum só
+   * enxerga os próprios pacientes, e o rótulo repetiria o nome dele em toda linha.
+   * Renderizar quando existir é, portanto, suficiente — não há checagem de papel a
+   * fazer aqui.
+   */
+  readonly owner_name?: string | null;
 }
 
 /** Um achado articular, como o backend grava em `encounters.joint_evaluations`. */
@@ -77,7 +90,6 @@ export interface Encounter {
   readonly patient_id: string;
   readonly occurred_at: string;
   readonly reason: string | null;
-  readonly clinical_notes: string | null;
   readonly joint_evaluations: Readonly<Record<string, JointEvaluationDto>> | null;
   readonly scores: EncounterScores;
   /**
@@ -189,7 +201,8 @@ export interface EncounterDetail extends Encounter {
 
 export interface PatientCreate {
   full_name: string;
-  birth_date?: string | null;
+  /** Obrigatória: o backend recusa com 422 sem ela. */
+  birth_date: string;
   sex?: Sex | null;
   phone?: string | null;
   primary_diagnosis?: string | null;
@@ -208,7 +221,6 @@ export type PatientUpdate = Partial<PatientCreate>;
 export interface EncounterCreate {
   occurred_at?: string | null;
   reason?: string | null;
-  clinical_notes?: string | null;
   joint_evaluations?: Record<string, JointEvaluationDto> | null;
   /** Chaves em maiúsculo (`CDAI`, `DAS28`); o backend normaliza ao gravar. */
   scores?: Record<string, CdaiScoreDto | Das28ScoreDto> | null;

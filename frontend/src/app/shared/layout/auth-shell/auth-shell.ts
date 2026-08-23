@@ -123,22 +123,6 @@ export class AuthShell {
         },
       ],
     },
-    {
-      kind: 'group',
-      label: 'Administração',
-      icon: 'shield',
-      requiredRoles: ['admin'],
-      children: [
-        { kind: 'link', label: 'Usuários', icon: 'users-round', route: '/administracao/usuarios' },
-        { kind: 'link', label: 'Dataset', icon: 'layers', route: '/administracao/dataset' },
-        {
-          kind: 'link',
-          label: 'Configurações',
-          icon: 'settings',
-          route: '/administracao/configuracoes',
-        },
-      ],
-    },
   ];
 
   /**

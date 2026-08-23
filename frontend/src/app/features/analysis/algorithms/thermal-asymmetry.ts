@@ -37,15 +37,33 @@ interface Par {
   readonly assinada: number;
 }
 
-/** Uma medição serve para comparar? Sem pele suficiente, o número não se sustenta. */
-function confiavel(joint: AlgorithmJoint): boolean {
-  return Number.isFinite(joint.mean) && joint.skinCoverage >= COBERTURA_MINIMA;
+/**
+ * Por que uma medição ficou de fora.
+ *
+ * Os dois motivos eram contados juntos e relatados como cobertura de pele, o que
+ * descrevia errado o caso mais grave dos dois: uma ROI sem temperatura nenhuma não é
+ * uma ROI mal coberta, é uma ROI que não mediu. Quem lê o relatório precisa saber qual
+ * dos dois aconteceu, porque a ação é diferente.
+ */
+type MotivoDescarte = 'cobertura' | 'sem-temperatura';
+
+interface Descartado {
+  readonly label: string;
+  readonly motivo: MotivoDescarte;
+}
+
+/** Por que esta medição não serve para comparar, ou `null` quando serve. */
+function motivoDeDescarte(joint: AlgorithmJoint): MotivoDescarte | null {
+  if (!Number.isFinite(joint.mean)) {
+    return 'sem-temperatura';
+  }
+  return joint.skinCoverage < COBERTURA_MINIMA ? 'cobertura' : null;
 }
 
 /** Pareia as articulações da captura, separando o que não dá para comparar. */
 function parear(joints: readonly AlgorithmJoint[]): {
   readonly pares: readonly Par[];
-  readonly descartados: readonly string[];
+  readonly descartados: readonly Descartado[];
 } {
   const esquerdas = new Map(
     joints.filter((j) => j.side === 'Esquerda').map((j) => [j.landmarkId, j]),
@@ -55,15 +73,19 @@ function parear(joints: readonly AlgorithmJoint[]): {
   );
 
   const pares: Par[] = [];
-  const descartados: string[] = [];
+  const descartados: Descartado[] = [];
 
   for (const [landmarkId, esquerda] of esquerdas) {
     const direita = direitas.get(landmarkId);
     if (!direita) {
       continue; // não detectada do outro lado: não há par, e não é descarte
     }
-    if (!confiavel(esquerda) || !confiavel(direita)) {
-      descartados.push(esquerda.label);
+    // O lado que falhou pior manda no motivo. Sem temperatura é falha de medição,
+    // cobertura baixa é medição fraca, e relatar a segunda escondendo a primeira
+    // mandaria o leitor conferir o enquadramento de uma ROI que nem mediu.
+    const motivo = motivoDeDescarte(esquerda) ?? motivoDeDescarte(direita);
+    if (motivo) {
+      descartados.push({ label: esquerda.label, motivo });
       continue;
     }
     pares.push({
@@ -74,6 +96,44 @@ function parear(joints: readonly AlgorithmJoint[]): {
 
   pares.sort((a, b) => Math.abs(b.assinada) - Math.abs(a.assinada));
   return { pares, descartados };
+}
+
+/** Qual mão está mais quente no par, ou `null` quando as duas medem igual. */
+function ladoMaisQuente(assinada: number): 'esquerda' | 'direita' | null {
+  if (assinada === 0) {
+    return null;
+  }
+  return assinada > 0 ? 'esquerda' : 'direita';
+}
+
+/**
+ * Os descartes em prosa, agrupados por motivo.
+ *
+ * Com um motivo só a frase não repete a contagem, porque "1 descartado: 1 por
+ * cobertura" diz duas vezes a mesma coisa.
+ */
+function frasesDeDescarte(descartados: readonly Descartado[]): string {
+  const rotulos: Record<MotivoDescarte, string> = {
+    cobertura: `cobertura de pele abaixo de ${COBERTURA_MINIMA * 100}%`,
+    'sem-temperatura': 'medição sem temperatura',
+  };
+
+  const grupos = (['cobertura', 'sem-temperatura'] as const)
+    .map((motivo) => ({
+      motivo,
+      nomes: descartados.filter((d) => d.motivo === motivo).map((d) => d.label),
+    }))
+    .filter((grupo) => grupo.nomes.length > 0);
+
+  const descrever = (grupo: (typeof grupos)[number]): string =>
+    `${grupo.nomes.length} por ${rotulos[grupo.motivo]} (${grupo.nomes.join(', ')})`;
+
+  if (grupos.length === 1) {
+    const [grupo] = grupos;
+    const palavra = grupo.nomes.length === 1 ? 'descartado' : 'descartados';
+    return `${grupo.nomes.length} ${palavra} por ${rotulos[grupo.motivo]} (${grupo.nomes.join(', ')}).`;
+  }
+  return `${descartados.length} descartados, ${grupos.map(descrever).join(' e ')}.`;
 }
 
 /**
@@ -140,21 +200,22 @@ export const thermalAsymmetry: ResearchAlgorithm = {
         status: 'insufficient-data',
         summary:
           descartados.length > 0
-            ? `As ${descartados.length} articulações pareadas têm cobertura de pele abaixo de ${COBERTURA_MINIMA * 100}%, insuficiente para comparar.`
+            ? `Nenhum par pôde ser comparado. ${frasesDeDescarte(descartados)}`
             : 'Não há articulação detectada nas duas mãos: sem par correspondente, não há assimetria a calcular.',
         values: [],
       };
     }
 
     const maior = pares[0];
-    // Só contagens no texto — nenhum número com casa decimal, porque formatar é
+    const ladoDoMaior = ladoMaisQuente(maior.assinada);
+    // Só contagens no texto, nenhum número com casa decimal, porque formatar é
     // trabalho da tela. Os valores vão em `values`, como números.
     const frases = [
-      `Maior diferença na ${maior.label}, com a mão ${maior.assinada >= 0 ? 'esquerda' : 'direita'} mais quente.`,
-      `${pares.length} ${pares.length === 1 ? 'par comparado' : 'pares comparados'}` +
-        (descartados.length > 0
-          ? `; ${descartados.length} descartado${descartados.length === 1 ? '' : 's'} por cobertura de pele insuficiente (${descartados.join(', ')}).`
-          : '.'),
+      ladoDoMaior === null
+        ? 'Nenhuma diferença de temperatura entre as mãos nos pares comparados.'
+        : `Maior diferença na ${maior.label}, com a mão ${ladoDoMaior} mais quente.`,
+      `${pares.length} ${pares.length === 1 ? 'par comparado' : 'pares comparados'}.` +
+        (descartados.length > 0 ? ` ${frasesDeDescarte(descartados)}` : ''),
     ];
 
     const aviso = origem(frame, Math.max(posicao, 0), input.frames.length);
@@ -165,11 +226,21 @@ export const thermalAsymmetry: ResearchAlgorithm = {
     return {
       status: 'ok',
       summary: frases.join(' '),
-      values: pares.map((par) => ({
-        label: par.label,
-        value: Math.abs(par.assinada),
-        unit: '°C',
-      })),
+      // O lado vai no rótulo, e não no sinal do número.
+      //
+      // `values` é magnitude, e a tabela da tela ordena e formata sem saber de
+      // convenção de sinal. Antes só o maior par dizia qual mão estava mais quente,
+      // na frase do resumo: as outras linhas mostravam "0,8 °C" e o leitor não tinha
+      // como saber de que lado, apesar de o algoritmo já ter calculado isso.
+      values: pares.map((par) => {
+        const lado = ladoMaisQuente(par.assinada);
+        return {
+          label:
+            lado === null ? `${par.label} (sem diferença)` : `${par.label} (${lado} mais quente)`,
+          value: Math.abs(par.assinada),
+          unit: '°C',
+        };
+      }),
     };
   },
 };

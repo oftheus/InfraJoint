@@ -22,6 +22,12 @@ _COLUMNS = """
     phone, primary_diagnosis, created_at, updated_at
 """
 
+# Nas leituras, o nome do médico dono vai junto. A função é SECURITY DEFINER e só
+# responde para admin — para os demais devolve NULL, que é o certo: um médico comum
+# só enxerga os próprios pacientes, e um rótulo com o nome dele em toda linha seria
+# ruído. Ver a migration `owner_display_name`.
+_COLUMNS_COM_DONO = f"{_COLUMNS.rstrip()}, app.owner_display_name(owner_id) AS owner_name"
+
 # Whitelist de colunas editáveis. O nome vem do schema Pydantic do router, mas o SQL
 # é montado por interpolação — então a lista precisa existir aqui, na única camada
 # que conhece nomes de coluna.
@@ -47,6 +53,9 @@ def _to_entity(row: asyncpg.Record) -> Patient:
         primary_diagnosis=row["primary_diagnosis"],
         created_at=row["created_at"],
         updated_at=row["updated_at"],
+        # Ausente nos caminhos de escrita, que não selecionam a coluna — e ali a
+        # resposta é sobre a linha que o próprio chamador acabou de gravar.
+        owner_name=row.get("owner_name"),
     )
 
 
@@ -56,13 +65,13 @@ class PostgresPatientRepository:
 
     async def list_all(self) -> Sequence[Patient]:
         rows = await self._connection.fetch(
-            f"SELECT {_COLUMNS} FROM public.patients ORDER BY created_at DESC"
+            f"SELECT {_COLUMNS_COM_DONO} FROM public.patients ORDER BY created_at DESC"
         )
         return [_to_entity(row) for row in rows]
 
     async def get(self, patient_id: UUID) -> Patient | None:
         row = await self._connection.fetchrow(
-            f"SELECT {_COLUMNS} FROM public.patients WHERE id = $1",
+            f"SELECT {_COLUMNS_COM_DONO} FROM public.patients WHERE id = $1",
             patient_id,
         )
         return _to_entity(row) if row else None

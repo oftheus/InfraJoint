@@ -19,6 +19,7 @@ import { applyAffine, estimateSimilarityTransform, similarityScale } from './ali
 import { isBlueRgb, isSkinRgb } from './color-tests';
 import { AffineMatrix, Point, RgbPixels, ThermalMatrix } from './image-analyzer.model';
 import { connectedComponents, otsuThreshold } from './image-ops';
+import { environment } from '../../../../environments/environment';
 
 export interface FiducialRefinement {
   /** RGB px → CSV cell similarity transform fitted on the marker pairs. */
@@ -220,8 +221,18 @@ function describeCorrection(
   };
 }
 
-/** Diagnostic trail for support: visible via the browser console's Info level. */
+/**
+ * Diagnostic trail for support, at the browser console's Info level.
+ *
+ * Silent in a production build. The trail exists to explain why a correction was
+ * discarded while someone is working on the alignment, and that audience is always
+ * running a development build. In production it was noise in the console of a user
+ * who cannot act on it.
+ */
 function debug(message: string, detail?: unknown): void {
+  if (environment.production) {
+    return;
+  }
   if (detail !== undefined) {
     console.info(`[fiducial] ${message}`, detail);
   } else {

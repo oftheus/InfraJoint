@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
 from dataclasses import replace
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from typing import Any
 from uuid import UUID, uuid4
 
@@ -34,6 +34,7 @@ from app.domain.entities import (
 from app.domain.errors import DuplicatePatientError, ForbiddenError, NotFoundError
 
 NOW = datetime(2026, 8, 9, 12, 0, tzinfo=UTC)
+NASCIMENTO = date(1970, 1, 1)
 
 
 def _patient(owner: UUID, name: str = "Ana") -> Patient:
@@ -41,7 +42,7 @@ def _patient(owner: UUID, name: str = "Ana") -> Patient:
         id=uuid4(),
         owner_id=owner,
         full_name=name,
-        birth_date=None,
+        birth_date=NASCIMENTO,
         sex=None,
         phone=None,
         primary_diagnosis=None,
@@ -110,7 +111,6 @@ class FakeEncounterRepository:
             owner_id=uuid4(),
             occurred_at=data.occurred_at or NOW,
             reason=data.reason,
-            clinical_notes=data.clinical_notes,
             joint_evaluations=data.joint_evaluations,
             scores=data.scores or {},
             analysis_status=None,
@@ -128,7 +128,9 @@ LEITOR = AuthenticatedUser(id=uuid4(), role=UserRole.USER)
 @pytest.mark.parametrize("user", [MEDICO, ADMIN])
 async def test_clinico_cria_paciente(user: AuthenticatedUser) -> None:
     repo = FakePatientRepository()
-    patient = await CreatePatient(repo).execute(user, NewPatient(full_name="Ana"))
+    patient = await CreatePatient(repo).execute(
+        user, NewPatient(full_name="Ana", birth_date=NASCIMENTO)
+    )
     assert patient.full_name == "Ana"
 
 
@@ -138,7 +140,9 @@ async def test_homonimo_recusa_com_a_lista_de_quem_ja_existe() -> None:
     repo = FakePatientRepository([existente])
 
     with pytest.raises(DuplicatePatientError) as capturado:
-        await CreatePatient(repo).execute(MEDICO, NewPatient(full_name="  ana   souza "))
+        await CreatePatient(repo).execute(
+            MEDICO, NewPatient(full_name="  ana   souza ", birth_date=NASCIMENTO)
+        )
 
     assert [p.id for p in capturado.value.matches] == [existente.id]
     assert len(repo.by_id) == 1, "nada foi criado enquanto o médico não confirma"
@@ -149,7 +153,7 @@ async def test_homonimo_confirmado_e_criado() -> None:
     # recusa é o índice único do banco — não este caso de uso.
     repo = FakePatientRepository([_patient(MEDICO.id, "Ana Souza")])
     criado = await CreatePatient(repo).execute(
-        MEDICO, NewPatient(full_name="Ana Souza"), allow_duplicate=True
+        MEDICO, NewPatient(full_name="Ana Souza", birth_date=NASCIMENTO), allow_duplicate=True
     )
     assert criado.full_name == "Ana Souza"
     assert len(repo.by_id) == 2
@@ -158,7 +162,9 @@ async def test_homonimo_confirmado_e_criado() -> None:
 async def test_leitor_nao_cria_paciente() -> None:
     repo = FakePatientRepository()
     with pytest.raises(ForbiddenError):
-        await CreatePatient(repo).execute(LEITOR, NewPatient(full_name="Ana"))
+        await CreatePatient(repo).execute(
+            LEITOR, NewPatient(full_name="Ana", birth_date=NASCIMENTO)
+        )
     assert repo.by_id == {}, "nada deve ter chegado ao repositório"
 
 
@@ -167,6 +173,22 @@ async def test_leitor_nao_edita_paciente() -> None:
     repo = FakePatientRepository([existing])
     with pytest.raises(ForbiddenError):
         await UpdatePatient(repo).execute(LEITOR, existing.id, {"full_name": "Outro"})
+
+
+async def test_admin_nao_edita_paciente_de_outro_medico() -> None:
+    """Espelha `patients_update`: o admin administra o acervo, não escreve nele.
+
+    Ele ENXERGA o paciente alheio, então o 404 de invisibilidade não o pega — é esta
+    guarda que impede a edição virar erro de policy lá embaixo, e que devolve 403 em
+    vez de um 404 sobre um paciente que a listagem dele acabou de mostrar.
+    """
+    do_medico = _patient(MEDICO.id)
+    repo = FakePatientRepository([do_medico])
+
+    with pytest.raises(ForbiddenError):
+        await UpdatePatient(repo).execute(ADMIN, do_medico.id, {"phone": "11999"})
+
+    assert repo.by_id[do_medico.id].phone is None, "nada pode ter sido gravado"
 
 
 async def test_paciente_invisivel_vira_not_found() -> None:

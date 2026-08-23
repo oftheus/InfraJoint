@@ -12,7 +12,7 @@ from enum import StrEnum
 from typing import Any, Literal
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, ValidationInfo, field_validator
 
 from app.domain.entities import Encounter, Patient, Sex
 
@@ -24,7 +24,9 @@ class PatientCreate(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     full_name: str = Field(min_length=1, max_length=200)
-    birth_date: date | None = None
+    # Sem default: é obrigatória, e o cliente que a omitir recebe 422 em vez de criar
+    # um cadastro que nenhum homônimo futuro conseguirá distinguir.
+    birth_date: date
     sex: Sex | None = None
     phone: str | None = Field(default=None, max_length=40)
     primary_diagnosis: str | None = Field(default=None, max_length=300)
@@ -45,29 +47,37 @@ class PatientUpdate(BaseModel):
     phone: str | None = Field(default=None, max_length=40)
     primary_diagnosis: str | None = Field(default=None, max_length=300)
 
-    @field_validator("full_name")
+    @field_validator("full_name", "birth_date")
     @classmethod
-    def _nome_nao_pode_ser_apagado(cls, value: str | None) -> str | None:
-        """`min_length` só vale para `str`; sem isto, `null` explícito passaria.
+    def _obrigatorio_nao_pode_ser_apagado(
+        cls, value: str | date | None, info: ValidationInfo
+    ) -> str | date | None:
+        """Campo `not null` no banco não pode ser limpo por um `null` explícito.
 
-        Os outros quatro campos são nulos no banco, então enviar `null` neles significa
-        limpar o campo. `full_name` é `not null`: o `UPDATE` falharia no constraint e o
-        cliente receberia 500 por um erro que é dele.
+        Os outros três campos são nulos no banco, então enviar `null` neles significa
+        limpar o campo — que é o comportamento desejado. `full_name` e `birth_date` são
+        `not null`: sem esta guarda o `UPDATE` falharia no constraint e o cliente
+        receberia 500 por um erro que é dele. Para `full_name`, `min_length` sozinho não
+        resolve — ele só vale para `str`, e `null` passaria por baixo.
         """
         if value is None:
-            raise ValueError("full_name não pode ser nulo")
+            raise ValueError(f"{info.field_name} não pode ser nulo")
         return value
 
 
 class PatientOut(BaseModel):
     id: UUID
     full_name: str
-    birth_date: date | None
+    birth_date: date
     sex: Sex | None
     phone: str | None
     primary_diagnosis: str | None
     created_at: datetime
     updated_at: datetime
+    # O nome do médico dono, nunca o `owner_id`: a tela precisa saber de quem é a linha,
+    # e o id do tenant não interessa ao cliente. Nulo para quem não é admin — ver
+    # `app.owner_display_name()`.
+    owner_name: str | None = None
 
     @classmethod
     def from_entity(cls, patient: Patient) -> PatientOut:
@@ -80,6 +90,7 @@ class PatientOut(BaseModel):
             primary_diagnosis=patient.primary_diagnosis,
             created_at=patient.created_at,
             updated_at=patient.updated_at,
+            owner_name=patient.owner_name,
         )
 
 
@@ -142,10 +153,9 @@ class EncounterCreate(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     occurred_at: datetime | None = None
+    # `max_length` não é decorativo: o uvicorn não limita o tamanho do corpo, e um
+    # campo textual sem teto seria bufferizado em memória e gravado como veio.
     reason: str | None = Field(default=None, max_length=300)
-    # O uvicorn não limita o tamanho do corpo, e este era o único campo textual sem
-    # teto: um POST de centenas de MB seria bufferizado em memória e gravado.
-    clinical_notes: str | None = Field(default=None, max_length=20_000)
 
     # As duas etapas do fluxo de Análise Térmica são opcionais, então os dois campos
     # também são: cabe consulta sem body map, e body map sem escore fechado (o DAS28
@@ -192,7 +202,6 @@ class EncounterOut(BaseModel):
     patient_id: UUID
     occurred_at: datetime
     reason: str | None
-    clinical_notes: str | None
     # Devolvidos como vieram do banco: é o que permite reabrir a consulta e ver os
     # mesmos dados. As chaves de `scores` saem minúsculas, como foram gravadas.
     joint_evaluations: dict[str, JointEvaluationIn] | None
@@ -210,7 +219,6 @@ class EncounterOut(BaseModel):
             patient_id=encounter.patient_id,
             occurred_at=encounter.occurred_at,
             reason=encounter.reason,
-            clinical_notes=encounter.clinical_notes,
             analysis_status=encounter.analysis_status.value if encounter.analysis_status else None,
             capture_count=encounter.capture_count,
             joint_evaluations=dict(encounter.joint_evaluations)

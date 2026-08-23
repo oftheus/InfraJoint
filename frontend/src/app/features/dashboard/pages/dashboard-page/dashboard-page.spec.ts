@@ -23,7 +23,7 @@ const PACIENTES = [
   {
     id: 'p1',
     full_name: 'Ana Souza',
-    birth_date: null,
+    birth_date: '1970-01-01',
     sex: null,
     phone: null,
     primary_diagnosis: 'Artrite reumatoide',
@@ -33,7 +33,7 @@ const PACIENTES = [
   {
     id: 'p2',
     full_name: 'Bruno Lima',
-    birth_date: null,
+    birth_date: '1970-01-01',
     sex: null,
     phone: null,
     primary_diagnosis: null,

@@ -115,8 +115,16 @@ class MarkAnalysisReady:
         if not user.is_clinician:
             raise ForbiddenError("apenas médicos e administradores gravam análises")
 
-        if await self.encounters.get(encounter_id) is None:
+        encounter = await self.encounters.get(encounter_id)
+        if encounter is None:
             raise NotFoundError("consulta não encontrada")
+
+        # Mesma guarda de CreateCaptures, e pelo mesmo motivo. A RLS já recusa a
+        # escrita, mas o 404 acima não pega o admin, que enxerga a consulta alheia:
+        # sem esta linha ele fecharia a análise de outro médico, ou receberia um 500
+        # vindo da policy no lugar do 403 que descreve o que aconteceu.
+        if encounter.owner_id != user.id:
+            raise ForbiddenError("apenas o médico responsável pela consulta fecha a análise")
 
         gravadas = await self.captures.list_for_encounter(encounter_id)
         if not gravadas:

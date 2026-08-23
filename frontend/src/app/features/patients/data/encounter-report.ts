@@ -79,20 +79,15 @@ function data(iso: string): string {
 }
 
 /**
- * O rótulo do catálogo, sem travessão.
+ * O rótulo do catálogo, com o id cru como último recurso.
  *
- * `JOINT_BY_ID` traz as articulações da mão como `MCP 3 — Mão direita`, e o catálogo
- * é compartilhado com o body map: reescrevê-lo mudaria a tela junto. A conversão fica
- * aqui, onde vale só para o documento. As demais articulações já vêm sem travessão
- * (`Joelho direito`) e passam intactas.
+ * O catálogo já guarda `MCP 3 (mão direita)`, então não há mais conversão a fazer.
+ * Houve: ele guardava o lado depois de um travessão, e este módulo o reescrevia só
+ * para o documento. O travessão saiu do catálogo, que é onde ele incomodava a tela
+ * também, e sobrou a busca com fallback.
  */
 export function rotuloArticulacao(id: string): string {
-  const definicao = JOINT_BY_ID.get(id as JointId);
-  if (!definicao) {
-    return id;
-  }
-  const [nome, lado] = definicao.label.split(' — ');
-  return lado ? `${nome} (${lado.toLowerCase()})` : definicao.label;
+  return JOINT_BY_ID.get(id as JointId)?.label ?? id;
 }
 
 const SEXO: Record<string, string> = {
@@ -676,13 +671,6 @@ function termografia(detail: EncounterDetail, recursos: RecursosDoRelatorio): Co
   return blocos;
 }
 
-function notas(detail: EncounterDetail): Content[] {
-  if (!detail.clinical_notes) {
-    return [];
-  }
-  return [titulo('Notas clínicas'), { text: detail.clinical_notes }];
-}
-
 // --- O documento ------------------------------------------------------------
 
 /** Nome do arquivo: paciente e data, para o download não virar `consulta (3).pdf`. */
@@ -758,7 +746,6 @@ export function montarRelatorio(
       ...resumoClinico(detail),
       ...avaliacaoArticular(detail),
       ...termografia(detail, recursos),
-      ...notas(detail),
     ],
   };
 }

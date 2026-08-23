@@ -80,7 +80,6 @@ function consulta(partial: Partial<EncounterDetail> = {}): EncounterDetail {
     patient: paciente,
     occurred_at: '2026-08-15T12:00:00Z',
     reason: 'Retorno',
-    clinical_notes: null,
     joint_evaluations: null,
     scores: {},
     analysis_status: null,
@@ -446,7 +445,7 @@ describe('montarRelatorio', () => {
     const texto = textoDe(
       montarRelatorio(
         consulta({
-          // `MCP 2 — Mão direita` é como o catálogo compartilhado guarda o rótulo.
+          // O catálogo compartilhado guarda o rótulo já como `MCP 2 (mão direita)`.
           joint_evaluations: { RIGHT_MCP_2: { pain: true, swelling: false } },
           analysis_status: 'ready',
           capture_count: 1,
@@ -487,7 +486,6 @@ describe('o pdfmake aceita a definição', () => {
   }
 
   const completa = consulta({
-    clinical_notes: 'Refere rigidez matinal de ~40 min.',
     joint_evaluations: { LEFT_WRIST: { pain: true, swelling: false } },
     scores: {
       cdai: {
