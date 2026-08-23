@@ -55,9 +55,9 @@ select set_config('request.jwt.claims',
   '{"sub":"aaaaaaaa-0000-0000-0000-000000000001","role":"authenticated"}', true);
 
 -- owner_id vai de propósito com o uuid do médico B: o trigger tem que descartar.
-insert into public.patients (id, owner_id, full_name)
+insert into public.patients (id, owner_id, full_name, birth_date)
 values ('11111111-aaaa-0000-0000-000000000001',
-        'bbbbbbbb-0000-0000-0000-000000000002', 'RLS-TEST paciente de A');
+        'bbbbbbbb-0000-0000-0000-000000000002', 'RLS-TEST paciente de A', '1970-01-01');
 
 insert into public.encounters (id, patient_id, owner_id, reason)
 values ('22222222-aaaa-0000-0000-000000000001',
@@ -96,7 +96,8 @@ begin
   select count(*) into n from public.patients where full_name like 'RLS-TEST%';
   assert n = 0, format('B deveria ver 0 pacientes de A, viu %s', n);
 
-  select count(*) into n from public.encounters;
+  select count(*) into n from public.encounters
+   where patient_id in (select id from public.patients where full_name like 'RLS-TEST%');
   assert n = 0, format('B deveria ver 0 consultas, viu %s', n);
 
   -- Buscar pelo id exato também não revela nada: é isso que vira 404 na API.
@@ -130,7 +131,8 @@ select set_config('request.jwt.claims',
 do $$
 begin
   begin
-    insert into public.patients (full_name) values ('RLS-TEST paciente do leitor');
+    insert into public.patients (full_name, birth_date)
+    values ('RLS-TEST paciente do leitor', '1970-01-01');
     raise exception 'FALHA: leitor criou paciente';
   exception when insufficient_privilege then
     null;  -- WITH CHECK exige role medico/admin
@@ -145,7 +147,8 @@ begin;
 set local role authenticated;
 select set_config('request.jwt.claims',
   '{"sub":"bbbbbbbb-0000-0000-0000-000000000002","role":"authenticated"}', true);
-insert into public.patients (full_name) values ('RLS-TEST paciente de B');
+insert into public.patients (full_name, birth_date)
+values ('RLS-TEST paciente de B', '1970-01-01');
 
 do $$
 declare n int;
@@ -169,7 +172,12 @@ begin
   select count(*) into n from public.patients where full_name like 'RLS-TEST%';
   assert n = 2, format('admin deveria ver os 2 pacientes, viu %s', n);
 
-  select count(*) into n from public.encounters;
+  -- Recortado por RLS-TEST, como toda asserção deste script. Contando a tabela
+  -- inteira, o teste passava só em banco recém-resetado: qualquer consulta criada
+  -- pelo navegador (ou pela suíte de pytest) o fazia abortar aqui, com uma mensagem
+  -- que parecia falha de isolamento. E abortando, a limpeza do fim não rodava.
+  select count(*) into n from public.encounters
+   where patient_id in (select id from public.patients where full_name like 'RLS-TEST%');
   assert n = 1, format('admin deveria ver a consulta de A, viu %s', n);
 end $$;
 commit;
@@ -212,6 +220,56 @@ end $$;
 commit;
 
 -- ─────────────────────────────────────────────────────────────────────────────
+\echo '5c. Admin lê e APAGA paciente alheio, mas não o EDITA'
+-- ─────────────────────────────────────────────────────────────────────────────
+-- A regra completa, depois de `paciente_e_do_dono`: o admin administra o acervo e
+-- não assina no lugar de quem atendeu.
+--
+-- A assimetria entre apagar (pode) e editar (não pode) é deliberada, e o eixo não é
+-- o tamanho do estrago: é falsificação contra remoção. Um paciente apagado não
+-- engana ninguém, e o médico percebe que ele sumiu. Um cadastro editado passa a
+-- afirmar algo que o dono nunca escreveu, e sobrevive assim, em silêncio.
+--
+-- Este bloco roda ANTES do 6 de propósito: ele apaga o paciente que cria, então não
+-- deixa nada para os cenários seguintes.
+begin;
+set local role authenticated;
+select set_config('request.jwt.claims',
+  '{"sub":"bbbbbbbb-0000-0000-0000-000000000002","role":"authenticated"}', true);
+insert into public.patients (id, full_name, birth_date)
+values ('11111111-cccc-0000-0000-000000000003', 'RLS-TEST alvo do admin', '1970-01-01');
+commit;
+
+begin;
+set local role authenticated;
+select set_config('request.jwt.claims',
+  '{"sub":"dddddddd-0000-0000-0000-000000000004","role":"authenticated"}', true);
+do $$
+declare n int;
+begin
+  select count(*) into n from public.patients
+   where id = '11111111-cccc-0000-0000-000000000003';
+  assert n = 1, 'admin deveria LER o paciente de B';
+
+  -- Editar: recusado. `patients_update` exige owner_id = auth.uid(), e um UPDATE que
+  -- não casa a policy simplesmente não acha linha — não levanta erro.
+  update public.patients set full_name = 'RLS-TEST renomeado pelo admin'
+   where id = '11111111-cccc-0000-0000-000000000003';
+  assert not found, 'FALHA: admin editou o cadastro do paciente de B';
+
+  -- E o nome continua o que o dono escreveu.
+  select count(*) into n from public.patients
+   where id = '11111111-cccc-0000-0000-000000000003'
+     and full_name = 'RLS-TEST alvo do admin';
+  assert n = 1, 'FALHA: o nome do paciente de B mudou';
+
+  -- Apagar: permitido. `patients_delete` mantém can_access.
+  delete from public.patients where id = '11111111-cccc-0000-0000-000000000003';
+  assert found, 'FALHA: admin não conseguiu apagar o paciente de B';
+end $$;
+commit;
+
+-- ─────────────────────────────────────────────────────────────────────────────
 \echo '6. A não consegue reparentar a própria consulta para o paciente de B'
 -- ─────────────────────────────────────────────────────────────────────────────
 -- Regressão: com o trigger só em BEFORE INSERT, este UPDATE passava. O owner_id
@@ -222,8 +280,8 @@ begin;
 set local role authenticated;
 select set_config('request.jwt.claims',
   '{"sub":"bbbbbbbb-0000-0000-0000-000000000002","role":"authenticated"}', true);
-insert into public.patients (id, full_name)
-values ('11111111-bbbb-0000-0000-000000000002', 'RLS-TEST paciente de B2');
+insert into public.patients (id, full_name, birth_date)
+values ('11111111-bbbb-0000-0000-000000000002', 'RLS-TEST paciente de B2', '1970-01-01');
 commit;
 
 begin;

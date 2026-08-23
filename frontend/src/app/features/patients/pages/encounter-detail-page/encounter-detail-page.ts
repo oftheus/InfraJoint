@@ -11,7 +11,9 @@ import { DatePipe } from '@angular/common';
 import { Router, RouterLink } from '@angular/router';
 import { LucideDynamicIcon } from '@lucide/angular';
 
+import { AuthService } from '../../../../core/auth/auth.service';
 import { messageFromError } from '../../data/api-error';
+import { EncounterReportService } from '../../data/encounter-report.service';
 import { analysisBadgeOf, jointSummaryOf, scoresOf } from '../../data/encounter-summary';
 import { EncounterDetail } from '../../data/patient.model';
 import { PatientsService } from '../../data/patients.service';
@@ -41,12 +43,15 @@ export class EncounterDetailPage {
 
   private readonly patients = inject(PatientsService);
   private readonly router = inject(Router);
+  private readonly report = inject(EncounterReportService);
+  private readonly auth = inject(AuthService);
 
   protected readonly detail = signal<EncounterDetail | null>(null);
   protected readonly loading = signal(true);
   protected readonly error = signal<string | null>(null);
   protected readonly confirmingDelete = signal(false);
   protected readonly deleting = signal(false);
+  protected readonly exporting = signal(false);
 
   protected readonly scores = computed(() => {
     const encounter = this.detail();
@@ -72,6 +77,35 @@ export class EncounterDetailPage {
 
   constructor() {
     effect(() => this.load(this.encounterId()));
+  }
+
+  /**
+   * Exporta a consulta como PDF.
+   *
+   * O relatório sai do que já está em `detail()` — nada é buscado de novo. As URLs
+   * das imagens vieram assinadas com o `GET /encounters/{id}` e valem 15 minutos;
+   * uma consulta aberta há mais tempo que isso simplesmente gera o relatório sem
+   * foto, e é por isso que o serviço trata imagem ausente como caso normal.
+   */
+  protected async exportPdf(): Promise<void> {
+    const consulta = this.detail();
+    if (!consulta || this.exporting()) {
+      return;
+    }
+    this.exporting.set(true);
+    this.error.set(null);
+    try {
+      await this.report.download(consulta, this.auth.profile()?.full_name ?? null);
+    } catch (cause: unknown) {
+      // Não passa por `messageFromError`: aquele helper traduz falha de HTTP, e aqui
+      // não há requisição — o PDF é montado inteiro no navegador. Mandar um erro de
+      // runtime por ele devolvia "Não foi possível completar a operação", que não diz
+      // o que houve nem o que fazer.
+      console.error('Falha ao gerar o relatório PDF', cause);
+      this.error.set('Não foi possível gerar o relatório PDF. Tente novamente.');
+    } finally {
+      this.exporting.set(false);
+    }
   }
 
   protected toggleConfirmDelete(): void {

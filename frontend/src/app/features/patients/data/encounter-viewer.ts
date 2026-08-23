@@ -24,9 +24,22 @@ const THUMBNAIL_WIDTH = 96;
 /** Matriz vazia para capturas cujo CSV não voltou: o analisador trata width 0. */
 const MATRIZ_VAZIA: ThermalMatrix = { width: 0, height: 0, values: new Float64Array(0) };
 
+/**
+ * Baixa um objeto do bucket, ou lança.
+ *
+ * A checagem de `ok` não é zelo genérico. Uma URL assinada expirada devolve **200 de
+ * protocolo nenhum**: o R2 responde 403 com um XML de erro no corpo. Sem esta guarda
+ * esse XML virava um `File` com `type: 'text/csv'` e seguia para `parseThermalCsv`,
+ * que devolvia uma matriz de lixo sem erro nenhum. A consulta reaberta mostrava
+ * temperaturas inventadas onde deveria mostrar as do dia do exame, que é o caso exato
+ * que esta tela existe para impedir.
+ */
 async function baixarArquivo(url: string, nome: string, tipo: string): Promise<File> {
-  const blob = await (await fetch(url)).blob();
-  return new File([blob], nome, { type: tipo });
+  const resposta = await fetch(url);
+  if (!resposta.ok) {
+    throw new Error(`Falha ao baixar ${nome} do armazenamento (HTTP ${resposta.status}).`);
+  }
+  return new File([await resposta.blob()], nome, { type: tipo });
 }
 
 /**

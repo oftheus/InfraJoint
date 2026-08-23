@@ -30,14 +30,14 @@ function handJoints(side: BodySide): JointDefinition[] {
   for (let digit = 1; digit <= 5; digit++) {
     joints.push({
       id: `${prefix}_MCP_${digit}` as JointId,
-      label: `MCP ${digit} — Mão ${handWord}`,
+      label: `MCP ${digit} (mão ${handWord})`,
       shortLabel: `MCP ${digit}`,
       side,
       group: 'mcp',
     });
     joints.push({
       id: `${prefix}_PIP_${digit}` as JointId,
-      label: `IFP/PIP ${digit} — Mão ${handWord}`,
+      label: `IFP/PIP ${digit} (mão ${handWord})`,
       shortLabel: `IFP ${digit}`,
       side,
       group: 'pip',

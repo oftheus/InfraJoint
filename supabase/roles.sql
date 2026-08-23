@@ -3,9 +3,9 @@
 -- Este arquivo é carregado pelo `supabase db reset` ("Seeding globals from roles.sql"),
 -- antes das migrations, e vale SOMENTE para o ambiente local.
 --
--- No projeto hospedado o mesmo role é criado manualmente, com senha forte gerada
--- (Passo 0.4 do PLANO-EXECUCAO.md). A senha abaixo é de desenvolvimento local,
--- onde o Postgres só escuta em 127.0.0.1:54322.
+-- No projeto hospedado o mesmo role é criado manualmente, com senha forte gerada.
+-- A senha abaixo é de desenvolvimento local, onde o Postgres só escuta em
+-- 127.0.0.1:54322.
 
 do $$
 begin

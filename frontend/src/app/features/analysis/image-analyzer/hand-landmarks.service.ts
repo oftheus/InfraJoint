@@ -1,8 +1,46 @@
 import { Injectable } from '@angular/core';
 
-import { DetectedHand, Point } from './image-analyzer.model';
+import { DetectedHand, HandSide, Point } from './image-analyzer.model';
 
 type HandLandmarker = import('@mediapipe/tasks-vision').HandLandmarker;
+
+/**
+ * Which hand is which, decided by where each one sits in the frame.
+ *
+ * **Not by MediaPipe's handedness classifier**, which was the previous rule and
+ * is a probability: on session V054 it scored the left-of-frame hand between
+ * 0.51 and 0.81, so the label flipped from capture to capture, and on three of
+ * the 21 it labelled *both* hands the same. That collapse is not a harmless
+ * mislabel — `captureJointRois` keys ROIs by side, so one side goes missing
+ * (a hole in the curve) while the other silently takes whichever hand came
+ * first in MediaPipe's array. A wrong temperature drawn as if it were right.
+ *
+ * The rig is fixed: the camera faces the volunteer, so the hand on the left of
+ * the frame is their **right** hand. Position is exact where the classifier was
+ * a coin flip near 0.5 — across V054 and V031 (42 captures) this rule matches
+ * the classifier on all 39 it decided confidently, and resolves the 3 it broke.
+ *
+ * With a single hand detected there is nothing to order against, so the frame's
+ * midpoint decides; the hands sit at x ≈ 0.13 and x ≈ 0.86 of the width, which
+ * leaves the margin enormous.
+ *
+ * Takes the at most two hands `numHands: 2` allows. Naming a third would have to
+ * repeat a side, which is the very failure this replaced.
+ */
+export function sidesByPosition(
+  wristXs: readonly number[],
+  imageWidth: number,
+): HandSide[] {
+  if (wristXs.length === 1) {
+    return [wristXs[0] < imageWidth / 2 ? 'Direita' : 'Esquerda'];
+  }
+  const byX = wristXs.map((_, i) => i).sort((a, b) => wristXs[a] - wristXs[b]);
+  const sides: HandSide[] = [];
+  byX.forEach((index, rank) => {
+    sides[index] = rank === 0 ? 'Direita' : 'Esquerda';
+  });
+  return sides;
+}
 
 /**
  * Thin wrapper around MediaPipe's HandLandmarker (the same model used by
@@ -22,12 +60,16 @@ export class HandLandmarksService {
     const width = image.naturalWidth;
     const height = image.naturalHeight;
 
-    return result.landmarks.map((landmarks, i) => ({
-      // MediaPipe labels the person's actual hand ('Left'/'Right'), the same
-      // convention core.py relies on.
-      side: result.handednesses[i]?.[0]?.categoryName === 'Left' ? 'Esquerda' : 'Direita',
-      landmarks: landmarks.map((p): Point => ({ x: p.x * width, y: p.y * height })),
-    }));
+    const hands = result.landmarks.map((landmarks) =>
+      landmarks.map((p): Point => ({ x: p.x * width, y: p.y * height })),
+    );
+    // Landmark 0 is the wrist. `handednesses` is deliberately unused — see
+    // `sidesByPosition`.
+    const sides = sidesByPosition(
+      hands.map((landmarks) => landmarks[0]?.x ?? 0),
+      width,
+    );
+    return hands.map((landmarks, i) => ({ side: sides[i], landmarks }));
   }
 
   private ensureLandmarker(): Promise<HandLandmarker> {

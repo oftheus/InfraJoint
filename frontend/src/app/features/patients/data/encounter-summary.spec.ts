@@ -7,7 +7,6 @@ function encounter(partial: Partial<Encounter> = {}): Encounter {
     patient_id: 'p1',
     occurred_at: '2026-08-15T12:00:00Z',
     reason: null,
-    clinical_notes: null,
     joint_evaluations: null,
     scores: {},
     analysis_status: null,

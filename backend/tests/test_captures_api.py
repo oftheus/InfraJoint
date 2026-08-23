@@ -13,6 +13,10 @@ from typing import Any
 from app.domain.entities import CaptureFile
 from tests.conftest import LEITOR, MEDICO_A, MEDICO_B
 
+# `birth_date` é obrigatória desde a migration `birth_date_obrigatoria`; aqui ela é só
+# preenchimento, porque nenhum destes testes é sobre o cadastro do paciente.
+_NASCIMENTO = "1970-01-01"
+
 
 class FakeStorage:
     """Guarda as chaves que 'existem'. `presign_put` devolve a própria chave."""
@@ -64,7 +68,7 @@ def _captura(indice: int, *, phase: str | None = None) -> dict[str, Any]:
 
 
 async def _consulta_de(http: Any, nome: str) -> str:
-    paciente = await http.post("/patients", json={"full_name": nome})
+    paciente = await http.post("/patients", json={"full_name": nome, "birth_date": _NASCIMENTO})
     assert paciente.status_code == 201, paciente.text
     consulta = await http.post(f"/patients/{paciente.json()['id']}/encounters", json={})
     assert consulta.status_code == 201, consulta.text
@@ -168,7 +172,9 @@ async def test_analise_aparece_na_leitura_do_paciente(client_com_storage: tuple)
     http, acting, storage = client_com_storage
     acting["user_id"] = MEDICO_A
 
-    paciente = await http.post("/patients", json={"full_name": "API-TEST leitura"})
+    paciente = await http.post(
+        "/patients", json={"full_name": "API-TEST leitura", "birth_date": _NASCIMENTO}
+    )
     pid = paciente.json()["id"]
     eid = (await http.post(f"/patients/{pid}/encounters", json={})).json()["id"]
 
@@ -200,7 +206,9 @@ async def test_capturas_de_outro_medico_nao_entram_na_contagem(
     http, acting, _ = client_com_storage
     acting["user_id"] = MEDICO_A
 
-    paciente = await http.post("/patients", json={"full_name": "API-TEST contagem"})
+    paciente = await http.post(
+        "/patients", json={"full_name": "API-TEST contagem", "birth_date": _NASCIMENTO}
+    )
     pid = paciente.json()["id"]
     eid = (await http.post(f"/patients/{pid}/encounters", json={})).json()["id"]
     await http.post(f"/encounters/{eid}/captures", json={"captures": [_captura(0)]})
@@ -232,6 +240,33 @@ async def test_admin_nao_grava_analise_na_consulta_de_outro(client_com_storage: 
     assert negado.status_code == 403, negado.text
     # A consulta continua visível para ele — é autoria que falta, não acesso.
     assert (await http.get(f"/encounters/{eid}")).status_code == 200
+
+
+async def test_admin_nao_fecha_analise_da_consulta_de_outro(client_com_storage: tuple) -> None:
+    """Fechar a análise segue a mesma autoria de gravá-la.
+
+    Sem a guarda de dono, o admin passava direto pelo 404 (ele enxerga a consulta
+    alheia) e batia na policy de escrita, que devolve 500 no lugar de um 403 que
+    explica o que faltou.
+    """
+    from tests.conftest import ADMIN
+
+    http, acting, storage = client_com_storage
+    acting["user_id"] = MEDICO_A
+    eid = await _consulta_de(http, "API-TEST ready de A")
+
+    assert (
+        await http.post(f"/encounters/{eid}/captures", json={"captures": [_captura(0)]})
+    ).status_code == 201
+    storage.existentes.update(storage.assinadas)
+
+    acting["user_id"] = ADMIN
+    negado = await http.patch(f"/encounters/{eid}/analysis-status")
+    assert negado.status_code == 403, negado.text
+
+    # E o dono continua fechando normalmente.
+    acting["user_id"] = MEDICO_A
+    assert (await http.patch(f"/encounters/{eid}/analysis-status")).status_code == 204
 
 
 async def test_leitor_recebe_403(client_com_storage: tuple) -> None:
@@ -272,7 +307,9 @@ async def test_apagar_paciente_limpa_os_arquivos_do_bucket(client_com_storage: t
     http, acting, storage = client_com_storage
     acting["user_id"] = MEDICO_A
 
-    paciente = await http.post("/patients", json={"full_name": "API-TEST exclusão"})
+    paciente = await http.post(
+        "/patients", json={"full_name": "API-TEST exclusão", "birth_date": _NASCIMENTO}
+    )
     pid = paciente.json()["id"]
     eid = (await http.post(f"/patients/{pid}/encounters", json={})).json()["id"]
     await http.post(f"/encounters/{eid}/captures", json={"captures": [_captura(0), _captura(1)]})
@@ -291,7 +328,9 @@ async def test_apagar_paciente_sem_analise_nao_chama_o_bucket(client_com_storage
     http, acting, storage = client_com_storage
     acting["user_id"] = MEDICO_A
 
-    paciente = await http.post("/patients", json={"full_name": "API-TEST sem análise"})
+    paciente = await http.post(
+        "/patients", json={"full_name": "API-TEST sem análise", "birth_date": _NASCIMENTO}
+    )
     await http.post(f"/patients/{paciente.json()['id']}/encounters", json={})
 
     assert (await http.delete(f"/patients/{paciente.json()['id']}")).status_code == 204
@@ -307,7 +346,9 @@ async def test_apagar_consulta_limpa_so_os_arquivos_dela(client_com_storage: tup
     http, acting, storage = client_com_storage
     acting["user_id"] = MEDICO_A
 
-    paciente = await http.post("/patients", json={"full_name": "API-TEST exclusão consulta"})
+    paciente = await http.post(
+        "/patients", json={"full_name": "API-TEST exclusão consulta", "birth_date": _NASCIMENTO}
+    )
     pid = paciente.json()["id"]
     alvo = (await http.post(f"/patients/{pid}/encounters", json={})).json()["id"]
     await http.post(f"/encounters/{alvo}/captures", json={"captures": [_captura(0), _captura(1)]})
@@ -371,7 +412,9 @@ async def test_apagar_paciente_funciona_sem_r2_configurado(client: tuple) -> Non
     http, acting = client
     acting["user_id"] = MEDICO_A
 
-    paciente = await http.post("/patients", json={"full_name": "API-TEST sem R2"})
+    paciente = await http.post(
+        "/patients", json={"full_name": "API-TEST sem R2", "birth_date": _NASCIMENTO}
+    )
     assert (await http.delete(f"/patients/{paciente.json()['id']}")).status_code == 204
 
 
@@ -380,7 +423,9 @@ async def test_reabrir_consulta_devolve_tudo_identico(client_com_storage: tuple)
     http, acting, storage = client_com_storage
     acting["user_id"] = MEDICO_A
 
-    paciente = await http.post("/patients", json={"full_name": "API-TEST reabrir", "sex": "F"})
+    paciente = await http.post(
+        "/patients", json={"full_name": "API-TEST reabrir", "sex": "F", "birth_date": _NASCIMENTO}
+    )
     pid = paciente.json()["id"]
     criada = await http.post(
         f"/patients/{pid}/encounters",

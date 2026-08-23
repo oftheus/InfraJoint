@@ -50,7 +50,7 @@
           <!--
             Só na tela solta. Embutido, "Nova análise" não quer dizer nada: no fluxo
             de Análise Térmica a análise é *desta* consulta, e voltar para a tela de
-            upload trocaria os arquivos que estão prestes a ser gravados; na consulta
+            upload trocaria os arquivos que estão prestes a ser gravados. Na consulta
             reaberta, pediria arquivos para uma análise que já aconteceu.
           -->
           @if (!embedded()) {
@@ -151,7 +151,7 @@
                   (input)="onAlphaInput($event)"
                   class="mt-1.5 w-full accent-accent"
                   aria-label="Opacidade da camada térmica"
-                  title="0% mostra só a foto óptica; 100% mostra só a imagem térmica"
+                  title="0% mostra só a foto óptica, 100% mostra só a imagem térmica"
                 />
               </div>
             </div>
@@ -513,7 +513,7 @@
                   <p class="mt-2 text-xs text-muted">
                     Aplica-se às ROIs não ajustadas. Clique em uma ROI articular (na imagem ou na
                     tabela) para selecioná-la e arraste para movê-la ou use a alça do canto para
-                    redimensioná-la; as setas movem, +/− redimensionam e Delete restaura a ROI.
+                    redimensioná-la. As setas movem, +/− redimensionam e Delete restaura a ROI.
                   </p>
 
                   <div class="mt-4">
@@ -647,8 +647,7 @@
               <div class="flex flex-wrap items-center justify-between gap-3">
                 <h2 class="text-lg font-semibold text-primary">Curva de Reaquecimento</h2>
                 <p class="text-xs text-muted">
-                  Baseline em t₀ = 0 · linha tracejada = temperatura basal · clique na curva para
-                  ir à captura
+                  Só capturas dinâmicas · clique na curva para ir à captura
                 </p>
               </div>
 
@@ -704,10 +703,23 @@
                   (timeSelected)="onCurveTimeSelected($event)"
                 />
               </div>
+              @if (activeSequenceCapture()?.kind === 'baseline') {
+                <p class="mt-3 rounded-xl bg-slate-50 px-3 py-2 text-xs text-muted">
+                  A captura <strong class="font-medium text-primary">Base</strong> está
+                  selecionada, e ela não aparece nesta curva: foi registrada antes do
+                  resfriamento, fora do eixo de tempo. As temperaturas dela estão na aba
+                  <strong class="font-medium text-primary">Imagem</strong>.
+                </p>
+              }
               <p class="mt-3 text-xs text-muted">
-                Cada ponto é a estatística da ROI articular naquela captura, com as ROIs
-                reposicionadas pelos landmarks de cada imagem. Capturas com falha de
-                alinhamento/detecção aparecem como lacunas.
+                Cada ponto é uma captura dinâmica, com as ROIs reposicionadas pelos
+                landmarks de cada imagem: a cor indica a mão, e o tracejado, a articulação.
+                Falhas de alinhamento ou detecção aparecem como lacunas. O eixo conta a
+                partir do fim do resfriamento e começa na primeira captura dinâmica, porque
+                a câmera só dispara {{ sequenceService.intervalSeconds() }} s depois que os
+                ventiladores param: não existe captura em 0:00. A basal fica de fora, por
+                ser registrada antes do resfriamento. As temperaturas dela estão na aba
+                Imagem, com a captura Base selecionada.
               </p>
             </div>
           } @else {
@@ -965,7 +977,7 @@
                 @if (ignoreBackground()) {
                   Com <strong class="font-medium text-primary">Ignorar fundo</strong> ativo, células
                   cuja posição correspondente na foto óptica não é pele (fundo) são descartadas da
-                  estatística; dedos frios continuam contando, pois o critério é a cor, não a
+                  estatística. Dedos frios continuam contando, pois o critério é a cor, não a
                   temperatura.
                 } @else {
                   <strong class="font-medium text-primary">Ignorar fundo</strong> está desativado:
@@ -1001,6 +1013,20 @@
         </section>
 
       </div>
+
+      <!--
+        Algoritmos: aplica uma análise sobre as medições já produzidas. Nada é
+        gravado aqui, esta tela é ferramenta aberta e continua sem caminho até a API.
+
+        Some apenas onde outra tela é dona do painel: no fluxo de Análise Térmica,
+        onde ele é a etapa 4. Na consulta reaberta, que embute esta página sem
+        etapas, ele continua aqui.
+      -->
+      @if (showAlgorithms()) {
+        <div class="mt-6">
+          <app-algorithm-panel [algorithmInput]="algorithmInput()" />
+        </div>
+      }
     </div>
   } @else if (fromSaved()) {
     <!--
@@ -1288,8 +1314,8 @@ Nenhuma imagem ou dado é enviado para servidores.
               <h3 class="font-semibold text-primary">3. ROIs manuais</h3>
               <p class="mt-0.5 text-muted">
                 Escolha o formato (círculo ou elipse) e <strong class="text-primary">arraste</strong>
-                sobre a imagem para desenhar. Clique em uma ROI para selecioná-la; arraste-a para
-                mover e use a alça do canto para redimensionar. Com uma ROI selecionada:
+                sobre a imagem para desenhar. Clique em uma ROI para selecioná-la, arraste-a para
+                mover e use a alça do canto para redimensionar. Com uma ROI selecionada,
                 <strong class="text-primary">setas</strong> movem, <strong class="text-primary">+/−</strong>
                 redimensionam e <strong class="text-primary">Delete</strong> remove.
               </p>
@@ -1335,11 +1361,11 @@ Nenhuma imagem ou dado é enviado para servidores.
               <p class="mt-0.5 text-muted">
                 Na tela inicial, escolha <strong class="text-primary">Sequência temporal</strong> e
                 importe a pasta da sessão (baseline Est + capturas Din). Cada captura é alinhada e
-                tem as articulações re-detectadas; navegue pela
+                tem as articulações re-detectadas. Navegue pela
                 <strong class="text-primary">linha do tempo</strong> (▶, setas, miniaturas) e abra a
                 <strong class="text-primary">Curva de Reaquecimento</strong> para acompanhar a
-                temperatura das articulações ao longo do tempo, com o repouso como referência
-                (linha tracejada).
+                temperatura das articulações ao longo do tempo. A curva traça as capturas
+                dinâmicas. A basal, anterior ao resfriamento, fica na aba Imagem.
               </p>
             </div>
           </section>

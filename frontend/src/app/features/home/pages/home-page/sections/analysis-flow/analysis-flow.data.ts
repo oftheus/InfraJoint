@@ -88,7 +88,7 @@ export const PROTOCOL_STEPS: readonly ProtocolStep[] = [
     capturePhases: [
       {
         title: 'Resfriamento (2 min)',
-        description: 'Ventiladores em velocidade máxima...',
+        description: 'Ventiladores em velocidade máxima, mãos descobertas.',
       },
       {
         title: 'Reaquecimento (5 min)',
@@ -99,7 +99,7 @@ export const PROTOCOL_STEPS: readonly ProtocolStep[] = [
       label: 'Captura dinâmica',
       phases: [
         { label: 'Resfriamento (2 min)', value: 29 },
-        { label: 'Reaquecimento — 20×15s (5 min)', value: 100 },
+        { label: 'Reaquecimento, 20×15s (5 min)', value: 100 },
       ],
     },
   },

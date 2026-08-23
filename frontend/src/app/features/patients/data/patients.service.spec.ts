@@ -38,20 +38,20 @@ describe('PatientsService', () => {
   });
 
   it('cria paciente com POST', () => {
-    service.create({ full_name: 'Ana' }).subscribe();
+    service.create({ full_name: 'Ana', birth_date: '1970-01-01' }).subscribe();
     const request = controller.expectOne(base);
     expect(request.request.method).toBe('POST');
-    expect(request.request.body).toEqual({ full_name: 'Ana' });
+    expect(request.request.body).toEqual({ full_name: 'Ana', birth_date: '1970-01-01' });
     request.flush({});
   });
 
   it('só manda allow_duplicate quando o médico confirma o homônimo', () => {
-    service.create({ full_name: 'Ana' }).subscribe();
+    service.create({ full_name: 'Ana', birth_date: '1970-01-01' }).subscribe();
     const primeira = controller.expectOne((request) => request.url === base);
     expect(primeira.request.params.has('allow_duplicate')).toBe(false);
     primeira.flush({});
 
-    service.create({ full_name: 'Ana' }, true).subscribe();
+    service.create({ full_name: 'Ana', birth_date: '1970-01-01' }, true).subscribe();
     const segunda = controller.expectOne((request) => request.url === base);
     expect(segunda.request.params.get('allow_duplicate')).toBe('true');
     segunda.flush({});

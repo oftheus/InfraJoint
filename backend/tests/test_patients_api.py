@@ -11,9 +11,14 @@ from typing import Any
 
 from tests.conftest import ADMIN, LEITOR, MEDICO_A, MEDICO_B
 
+# Data padrão dos pacientes de teste. `birth_date` é obrigatória desde a migration
+# `birth_date_obrigatoria`, e os testes que exercitam a duplicata passam uma data
+# própria para poderem ser a MESMA pessoa ou outra, conforme o caso.
+_NASCIMENTO = "1970-01-01"
 
-async def _criar_paciente(http: Any, nome: str) -> dict[str, Any]:
-    response = await http.post("/patients", json={"full_name": nome})
+
+async def _criar_paciente(http: Any, nome: str, birth_date: str = _NASCIMENTO) -> dict[str, Any]:
+    response = await http.post("/patients", json={"full_name": nome, "birth_date": birth_date})
     assert response.status_code == 201, response.text
     return response.json()
 
@@ -140,7 +145,9 @@ async def test_leitor_recebe_403_ao_criar_paciente(client: tuple[Any, dict]) -> 
     http, acting = client
     acting["user_id"] = LEITOR
 
-    response = await http.post("/patients", json={"full_name": "API-TEST do leitor"})
+    response = await http.post(
+        "/patients", json={"full_name": "API-TEST do leitor", "birth_date": _NASCIMENTO}
+    )
     assert response.status_code == 403
 
 
@@ -154,6 +161,81 @@ async def test_admin_enxerga_pacientes_dos_dois_medicos(client: tuple[Any, dict]
 
     acting["user_id"] = ADMIN
     assert await _nomes_de_teste(http) == ["API-TEST de A", "API-TEST de B"]
+
+
+async def test_so_o_admin_ve_de_quem_e_cada_paciente(client: tuple[Any, dict]) -> None:
+    """O admin enxerga a base dos dois médicos numa lista só — e pode apagar dela.
+
+    Sem saber de quem é a linha, apagar paciente alheio não é decisão, é acidente.
+    `owner_name` existe para isso, e só para o admin: um médico comum só vê os
+    próprios pacientes, então o campo diria o nome dele em toda linha.
+    """
+    http, acting = client
+
+    acting["user_id"] = MEDICO_A
+    de_a = await _criar_paciente(http, "API-TEST de A")
+    assert de_a["owner_name"] is None, "para o próprio médico o campo não tem o que dizer"
+
+    acting["user_id"] = ADMIN
+    listagem = await http.get("/patients")
+    donos = {
+        p["full_name"]: p["owner_name"]
+        for p in listagem.json()
+        if p["full_name"].startswith("API-TEST")
+    }
+    assert donos["API-TEST de A"], "o admin precisa ver de quem é o paciente"
+
+    # Preenchido significa exatamente uma coisa: **é de outro médico**. Nas linhas do
+    # próprio admin ele cala, porque ali o rótulo não decidiria nada — e é isso que
+    # deixa a tela esconder "Editar" só onde a policy vai recusar.
+    proprio = await _criar_paciente(http, "API-TEST do próprio admin")
+    assert proprio["owner_name"] is None
+    listagem_2 = await http.get("/patients")
+    do_admin = next(p for p in listagem_2.json() if p["full_name"] == "API-TEST do próprio admin")
+    assert do_admin["owner_name"] is None, "no que é dele, o campo não tem o que dizer"
+
+    # E o nome do médico nunca vaza pelo id do tenant, que continua fora da resposta.
+    assert "owner_id" not in listagem.json()[0]
+
+    # Também no detalhe, que é onde mora o botão de excluir.
+    detalhe = await http.get(f"/patients/{de_a['id']}")
+    assert detalhe.json()["owner_name"] == donos["API-TEST de A"]
+
+    # Para o outro médico, nem o paciente nem o dono existem.
+    acting["user_id"] = MEDICO_B
+    assert (await http.get(f"/patients/{de_a['id']}")).status_code == 404
+
+
+async def test_admin_apaga_paciente_alheio_mas_nao_o_edita(client: tuple[Any, dict]) -> None:
+    """A regra completa: o admin administra o acervo, não assina no lugar de quem atendeu.
+
+    A assimetria é deliberada e o eixo não é o tamanho do estrago, é falsificação
+    contra remoção: um paciente apagado não engana ninguém, e o médico percebe que ele
+    sumiu; um cadastro editado passa a afirmar algo que o dono nunca escreveu.
+
+    O 403 (e não 404) também é escolha: o admin ENXERGA o paciente, então esconder a
+    existência dele seria mentir. O que falta a ele é ser o responsável.
+    """
+    http, acting = client
+
+    acting["user_id"] = MEDICO_A
+    paciente = await _criar_paciente(http, "API-TEST alvo do admin")
+
+    acting["user_id"] = ADMIN
+    assert (await http.get(f"/patients/{paciente['id']}")).status_code == 200, "leitura continua"
+
+    recusado = await http.patch(f"/patients/{paciente['id']}", json={"phone": "11999999999"})
+    assert recusado.status_code == 403, recusado.text
+
+    # E nada foi gravado.
+    acting["user_id"] = MEDICO_A
+    assert (await http.get(f"/patients/{paciente['id']}")).json()["phone"] is None
+
+    # Apagar, sim.
+    acting["user_id"] = ADMIN
+    assert (await http.delete(f"/patients/{paciente['id']}")).status_code == 204
+    acting["user_id"] = MEDICO_A
+    assert (await http.get(f"/patients/{paciente['id']}")).status_code == 404
 
 
 async def test_consulta_criada_aparece_no_detalhe_do_paciente(client: tuple[Any, dict]) -> None:
@@ -190,7 +272,10 @@ async def test_limpar_campo_opcional_continua_valendo(client: tuple[Any, dict]) 
     http, acting = client
     acting["user_id"] = MEDICO_A
 
-    criado = await http.post("/patients", json={"full_name": "API-TEST Ana", "phone": "11999"})
+    criado = await http.post(
+        "/patients",
+        json={"full_name": "API-TEST Ana", "birth_date": _NASCIMENTO, "phone": "11999"},
+    )
     assert criado.status_code == 201
     paciente = criado.json()
     assert paciente["phone"] == "11999"
@@ -363,7 +448,9 @@ async def test_homonimo_recusa_com_a_lista_e_passa_na_confirmacao(
 
     # Acento, caixa e espaço não fazem pessoa nova — é o cadastro duplicado que mais
     # acontece, alguém redigitando quem já está lá.
-    conflito = await http.post("/patients", json={"full_name": "  api-test  aná   sóuza "})
+    conflito = await http.post(
+        "/patients", json={"full_name": "  api-test  aná   sóuza ", "birth_date": _NASCIMENTO}
+    )
     assert conflito.status_code == 409, conflito.text
     assert [p["id"] for p in conflito.json()["duplicates"]] == [existente["id"]]
 
@@ -387,19 +474,25 @@ async def test_mesmo_nome_e_mesma_data_o_banco_recusa(client: tuple[Any, dict]) 
     assert "data de nascimento" in negado.json()["detail"]
 
 
-async def test_dois_sem_data_de_nascimento_tambem_colidem(client: tuple[Any, dict]) -> None:
-    """NULLS NOT DISTINCT: 'sem data' colide com 'sem data'.
+async def test_paciente_sem_data_de_nascimento_vira_422(client: tuple[Any, dict]) -> None:
+    """Sem documento e sem prontuário, a data é o que separa dois homônimos.
 
-    Sem isso o índice deixaria passar justamente o par que ninguém consegue separar.
+    Substitui o antigo teste do NULLS NOT DISTINCT: enquanto a coluna era nula, o índice
+    precisava fazer 'sem data' colidir com 'sem data'. Tornando-a obrigatória, o par que
+    ninguém conseguia separar deixa de nascer — e a recusa passa a ser na borda, com
+    mensagem legível, em vez de no índice.
     """
     http, acting = client
     acting["user_id"] = MEDICO_A
-    await _criar_paciente(http, "API-TEST Sem Data")
 
-    negado = await http.post(
-        "/patients?allow_duplicate=true", json={"full_name": "API-TEST Sem Data"}
-    )
-    assert negado.status_code == 409, negado.text
+    negado = await http.post("/patients", json={"full_name": "API-TEST Sem Data"})
+    assert negado.status_code == 422, negado.text
+
+    # E nem pela edição ela pode ser apagada depois.
+    paciente = await _criar_paciente(http, "API-TEST Com Data")
+    apagar = await http.patch(f"/patients/{paciente['id']}", json={"birth_date": None})
+    assert apagar.status_code == 422, apagar.text
+    assert (await http.get(f"/patients/{paciente['id']}")).json()["birth_date"] == _NASCIMENTO
 
 
 async def test_homonimo_de_outro_medico_nao_atrapalha_nem_aparece(
@@ -411,7 +504,9 @@ async def test_homonimo_de_outro_medico_nao_atrapalha_nem_aparece(
     await _criar_paciente(http, "API-TEST Homônima")
 
     acting["user_id"] = MEDICO_B
-    criado = await http.post("/patients", json={"full_name": "API-TEST Homônima"})
+    criado = await http.post(
+        "/patients", json={"full_name": "API-TEST Homônima", "birth_date": _NASCIMENTO}
+    )
     assert criado.status_code == 201, "o paciente do outro médico não pode barrar este"
 
 
@@ -452,7 +547,12 @@ async def test_campo_desconhecido_vira_422(client: tuple[Any, dict]) -> None:
     acting["user_id"] = MEDICO_A
 
     response = await http.post(
-        "/patients", json={"full_name": "API-TEST", "owner_id": str(MEDICO_B)}
+        "/patients",
+        json={
+            "full_name": "API-TEST",
+            "birth_date": _NASCIMENTO,
+            "owner_id": str(MEDICO_B),
+        },
     )
     assert response.status_code == 422, "tentar definir o dono não pode passar em silêncio"
 

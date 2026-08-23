@@ -2,7 +2,7 @@
   <header>
     <h1 class="text-3xl font-bold tracking-tight text-primary sm:text-4xl">Análise Térmica</h1>
     <p class="mt-2 max-w-2xl text-base text-muted">
-      Avaliação completa atrelada a um paciente. As etapas clínicas são opcionais — o que for
+      Avaliação completa atrelada a um paciente. As etapas clínicas são opcionais, e o que for
       preenchido é gravado no histórico ao finalizar.
     </p>
   </header>
@@ -14,6 +14,7 @@
         { id: 'patient', label: '1. Paciente' },
         { id: 'body-map', label: '2. Mapa corporal' },
         { id: 'analyzer', label: '3. Analisador' },
+        { id: 'algorithms', label: '4. Algoritmo' },
       ];
       track item.id
     ) {
@@ -69,14 +70,24 @@
     carregamento do analisador nem do modelo de mãos.
 
     Já foi desmontado durante o envio, por suspeita de que a memória dele
-    atrapalhasse os uploads. Medido: não atrapalhava — o tempo somado dentro dos
+    atrapalhasse os uploads. Medido: não atrapalhava, o tempo somado dentro dos
     PUTs ficou igual (1602s contra 1616s). A lentidão era limitação de rede
     aplicada na aba do navegador. Como desmontar custava perder a sequência
     carregada quando o envio falha, voltou a ficar montado.
   -->
   @if (patient()) {
     <div [hidden]="step() !== 'analyzer'">
-      <app-image-analyzer-page [embedded]="true" />
+      <app-image-analyzer-page [embedded]="true" [showAlgorithms]="false" />
+    </div>
+
+    <!--
+      Etapa 4 fica montada pelo mesmo motivo da etapa 3: sair dela e voltar não pode
+      custar re-executar o algoritmo. O painel já limpa o resultado sozinho quando as
+      medições mudam. Ir ao analisador, mexer numa ROI e voltar mostra a tela limpa,
+      e não um achado de outras medições.
+    -->
+    <div [hidden]="step() !== 'algorithms'">
+      <app-algorithm-panel [algorithmInput]="algorithmInput()" />
     </div>
   }
 
@@ -90,30 +101,19 @@
       <label for="motivo" class="mt-4 block text-xs font-medium text-secondary">
         Motivo da consulta (opcional)
       </label>
+      <!-- Travado depois de gravar: o motivo foi junto com a consulta, e não há PATCH
+           que o atualize. Editável, o campo aceitaria um texto que seria descartado
+           sem aviso. -->
       <input
         id="motivo"
         type="text"
         maxlength="300"
         [value]="reason()"
         (input)="reason.set($any($event.target).value)"
+        [disabled]="consultaSalva()"
         placeholder="Ex.: reavaliação de atividade da doença"
-        class="auth-input mt-1 max-w-xl py-2 text-sm"
+        class="auth-input mt-1 max-w-xl py-2 text-sm disabled:opacity-60"
       />
-
-      <p class="mt-4 text-sm text-secondary">
-        Será gravado:
-        <span class="font-semibold text-primary">{{ evaluatedCount() }}</span> articulações
-        @if (closedIndexes().length > 0) {
-          e os índices
-          <span class="font-semibold text-primary">
-            @for (index of closedIndexes(); track index.assessmentType) {
-              {{ index.assessmentType }}{{ $last ? '' : ', ' }}
-            }
-          </span>
-        } @else {
-          e nenhum índice fechado
-        }
-      </p>
 
       <!-- Sem isto o envio de dezenas de MB fica num "Gravando…" opaco, e não há
            como distinguir "está progredindo" de "travou". -->
@@ -156,7 +156,13 @@
 
       <!-- Por que Finalizar some aqui: clicar antes de processar gravaria a consulta
            e sairia da tela, levando junto a análise já carregada, sem aviso. -->
-      @if (step() === 'analyzer' && !analysisReady()) {
+      @if (consultaSalva()) {
+        <p class="mt-4 rounded-xl bg-brand-50 px-4 py-3 text-sm text-secondary">
+          A consulta e o mapa corporal já estão salvos no prontuário. O que falta é o
+          envio das imagens, e tentar de novo retoma de onde parou, sem duplicar a
+          consulta nem reenviar o que já subiu.
+        </p>
+      } @else if (step() === 'analyzer' && !analysisReady()) {
         <p class="mt-4 rounded-xl bg-brand-50 px-4 py-3 text-sm text-secondary">
           Carregue os arquivos e processe a análise para poder finalizar.
           <!-- A frase do body map só cabe se houver body map: dizer que "continua
@@ -182,7 +188,38 @@
             Ir para o analisador
           </button>
         }
-        @if (canFinish() || step() !== 'analyzer') {
+        @if (step() === 'analyzer' && analysisReady()) {
+          <button
+            type="button"
+            (click)="goTo('algorithms')"
+            class="cursor-pointer rounded-lg border border-black/10 px-5 py-2.5 text-sm font-semibold text-primary hover:bg-brand-50"
+          >
+            Ir para os algoritmos
+          </button>
+        }
+        <!-- Com a consulta já gravada, o botão RETOMA em vez de criar. Antes ele
+             voltava ao estado inicial e o segundo clique nascia uma segunda consulta
+             com o mesmo body map, deixando a primeira órfã em 'uploading'. -->
+        @if (consultaSalva()) {
+          <button
+            type="button"
+            (click)="finish()"
+            [disabled]="!canFinish()"
+            class="cursor-pointer rounded-lg bg-primary px-5 py-2.5 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {{ saving() ? 'Enviando…' : 'Tentar enviar novamente' }}
+          </button>
+          <!-- Saída sem perder o que já foi gravado: a consulta e o body map estão no
+               banco, e o envio pode ser retomado depois pelo prontuário. -->
+          <button
+            type="button"
+            (click)="verConsultaSalva()"
+            [disabled]="saving()"
+            class="cursor-pointer rounded-lg px-4 py-2.5 text-sm font-semibold text-secondary underline underline-offset-2 hover:text-primary disabled:opacity-50"
+          >
+            Ver a consulta salva
+          </button>
+        } @else if (canFinish() || step() !== 'analyzer') {
           <button
             type="button"
             (click)="finish()"

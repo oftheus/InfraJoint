@@ -168,7 +168,7 @@ export const TERMS_OF_USE_SECTIONS: LegalSection[] = [
       },
       {
         kind: 'paragraph',
-        text: 'Podemos alterar, suspender ou encerrar recursos — ou a própria plataforma — a qualquer momento, buscando comunicar previamente mudanças relevantes pelos canais disponíveis.',
+        text: 'Podemos alterar, suspender ou encerrar recursos, ou a própria plataforma, a qualquer momento, buscando comunicar previamente mudanças relevantes pelos canais disponíveis.',
       },
       {
         kind: 'paragraph',

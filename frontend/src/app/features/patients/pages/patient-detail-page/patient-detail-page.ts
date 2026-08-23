@@ -50,7 +50,7 @@ export class PatientDetailPage {
 
   protected readonly patientForm = this.formBuilder.group({
     full_name: ['', [Validators.required, Validators.maxLength(200)]],
-    birth_date: [''],
+    birth_date: ['', [Validators.required]],
     sex: ['' as Sex | ''],
     phone: [''],
     primary_diagnosis: [''],
@@ -72,7 +72,7 @@ export class PatientDetailPage {
         this.encounters.set(detail.encounters);
         this.patientForm.patchValue({
           full_name: detail.full_name,
-          birth_date: detail.birth_date ?? '',
+          birth_date: detail.birth_date,
           sex: detail.sex ?? '',
           phone: detail.phone ?? '',
           primary_diagnosis: detail.primary_diagnosis ?? '',
@@ -107,7 +107,7 @@ export class PatientDetailPage {
     const raw = this.patientForm.getRawValue();
     const changes = {
       full_name: raw.full_name.trim(),
-      birth_date: blankToNull(raw.birth_date),
+      birth_date: raw.birth_date,
       sex: raw.sex === '' ? null : raw.sex,
       phone: blankToNull(raw.phone),
       primary_diagnosis: blankToNull(raw.primary_diagnosis),

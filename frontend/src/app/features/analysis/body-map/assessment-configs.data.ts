@@ -45,13 +45,13 @@ export const ASSESSMENT_CONFIGS: readonly AssessmentConfig[] = [
   {
     assessmentType: 'CDAI',
     label: 'CDAI',
-    description: 'Clinical Disease Activity Index — 28 articulações',
+    description: 'Clinical Disease Activity Index, 28 articulações',
     joints: JOINTS_28,
   },
   {
     assessmentType: 'DAS28',
     label: 'DAS28',
-    description: 'Disease Activity Score — 28 articulações',
+    description: 'Disease Activity Score, 28 articulações',
     joints: JOINTS_28,
   },
 ];

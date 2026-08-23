@@ -44,9 +44,22 @@ export class Timeline {
   protected readonly speed = signal(1);
   protected readonly speeds = [1, 2, 4];
   protected readonly displayLabel = captureDisplayLabel;
+
   protected readonly formatSeconds = formatSeconds;
 
   protected readonly active = computed(() => this.captures()[this.activeIndex()] ?? null);
+
+  /**
+   * Tooltip da miniatura. A basal não recebe `t =`: ela é anterior ao
+   * resfriamento, e o eixo de tempo começa na primeira dinâmica — anunciar
+   * "t = 0:00" aqui contradiria a curva, que não a desenha.
+   */
+  protected captureTitle(cap: TimelineCapture): string {
+    const quando =
+      cap.kind === 'baseline' ? 'antes do resfriamento' : `t = ${formatSeconds(cap.timeSeconds)}`;
+    return `${captureDisplayLabel(cap)} · ${quando}${cap.issue ? ` · ⚠ ${cap.issue}` : ''}`;
+  }
+
 
   private timer: ReturnType<typeof setInterval> | null = null;
 

@@ -18,6 +18,9 @@ import { Patient } from '../../../../patients/data/patient.model';
 import { PatientsService } from '../../../../patients/data/patients.service';
 import { messageFromError } from '../../../../patients/data/api-error';
 import { AssessedIndex, toEncounterCreate } from '../../thermal-analysis.model';
+import { toAlgorithmInput } from '../../../algorithms/algorithm-input';
+import { AlgorithmInput } from '../../../algorithms/algorithm.model';
+import { AlgorithmPanel } from '../../../algorithms/components/algorithm-panel/algorithm-panel';
 import { ImageAnalyzerPage } from '../../../pages/image-analyzer-page/image-analyzer-page';
 import {
   CollectedAnalysis,
@@ -25,12 +28,14 @@ import {
   collectSingleAnalysis,
   uploadKey,
 } from '../../data/analyzer-collect';
-import { describeTimings, uploadAll } from '../../data/capture-upload';
+import { PendingUpload, describeTimings, uploadAll } from '../../data/capture-upload';
 import { BodyMapStep } from '../../steps/body-map-step/body-map-step';
 import { PatientStep } from '../../steps/patient-step/patient-step';
 
+import { environment } from '../../../../../../environments/environment';
+
 /** Etapas do fluxo, na ordem em que acontecem. */
-type Step = 'patient' | 'body-map' | 'analyzer';
+type Step = 'patient' | 'body-map' | 'analyzer' | 'algorithms';
 
 /**
  * Fluxo de Análise Térmica: paciente → mapa corporal → analisador → gravar.
@@ -50,7 +55,7 @@ type Step = 'patient' | 'body-map' | 'analyzer';
  */
 @Component({
   selector: 'app-thermal-analysis-page',
-  imports: [PatientStep, BodyMapStep, ImageAnalyzerPage, DecimalPipe],
+  imports: [PatientStep, BodyMapStep, ImageAnalyzerPage, AlgorithmPanel, DecimalPipe],
   providers: [JointAssessmentService],
   templateUrl: './thermal-analysis-page.html',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -90,13 +95,36 @@ export class ThermalAnalysisPage {
   /** Quantas articulações foram tocadas — decide se há body map a gravar. */
   protected readonly evaluatedCount = this.store.evaluatedCount;
 
-  /** Índices com escore fechado; o DAS28 some daqui enquanto faltar VHS/PCR. */
-  protected readonly closedIndexes = computed(() =>
-    ASSESSMENT_CONFIGS.map((config) => ({
+  /**
+   * Índices com escore fechado; o DAS28 some daqui enquanto faltar VHS/PCR.
+   *
+   * Sem articulação avaliada não há índice nenhum, e a checagem não é redundante com
+   * a de `score !== null`: com o body map intocado o CDAI vale 0 + 0 + 0 + 0 = **0**,
+   * que não é nulo — e uma consulta sem body map acabava gravada com "CDAI 0,0,
+   * remissão", uma avaliação que ninguém fez. O DAS28 escapava por acaso, porque
+   * `acuteValue` nasce nulo.
+   */
+  protected readonly closedIndexes = computed(() => {
+    if (this.store.evaluatedCount() === 0) {
+      return [];
+    }
+    return ASSESSMENT_CONFIGS.map((config) => ({
       assessmentType: config.assessmentType,
       outcome: this.store.scoreFor(config.assessmentType),
-    })).filter((index): index is AssessedIndex => index.outcome.score !== null),
-  );
+    })).filter((index): index is AssessedIndex => index.outcome.score !== null);
+  });
+
+  /**
+   * Entrada dos algoritmos.
+   *
+   * Idêntica à da tela solta, e é de propósito: a conversão é a mesma função, e o
+   * fluxo não acrescenta nada. Já acrescentou paciente e body map — saíram porque
+   * nenhum algoritmo os lia.
+   */
+  protected readonly algorithmInput = computed<AlgorithmInput | null>(() => {
+    const frames = this.analyzer()?.algorithmFrames() ?? [];
+    return frames.length === 0 ? null : toAlgorithmInput(frames);
+  });
 
   /** Sequência carregada. O fluxo ainda só grava a análise avulsa. */
   protected readonly isSequence = computed(() => this.analyzer()?.sequenceActive() ?? false);
@@ -132,6 +160,36 @@ export class ThermalAnalysisPage {
   );
 
   /**
+   * A consulta desta tentativa já está gravada.
+   *
+   * Enquanto for nula, "Finalizar" cria. Preenchida, ele **retoma**: a consulta e o
+   * body map já estão no banco, e o que resta é levar as imagens ao bucket.
+   */
+  private readonly encounterSalvo = signal<string | null>(null);
+
+  /** Já existe consulta gravada, e o que falta é o envio. */
+  protected readonly consultaSalva = computed(() => this.encounterSalvo() !== null);
+
+  /**
+   * O que ainda não chegou ao bucket, com as URLs já assinadas.
+   *
+   * É o que permite reenviar **só o que faltou**: numa sequência de 63 arquivos, um
+   * erro no décimo não pode obrigar a subir os outros 62 de novo. As URLs valem 1 h.
+   */
+  private pendentes: readonly PendingUpload[] = [];
+
+  /**
+   * `POST /captures` já respondeu.
+   *
+   * Ele não pode ser repetido: a segunda chamada recebe 409, porque criaria um
+   * segundo jogo de capturas sob a mesma consulta.
+   */
+  private capturasGravadas = false;
+
+  /** A coleta do analisador, guardada para a retomada não depender de recoletá-la. */
+  private coletado: CollectedAnalysis | null = null;
+
+  /**
    * Finalizar só aparece quando não custa perder trabalho.
    *
    * Na etapa do analisador, clicar antes de processar gravaria a consulta e sairia
@@ -139,7 +197,15 @@ export class ThermalAnalysisPage {
    * perder: o body map já está em memória e é opcional por definição.
    */
   protected readonly canFinish = computed(() => {
-    if (this.patient() === null || this.saving() || !this.hasFindings()) {
+    if (this.patient() === null || this.saving()) {
+      return false;
+    }
+    // Retomada: a consulta já está no banco, então as condições que decidem se há o
+    // que gravar não se aplicam mais — o que resta é reenviar o que faltou.
+    if (this.consultaSalva()) {
+      return true;
+    }
+    if (!this.hasFindings()) {
       return false;
     }
     if (this.step() !== 'analyzer') {
@@ -193,20 +259,45 @@ export class ThermalAnalysisPage {
     }
   }
 
+  /**
+   * Grava a consulta — ou **retoma** o envio, se ela já tiver sido gravada.
+   *
+   * A distinção não é cosmética. Sem ela, uma falha no upload devolvia o botão ao
+   * estado inicial, e o segundo clique chamava `createEncounter` de novo: nascia uma
+   * SEGUNDA consulta, com o mesmo body map e a mesma data, enquanto a primeira ficava
+   * órfã em `uploading` com os arquivos pela metade. O prontuário terminava com duas
+   * consultas para um exame só, e nada na tela dizia isso.
+   *
+   * Como a queda de rede no meio de dezenas de MB é a falha mais provável deste
+   * fluxo, o caminho de erro precisa ser tão correto quanto o de sucesso.
+   */
   protected finish(): void {
     const patient = this.patient();
     if (!patient || this.saving()) {
       return;
     }
 
-    // ORDEM CRÍTICA: coletar ANTES de marcar `saving`.
+    this.saving.set(true);
+    this.error.set(null);
+
+    const jaSalva = this.encounterSalvo();
+    if (jaSalva) {
+      void this.enviarAnalise(jaSalva, patient.id, this.coletado);
+      return;
+    }
+
+    // Coleta ANTES de qualquer coisa assíncrona, e a coleta viaja como parâmetro.
     //
-    // É `saving` que desmonta o analisador para liberar a thread durante o envio.
-    // Coletar depois encontraria `this.analyzer()` indefinido, a análise viraria
-    // `null` e a consulta seria salva sem imagem nenhuma — sem erro, em silêncio.
-    // Foi exatamente esse o bug. Por isso `enviarAnalise` recebe a coleta pronta
-    // como parâmetro em vez de buscá-la: assim não há como inverter a ordem.
-    const coletado = this.coletarAnalise();
+    // Houve uma versão em que `saving` desmontava o analisador para liberar a thread
+    // durante o envio. Nela, coletar depois encontrava `this.analyzer()` indefinido,
+    // a análise virava `null` e a consulta era salva sem imagem nenhuma, em silêncio.
+    // O desmonte foi revertido (ver o comentário da etapa 3 no template), mas a ordem
+    // ficou: `enviarAnalise` recebe a coleta pronta em vez de buscá-la, e assim o bug
+    // não volta se alguém desmontar o analisador de novo.
+    //
+    // Guardada no campo pelo mesmo motivo: a retomada não pode depender de o
+    // analisador continuar montado e no mesmo estado.
+    this.coletado = this.coletarAnalise();
 
     const payload = toEncounterCreate(
       this.store.toResult('CDAI', patient.id),
@@ -215,20 +306,29 @@ export class ThermalAnalysisPage {
       this.reason(),
     );
 
-    this.saving.set(true);
-    this.error.set(null);
     this.patients.createEncounter(patient.id, payload).subscribe({
       next: (encounter) => {
+        // A partir daqui a consulta EXISTE. Registrar o id é o que impede a próxima
+        // tentativa de criar outra.
+        this.encounterSalvo.set(encounter.id);
         // A consulta e o body map já estão salvos. As imagens vêm depois, de
         // propósito: se o upload de dezenas de MB falhar, o registro clínico não
         // vai junto.
-        void this.enviarAnalise(encounter.id, patient.id, coletado);
+        void this.enviarAnalise(encounter.id, patient.id, this.coletado);
       },
       error: (cause: unknown) => {
         this.error.set(messageFromError(cause));
         this.saving.set(false);
       },
     });
+  }
+
+  /** Sai do fluxo para o prontuário. A consulta já está salva; o envio fica para depois. */
+  protected verConsultaSalva(): void {
+    const patient = this.patient();
+    if (patient) {
+      void this.router.navigate(['/pacientes', patient.id]);
+    }
   }
 
   /** Lê o analisador — avulsa ou sequência — enquanto ele ainda está montado. */
@@ -295,8 +395,8 @@ export class ThermalAnalysisPage {
   /**
    * Segunda fase do Finalizar: capturas, upload e fechamento em `ready`.
    *
-   * Recebe `coletado` pronto porque a esta altura o analisador já foi desmontado
-   * para liberar a thread — não há mais de onde ler.
+   * Recebe `coletado` pronto, e não o analisador, para não depender de ele continuar
+   * montado durante o envio. Ver a ordem em `finish()`.
    */
   private async enviarAnalise(
     encounterId: string,
@@ -311,14 +411,15 @@ export class ThermalAnalysisPage {
     }
 
     try {
-      const criada = await firstValueFrom(
-        this.patients.createCaptures(encounterId, coletado.payload),
-      );
-
-      this.uploadTotal.set(criada.uploads.length);
-      this.uploadFailed.set([]);
-      const resultado = await uploadAll(
-        criada.uploads.map((upload) => {
+      // O POST das capturas acontece UMA vez por consulta. Repeti-lo responde 409 —
+      // ele criaria um segundo jogo de capturas —, então numa retomada este bloco é
+      // pulado e as URLs assinadas da primeira vez continuam valendo (1 h).
+      if (!this.capturasGravadas) {
+        const criada = await firstValueFrom(
+          this.patients.createCaptures(encounterId, coletado.payload),
+        );
+        this.capturasGravadas = true;
+        this.pendentes = criada.uploads.map((upload) => {
           const file = coletado.files.get(uploadKey(upload.capture_index, upload.kind))!;
           return {
             url: upload.url,
@@ -326,33 +427,48 @@ export class ThermalAnalysisPage {
             contentType: file.type || 'application/octet-stream',
             describe: `captura ${upload.capture_index}: ${upload.kind}`,
           };
-        }),
-        {
+        });
+      }
+
+      if (this.pendentes.length > 0) {
+        const desteEnvio = this.pendentes.length;
+        this.uploadTotal.set(desteEnvio);
+        this.uploadDone.set(0);
+        this.uploadFailed.set([]);
+        const resultado = await uploadAll(this.pendentes, {
           onProgress: (p) => {
             this.uploadDone.set(p.done);
             this.uploadMbDone.set(p.bytesDone / 1e6);
             this.uploadMbTotal.set(p.bytesTotal / 1e6);
             this.uploadLast.set(p.lastDescribe);
           },
-        },
-      );
+        });
 
-      // Diagnóstico: com a rede medida em ~5 MB/s, 48 MB deveriam levar ~10s. Se o
-      // decorrido for muito maior que o tempo somado dentro dos PUTs, o gargalo não
-      // é a rede — está na thread principal.
-      console.info('[upload]', describeTimings(resultado));
+        // Diagnóstico, e só fora de produção: se o decorrido for muito maior que o
+        // tempo somado dentro dos PUTs, o gargalo não é a rede, está na thread
+        // principal. Para o médico isso não é acionável, então não vai ao console dele.
+        if (!environment.production) {
+          console.info('[upload]', describeTimings(resultado));
+        }
 
-      const { failed } = resultado;
-      if (failed.length > 0) {
-        // A consulta e o body map estão salvos; `analysis_status` fica em
-        // 'uploading', que o prontuário mostra como envio incompleto.
-        this.uploadFailed.set(failed.map((f) => f.describe));
-        this.saving.set(false);
-        this.error.set(
-          `${failed.length} de ${criada.uploads.length} arquivos não subiram. ` +
-            'A consulta e o mapa corporal foram salvos.',
-        );
-        return;
+        const { failed } = resultado;
+        // A fila da próxima tentativa é só o que faltou — `uploadAll` não aborta na
+        // primeira falha, então o que subiu está no bucket e não volta a subir.
+        const faltaram = new Set(failed.map((f) => f.describe));
+        this.pendentes = this.pendentes.filter((p) => faltaram.has(p.describe));
+
+        if (failed.length > 0) {
+          // A consulta e o body map estão salvos; `analysis_status` fica em
+          // 'uploading', que o prontuário mostra como envio incompleto — e que o
+          // botão de retomar, aqui, resolve sem criar consulta nova.
+          this.uploadFailed.set(failed.map((f) => f.describe));
+          this.saving.set(false);
+          this.error.set(
+            `${failed.length} de ${desteEnvio} arquivos não subiram. ` +
+              'A consulta e o mapa corporal foram salvos; tente enviar novamente.',
+          );
+          return;
+        }
       }
 
       await firstValueFrom(this.patients.markAnalysisReady(encounterId));
@@ -360,7 +476,7 @@ export class ThermalAnalysisPage {
       void this.router.navigate(['/pacientes', patientId]);
     } catch (cause: unknown) {
       // A consulta e o body map continuam salvos; o que falhou foi o arquivamento.
-      // `analysis_status` fica em 'uploading', que é estado recuperável.
+      // `analysis_status` fica em 'uploading', e o botão de retomar continua na tela.
       this.saving.set(false);
       const motivo = messageFromError(cause).replace(/[.\s]+$/, '');
       this.error.set(

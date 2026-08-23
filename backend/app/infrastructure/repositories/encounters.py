@@ -10,7 +10,7 @@ import asyncpg
 from app.domain.entities import AnalysisStatus, Encounter, NewEncounter
 
 _COLUMNS = """
-    id, patient_id, owner_id, occurred_at, reason, clinical_notes,
+    id, patient_id, owner_id, occurred_at, reason,
     joint_evaluations, scores, analysis_status, created_at, updated_at
 """
 
@@ -37,7 +37,6 @@ def _to_entity(row: asyncpg.Record) -> Encounter:
         owner_id=row["owner_id"],
         occurred_at=row["occurred_at"],
         reason=row["reason"],
-        clinical_notes=row["clinical_notes"],
         joint_evaluations=_decode(row["joint_evaluations"]),
         scores=_decode(row["scores"]) or {},
         analysis_status=(
@@ -127,14 +126,13 @@ class PostgresEncounterRepository:
         row = await self._connection.fetchrow(
             f"""
             INSERT INTO public.encounters
-                (patient_id, occurred_at, reason, clinical_notes, joint_evaluations, scores)
-            VALUES ($1, COALESCE($2, now()), $3, $4, $5::jsonb, COALESCE($6::jsonb, '{{}}'::jsonb))
+                (patient_id, occurred_at, reason, joint_evaluations, scores)
+            VALUES ($1, COALESCE($2, now()), $3, $4::jsonb, COALESCE($5::jsonb, '{{}}'::jsonb))
             RETURNING {_COLUMNS}
             """,
             patient_id,
             data.occurred_at,
             data.reason,
-            data.clinical_notes,
             _encode(data.joint_evaluations),
             _encode(data.scores),
         )

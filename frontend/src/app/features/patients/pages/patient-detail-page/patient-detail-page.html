@@ -25,21 +25,34 @@
           {{ detail.full_name }}
         </h1>
         <p class="mt-2 text-base text-muted">
-          @if (detail.birth_date) {
-            Nascimento {{ detail.birth_date | date: 'dd/MM/yyyy' }}
-          } @else {
-            Data de nascimento não informada
-          }
+          Nascimento {{ detail.birth_date | date: 'dd/MM/yyyy' }}
           @if (sexLabel(detail.sex); as label) {
             · {{ label }}
           }
         </p>
+        <!-- Só vem preenchido para admin. Esta tela tem o botão de excluir, que leva o
+             histórico clínico inteiro por cascata: saber de quem é o prontuário é o que
+             separa uma decisão de um acidente. -->
+        @if (detail.owner_name) {
+          <p
+            class="mt-3 inline-flex items-center gap-1.5 rounded-full bg-brand-50 px-3 py-1.5 text-sm font-medium text-secondary"
+          >
+            <svg [lucideIcon]="'stethoscope'" class="h-4 w-4" aria-hidden="true"></svg>
+            Paciente de {{ detail.owner_name }}
+          </p>
+        }
       </div>
 
       <div class="flex gap-3">
-        <button type="button" class="btn-secondary h-11 px-6 text-sm" (click)="toggleEditing()">
-          {{ editing() ? 'Cancelar' : 'Editar' }}
-        </button>
+        <!-- Editar some no paciente de outro médico. `owner_name` preenchido significa
+             exatamente isso, e é onde `patients_update` recusaria: sem esconder aqui, o
+             admin preencheria o formulário inteiro para receber 403 no Salvar.
+             Excluir continua — ele administra o acervo, e o rótulo acima diz de quem é. -->
+        @if (!detail.owner_name) {
+          <button type="button" class="btn-secondary h-11 px-6 text-sm" (click)="toggleEditing()">
+            {{ editing() ? 'Cancelar' : 'Editar' }}
+          </button>
+        }
         <button
           type="button"
           class="inline-flex h-11 items-center justify-center rounded-full border border-red-200 bg-red-50 px-6 text-sm font-semibold text-red-600 transition-colors hover:bg-red-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-400"
@@ -113,9 +126,12 @@
 
           <label>
             <span class="mb-1.5 block text-sm font-medium text-secondary">
-              Data de nascimento
+              Data de nascimento *
             </span>
             <input class="auth-input" type="date" formControlName="birth_date" />
+            @if (patientForm.controls.birth_date.touched && patientForm.controls.birth_date.invalid) {
+              <span class="mt-1 block text-xs text-red-600">Informe a data de nascimento.</span>
+            }
           </label>
 
           <label>
@@ -169,7 +185,7 @@
         <h2 class="text-2xl font-bold tracking-tight text-primary">Consultas</h2>
         <!--
           Não há formulário de consulta aqui de propósito. Consulta nasce de um
-          caminho só — o fluxo de Análise Térmica —, para que toda consulta tenha
+          caminho só, o fluxo de Análise Térmica, para que toda consulta tenha
           a mesma origem e possa carregar body map e escores. Este botão apenas
           abre o fluxo com o paciente já escolhido.
         -->
@@ -199,11 +215,6 @@
                 {{ encounter.occurred_at | date: 'dd/MM/yyyy HH:mm' }}
               </p>
               <p class="mt-1 text-base">{{ encounter.reason || 'Sem motivo informado' }}</p>
-              @if (encounter.clinical_notes) {
-                <p class="mt-2 whitespace-pre-line text-sm text-muted">
-                  {{ encounter.clinical_notes }}
-                </p>
-              }
 
               <!-- Índices de atividade gravados no fluxo de Análise Térmica -->
               @if (scoresOf(encounter); as indices) {

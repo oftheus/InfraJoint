@@ -37,7 +37,9 @@ export class PatientsPage {
 
   protected readonly form = this.formBuilder.group({
     full_name: ['', [Validators.required, Validators.maxLength(200)]],
-    birth_date: [''],
+    // Obrigatória pelo mesmo motivo que o banco a exige: é o que separa dois
+    // homônimos, e o aviso de duplicata só ajuda a decidir se ela existir.
+    birth_date: ['', [Validators.required]],
     sex: ['' as Sex | ''],
     phone: [''],
     primary_diagnosis: [''],
@@ -108,7 +110,7 @@ export class PatientsPage {
     const raw = this.form.getRawValue();
     return {
       full_name: raw.full_name.trim(),
-      birth_date: blankToNull(raw.birth_date),
+      birth_date: raw.birth_date,
       sex: raw.sex === '' ? null : raw.sex,
       phone: blankToNull(raw.phone),
       primary_diagnosis: blankToNull(raw.primary_diagnosis),

@@ -46,7 +46,11 @@
     @if (active(); as cap) {
       <p class="ml-auto shrink-0 text-xs tabular-nums text-muted">
         <strong class="font-semibold text-primary">{{ displayLabel(cap) }}</strong>
-        · t = {{ formatSeconds(cap.timeSeconds) }}
+        @if (cap.kind === 'baseline') {
+          · antes do resfriamento
+        } @else {
+          · t = {{ formatSeconds(cap.timeSeconds) }}
+        }
         · {{ activeIndex() + 1 }}/{{ captures().length }}
       </p>
     }
@@ -69,7 +73,7 @@
         [class]="$index === activeIndex() ? 'border-accent' : 'border-transparent hover:border-slate-300'"
         [class.mr-2]="cap.kind === 'baseline'"
         (click)="select($index)"
-        [title]="displayLabel(cap) + ' · t = ' + formatSeconds(cap.timeSeconds) + (cap.issue ? ' · ⚠ ' + cap.issue : '')"
+        [title]="captureTitle(cap)"
       >
         @if (cap.thumbnail) {
           <img [src]="cap.thumbnail" [alt]="displayLabel(cap)" class="h-12 w-16 object-cover" />

@@ -59,7 +59,7 @@ export class LoginPage {
     const { error } = await this.auth.signInWithPassword(email, password);
 
     if (error) {
-      this.errorMessage.set('Email ou senha inválidos.');
+      this.errorMessage.set('E-mail ou senha inválidos.');
       this.submitting.set(false);
       return;
     }

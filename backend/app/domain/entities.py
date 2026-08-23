@@ -46,18 +46,24 @@ class Patient:
     id: UUID
     owner_id: UUID
     full_name: str
-    birth_date: date | None
+    # Obrigatória: sem documento e sem número de prontuário, é o único campo que
+    # distingue dois homônimos. Ver a migration `birth_date_obrigatoria`.
+    birth_date: date
     sex: Sex | None
     phone: str | None
     primary_diagnosis: str | None
     created_at: datetime
     updated_at: datetime
+    # Nome do médico dono, e não o id: serve à tela, não à autorização. Só vem
+    # preenchido para admin — `app.owner_display_name()` devolve NULL para os demais,
+    # e para um médico comum ele diria o nome dele mesmo em toda linha.
+    owner_name: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
 class NewPatient:
     full_name: str
-    birth_date: date | None = None
+    birth_date: date
     sex: Sex | None = None
     phone: str | None = None
     primary_diagnosis: str | None = None
@@ -70,7 +76,6 @@ class Encounter:
     owner_id: UUID
     occurred_at: datetime
     reason: str | None
-    clinical_notes: str | None
     joint_evaluations: Mapping[str, Any] | None
     scores: Mapping[str, Any]
     # `None` = consulta sem análise de imagem. Distingue "não tem" de "tem e ainda
@@ -148,6 +153,5 @@ class NewEncounter:
 
     occurred_at: datetime | None = None
     reason: str | None = None
-    clinical_notes: str | None = None
     joint_evaluations: Mapping[str, Any] | None = None
     scores: Mapping[str, Any] | None = None

@@ -53,7 +53,7 @@
           Prefere selecionar os arquivos avulsos? Clique aqui
         </button>
         <p class="mt-0.5 text-[11px] text-gray-400">
-          As capturas são reconhecidas pelo nome do arquivo; você pode adicionar as imagens e as
+          As capturas são reconhecidas pelo nome do arquivo. Você pode adicionar as imagens e as
           matrizes em seleções separadas.
         </p>
       </div>
@@ -158,12 +158,13 @@
         <p class="mt-2 rounded-lg bg-sky-50 px-3 py-2 text-xs text-sky-700">
           Seleção parcial reconhecida. Continue com
           <strong class="font-medium">Adicionar arquivos</strong> até que cada captura tenha a
-          imagem óptica, a térmica e a matriz; aí o processamento é liberado.
+          imagem óptica, a térmica e a matriz. Aí o processamento é liberado.
         </p>
       } @else if (!hasBaseline()) {
         <p class="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-700">
-          ⚠ Baseline (Est) não encontrada: a curva de reaquecimento ficará sem a referência de
-          repouso.
+          ⚠ Baseline (Est) não encontrada: a análise ficará sem a temperatura de repouso, e o
+          relatório vai comparar o desfecho com a primeira captura dinâmica. A curva de
+          reaquecimento não é afetada, porque traça só as dinâmicas.
         </p>
       }
 
@@ -221,7 +222,7 @@
       </div>
       <p class="mt-2 text-xs text-muted">
         A baseline (Est) registra a temperatura de repouso, antes do resfriamento. As capturas Din
-        registram o reaquecimento após os ventiladores; os tempos contam a partir do início dessa
+        registram o reaquecimento após os ventiladores. Os tempos contam a partir do início dessa
         fase, em intervalos de {{ sequence.intervalSeconds() }} s.
       </p>
 
@@ -235,7 +236,7 @@
             [value]="sequence.intervalSeconds()"
             (input)="onIntervalInput($event)"
             class="mt-1 block w-32 rounded-xl border border-gray-200 px-3 py-2 text-sm tabular-nums text-ink-strong"
-            title="Segundos entre as capturas dinâmicas (baseline é t₀ = 0)"
+            title="Segundos entre as capturas dinâmicas, contados do fim do resfriamento"
           />
         </label>
         <button

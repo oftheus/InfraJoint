@@ -69,7 +69,7 @@ export type JointStatus = 'not-evaluated' | 'normal' | 'pain' | 'swelling' | 'bo
 /** Clinical metadata describing a single evaluable joint. */
 export interface JointDefinition {
   readonly id: JointId;
-  /** Full, human-readable label (pt-BR), e.g. "MCP 3 — Mão direita". */
+  /** Full, human-readable label (pt-BR), e.g. "MCP 3 (mão direita)". */
   readonly label: string;
   /** Compact label for chips and hotspots, e.g. "MCP 3". */
   readonly shortLabel: string;

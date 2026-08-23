@@ -27,11 +27,15 @@ MEDICO_B = UUID("bbbbbbbb-1111-0000-0000-00000000000b")
 LEITOR = UUID("cccccccc-1111-0000-0000-00000000000c")
 ADMIN = UUID("dddddddd-1111-0000-0000-00000000000d")
 
+# O nome não é enfeite: `app.owner_display_name()` o devolve para o admin saber de
+# quem é cada paciente, e sem ele o teste dessa visibilidade não teria o que assertar.
+# Na aplicação ele nunca falta — `handle_new_user()` o copia do metadata do cadastro, e
+# tanto o formulário de registro quanto o de perfil o exigem.
 _SEED = [
-    (MEDICO_A, "api-a@local", "medico"),
-    (MEDICO_B, "api-b@local", "medico"),
-    (LEITOR, "api-l@local", "user"),
-    (ADMIN, "api-x@local", "admin"),
+    (MEDICO_A, "api-a@local", "medico", "Dra. API A"),
+    (MEDICO_B, "api-b@local", "medico", "Dr. API B"),
+    (LEITOR, "api-l@local", "user", "Leitor API"),
+    (ADMIN, "api-x@local", "admin", "Admin API"),
 ]
 
 
@@ -45,21 +49,32 @@ async def _seeded() -> None:
 
     try:
         await connection.execute("DELETE FROM public.patients WHERE full_name LIKE 'API-TEST%'")
-        for user_id, email, role in _SEED:
+        for user_id, email, role, nome in _SEED:
             await connection.execute(
                 """
-                INSERT INTO auth.users (id, instance_id, aud, role, email)
+                INSERT INTO auth.users
+                    (id, instance_id, aud, role, email, raw_user_meta_data)
                 VALUES ($1, '00000000-0000-0000-0000-000000000000',
-                        'authenticated', 'authenticated', $2)
+                        'authenticated', 'authenticated', $2,
+                        jsonb_build_object('full_name', $3::text))
                 ON CONFLICT (id) DO NOTHING
                 """,
                 user_id,
                 email,
+                nome,
             )
+            # O nome vai no UPDATE também: quem rodou a suíte antes desta mudança já tem
+            # a linha criada pelo trigger com full_name nulo, e o ON CONFLICT acima não
+            # a corrigiria.
             await connection.execute(
-                "UPDATE public.users SET role = $2::public.user_role WHERE id = $1",
+                """
+                UPDATE public.users
+                   SET role = $2::public.user_role, full_name = $3
+                 WHERE id = $1
+                """,
                 user_id,
                 role,
+                nome,
             )
     finally:
         await connection.close()
