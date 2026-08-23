@@ -21,14 +21,26 @@
         </p>
       </div>
 
-      <button
-        type="button"
-        class="inline-flex h-11 items-center justify-center rounded-full border border-red-200 bg-red-50 px-6 text-sm font-semibold text-red-600 transition-colors hover:bg-red-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-400"
-        (click)="toggleConfirmDelete()"
-      >
-        <svg [lucideIcon]="'trash-2'" class="mr-2 h-4 w-4" aria-hidden="true"></svg>
-        Excluir consulta
-      </button>
+      <div class="flex flex-wrap gap-3">
+        <button
+          type="button"
+          class="btn-secondary inline-flex h-11 items-center justify-center px-6 text-sm disabled:opacity-60"
+          [disabled]="exporting()"
+          (click)="exportPdf()"
+        >
+          <svg [lucideIcon]="'file-down'" class="mr-2 h-4 w-4" aria-hidden="true"></svg>
+          {{ exporting() ? 'Gerando PDF…' : 'Exportar PDF' }}
+        </button>
+
+        <button
+          type="button"
+          class="inline-flex h-11 items-center justify-center rounded-full border border-red-200 bg-red-50 px-6 text-sm font-semibold text-red-600 transition-colors hover:bg-red-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-400"
+          (click)="toggleConfirmDelete()"
+        >
+          <svg [lucideIcon]="'trash-2'" class="mr-2 h-4 w-4" aria-hidden="true"></svg>
+          Excluir consulta
+        </button>
+      </div>
     </div>
 
     @if (consulta.clinical_notes) {

@@ -25,6 +25,7 @@
           "options": {
             "browser": "src/main.ts",
             "tsConfig": "tsconfig.app.json",
+            "allowedCommonJsDependencies": ["pdfmake/build/pdfmake", "pdfmake/build/vfs_fonts"],
             "inlineStyleLanguage": "scss",
             "assets": [
               {
@@ -84,6 +85,11 @@
         },
         "serve": {
           "builder": "@angular/build:dev-server",
+          "options": {
+            "prebundle": {
+              "exclude": ["pdfmake"]
+            }
+          },
           "configurations": {
             "production": {
               "buildTarget": "InfraJoint:build:production"
