@@ -154,14 +154,14 @@
         </p>
       }
 
-      <!-- Por que Finalizar some aqui: clicar antes de processar gravaria a consulta
+      <!-- As dicas abaixo ajudam a decidir O QUE gravar. Com a consulta já gravada não
+           há mais essa decisão: o que falta é o envio, e quem diz isso é a tarja de erro,
+           logo acima. Uma terceira caixa repetindo o mesmo era ruído.
+
+           Por que Finalizar some aqui: clicar antes de processar gravaria a consulta
            e sairia da tela, levando junto a análise já carregada, sem aviso. -->
       @if (consultaSalva()) {
-        <p class="mt-4 rounded-xl bg-brand-50 px-4 py-3 text-sm text-secondary">
-          A consulta e o mapa corporal já estão salvos no prontuário. O que falta é o
-          envio das imagens, e tentar de novo retoma de onde parou, sem duplicar a
-          consulta nem reenviar o que já subiu.
-        </p>
+        <!-- sem dica: a tarja de erro e os botões já dizem o que resta -->
       } @else if (step() === 'analyzer' && !analysisReady()) {
         <p class="mt-4 rounded-xl bg-brand-50 px-4 py-3 text-sm text-secondary">
           Carregue os arquivos e processe a análise para poder finalizar.
@@ -210,15 +210,20 @@
             {{ saving() ? 'Enviando…' : 'Tentar enviar novamente' }}
           </button>
           <!-- Saída sem perder o que já foi gravado: a consulta e o body map estão no
-               banco, e o envio pode ser retomado depois pelo prontuário. -->
-          <button
-            type="button"
-            (click)="verConsultaSalva()"
-            [disabled]="saving()"
-            class="cursor-pointer rounded-lg px-4 py-2.5 text-sm font-semibold text-secondary underline underline-offset-2 hover:text-primary disabled:opacity-50"
-          >
-            Ver a consulta salva
-          </button>
+               banco, e o envio pode ser retomado depois pelo prontuário.
+
+               Só depois que o envio para. Durante o upload não há o que recuperar, e
+               oferecer a saída ali — ainda que desabilitada — é a mesma coisa que a
+               mensagem de recuperação que aparecia no meio do progresso. -->
+          @if (!saving()) {
+            <button
+              type="button"
+              (click)="verConsultaSalva()"
+              class="cursor-pointer rounded-lg px-4 py-2.5 text-sm font-semibold text-secondary underline underline-offset-2 hover:text-primary"
+            >
+              Ver a consulta salva
+            </button>
+          }
         } @else if (canFinish() || step() !== 'analyzer') {
           <button
             type="button"
