@@ -69,11 +69,14 @@ async function restaurarCaptura(detail: CaptureDetail): Promise<SequenceCapture 
   }
 
   return {
-    // `phase` é nulo na análise avulsa — o banco distingue "não sei" de "é basal".
-    // A curva não aceita nulo, e uma captura solta é dinâmica para efeito de série.
-    kind: detail.phase ?? 'dynamic',
-    index: detail.capture_index,
-    label: detail.label ?? '',
+    // `kind` é derivado do índice, e este é o único lugar que faz a conversão: 0 é a
+    // basal, o resto é dinâmica. Índice nulo é a avulsa — a curva não aceita nulo, e
+    // uma captura solta é dinâmica para efeito de série.
+    kind: detail.capture_index === 0 ? 'baseline' : 'dynamic',
+    index: detail.capture_index ?? 0,
+    // Não é mais persistido: a tela mostra fase + índice, que `captureDisplayLabel`
+    // recalcula. Sobrou como campo de importação, e a consulta reaberta não importa.
+    label: '',
     timeSeconds: detail.elapsed_seconds ?? 0,
     optical: opticalFile,
     thermal: thermalFile,

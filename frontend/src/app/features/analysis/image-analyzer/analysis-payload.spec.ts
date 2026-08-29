@@ -43,12 +43,7 @@ function source(overrides: Partial<CaptureSource> = {}): CaptureSource {
 }
 
 function posicao(i: number): CapturePosition {
-  return {
-    captureIndex: i,
-    phase: i === 0 ? 'baseline' : 'dynamic',
-    label: i === 0 ? 'Base' : `Din ${i}`,
-    elapsedSeconds: i * 30,
-  };
+  return { captureIndex: i, elapsedSeconds: i * 30 };
 }
 
 describe('analysis-payload', () => {
@@ -61,18 +56,18 @@ describe('analysis-payload', () => {
 
     expect(capturas).toHaveLength(n);
     expect(capturas.map((c) => c.capture_index)).toEqual([...Array(n).keys()]);
-    expect(capturas.filter((c) => c.phase === 'baseline')).toHaveLength(1);
+    // Exatamente uma basal, porque basal é o índice 0 e os índices não repetem.
+    expect(capturas.filter((c) => c.capture_index === 0)).toHaveLength(1);
     expect(capturas.every((c) => c.alignment_method === 'silhouette')).toBe(true);
   });
 
   it('avulsa é uma sequência de um elemento, com posição nula', () => {
     const [captura] = captureFromSingle(source());
 
-    // O banco precisa distinguir "não sei em que fase" de "é basal".
-    expect(captura.phase).toBeNull();
-    expect(captura.label).toBeNull();
+    // Índice nulo, e não 0: o banco precisa distinguir "não sei em que fase" de
+    // "é basal", e 0 agora significa exatamente basal.
+    expect(captura.capture_index).toBeNull();
     expect(captura.elapsed_seconds).toBeNull();
-    expect(captura.capture_index).toBe(0);
   });
 
   it('achata a afim nas seis colunas de alinhamento', () => {

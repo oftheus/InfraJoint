@@ -375,8 +375,6 @@ export class ThermalAnalysisPage {
     return collectSequenceAnalysis(
       capturas.map((captura, i) => ({
         index: captura.index,
-        kind: captura.kind,
-        label: captura.label,
         timeSeconds: captura.timeSeconds,
         matrix: captura.matrix,
         alignment: captura.alignment,

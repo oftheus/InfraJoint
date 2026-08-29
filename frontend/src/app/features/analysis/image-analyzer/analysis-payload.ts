@@ -7,7 +7,7 @@
  *
  * **Avulsa e sequência não são dois fluxos.** A diferença entre elas é a
  * *cardinalidade* do array de capturas — uma avulsa é uma sequência de um
- * elemento, com `phase`, `label` e `elapsedSeconds` nulos. É a mesma decisão que
+ * elemento, com `captureIndex` e `elapsedSeconds` nulos. É a mesma decisão que
  * o banco toma ao não ter discriminador `single`/`sequence`, e a razão de
  * `captureFromSingle` e `captureFromSequence` desembocarem na mesma função.
  *
@@ -23,9 +23,6 @@ import { JointRoi } from './joint-rois';
 /** Como o alinhamento foi obtido. Espelha o check de `alignment_method`. */
 export type AlignmentMethod = 'silhouette' | 'fiducial' | 'manual';
 
-/** Posição da captura numa sequência. Nula na análise avulsa. */
-export type CapturePhase = 'baseline' | 'dynamic';
-
 /** Arquivos declarados no POST — tipo e tamanho, não conteúdo. */
 export interface CaptureFilesPayload {
   readonly optical?: { readonly size: number };
@@ -35,9 +32,13 @@ export interface CaptureFilesPayload {
 
 /** O corpo de uma captura no `POST /encounters/{id}/captures`. */
 export interface CapturePayload {
-  readonly capture_index: number;
-  readonly phase: CapturePhase | null;
-  readonly label: string | null;
+  /**
+   * Posição da captura, e o único lugar onde ela é declarada.
+   *
+   * `null` = avulsa, `0` = basal, `N` = dinâmica N. Havia uma `phase` ao lado
+   * dizendo o mesmo por outro caminho; as duas podiam divergir, e a coluna saiu.
+   */
+  readonly capture_index: number | null;
   readonly elapsed_seconds: number | null;
 
   readonly align_a: number;
@@ -73,9 +74,7 @@ export interface CaptureSource {
 
 /** Onde a captura fica na sequência. Tudo nulo na avulsa. */
 export interface CapturePosition {
-  readonly captureIndex: number;
-  readonly phase: CapturePhase | null;
-  readonly label: string | null;
+  readonly captureIndex: number | null;
   readonly elapsedSeconds: number | null;
 }
 
@@ -84,8 +83,6 @@ export function captureFrom(source: CaptureSource, position: CapturePosition): C
   const { alignment } = source;
   return {
     capture_index: position.captureIndex,
-    phase: position.phase,
-    label: position.label,
     elapsed_seconds: position.elapsedSeconds,
 
     align_a: alignment.a,
@@ -110,11 +107,12 @@ export function captureFrom(source: CaptureSource, position: CapturePosition): C
 /**
  * Análise avulsa: uma captura só, sem posição na sequência.
  *
- * `phase` nulo é significativo — uma captura solta pode ser basal, pós-estresse
- * ou teste de bancada, e o banco precisa distinguir isso de "é basal".
+ * `captureIndex` nulo é significativo, e não "índice zero por falta de coisa
+ * melhor": uma captura solta pode ser basal, pós-estresse ou teste de bancada, e
+ * o nulo é o que distingue isso de `0`, que agora significa exatamente "é basal".
  */
 export function captureFromSingle(source: CaptureSource): CapturePayload[] {
-  return [captureFrom(source, { captureIndex: 0, phase: null, label: null, elapsedSeconds: null })];
+  return [captureFrom(source, { captureIndex: null, elapsedSeconds: null })];
 }
 
 /** Sequência: N capturas, a primeira basal e as demais dinâmicas. */

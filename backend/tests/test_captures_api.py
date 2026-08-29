@@ -48,12 +48,11 @@ class FakeStorage:
             self.existentes.discard(chave)
 
 
-def _captura(indice: int, *, phase: str | None = None) -> dict[str, Any]:
+def _captura(indice: int | None) -> dict[str, Any]:
+    """Uma captura do payload. `indice` None é a avulsa, 0 a basal, N a dinâmica N."""
     return {
         "capture_index": indice,
-        "phase": phase,
-        "label": None if phase is None else f"c{indice}",
-        "elapsed_seconds": None if phase is None else indice * 30.0,
+        "elapsed_seconds": None if indice is None else indice * 30.0,
         "align_a": 0.5,
         "align_b": 0.0,
         "align_tx": 3.0,
@@ -82,37 +81,15 @@ async def test_avulsa_e_sequencia_pelo_mesmo_endpoint(client_com_storage: tuple)
 
     for n in (1, 21):
         eid = await _consulta_de(http, f"API-TEST análise n={n}")
-        capturas = [_captura(0, phase="baseline" if n > 1 else None)]
-        capturas += [_captura(i, phase="dynamic") for i in range(1, n)]
+        # n == 1 é a avulsa, e ela se declara pelo índice nulo — não há mais uma
+        # coluna `phase` dizendo o mesmo por outro caminho.
+        capturas = [_captura(0 if n > 1 else None)]
+        capturas += [_captura(i) for i in range(1, n)]
 
         r = await http.post(f"/encounters/{eid}/captures", json={"captures": capturas})
         assert r.status_code == 201, r.text
         # Dois arquivos declarados por captura ⇒ duas URLs assinadas por captura.
         assert len(r.json()["uploads"]) == n * 2
-
-
-async def test_backend_deriva_agreement_normalized(client_com_storage: tuple) -> None:
-    """A coluna não vem do cliente: é extraída do JSON pelo backend."""
-    http, acting, _ = client_com_storage
-    acting["user_id"] = MEDICO_A
-    eid = await _consulta_de(http, "API-TEST agreement")
-
-    r = await http.post(f"/encounters/{eid}/captures", json={"captures": [_captura(0)]})
-    assert r.status_code == 201, r.text
-
-    import asyncpg
-
-    from tests.conftest import LOCAL_ADMIN_DSN
-
-    conn = await asyncpg.connect(LOCAL_ADMIN_DSN)
-    try:
-        valor = await conn.fetchval(
-            "SELECT agreement_normalized FROM public.analysis_captures WHERE encounter_id = $1",
-            __import__("uuid").UUID(eid),
-        )
-    finally:
-        await conn.close()
-    assert float(valor) == 0.87
 
 
 async def test_chave_derivada_do_dono_da_linha(client_com_storage: tuple) -> None:
@@ -287,10 +264,10 @@ async def test_payload_invalido_vira_422(client_com_storage: tuple) -> None:
 
     casos = {
         "sem capturas": {"captures": []},
+        # Índice repetido cobre a basal duplicada: duas basais são dois índices 0.
         "índice repetido": {"captures": [_captura(0), _captura(0)]},
-        "duas basais": {"captures": [_captura(0, phase="baseline"), _captura(1, phase="baseline")]},
         "kind desconhecido": {"captures": [{**_captura(0), "files": {"../escape": {"size": 1}}}]},
-        "fase inválida": {"captures": [{**_captura(0), "phase": "meio"}]},
+        "índice fora da faixa": {"captures": [{**_captura(0), "capture_index": 64}]},
         "tamanho zero": {"captures": [{**_captura(0), "files": {"optical": {"size": 0}}}]},
     }
     for rotulo, payload in casos.items():
@@ -437,7 +414,7 @@ async def test_reabrir_consulta_devolve_tudo_identico(client_com_storage: tuple)
     eid = criada.json()["id"]
     await http.post(
         f"/encounters/{eid}/captures",
-        json={"captures": [_captura(0, phase="baseline"), _captura(1, phase="dynamic")]},
+        json={"captures": [_captura(0), _captura(1)]},
     )
     storage.existentes.update(storage.assinadas)
     assert (await http.patch(f"/encounters/{eid}/analysis-status")).status_code == 204
@@ -458,11 +435,13 @@ async def test_reabrir_consulta_devolve_tudo_identico(client_com_storage: tuple)
 
     assert [c["capture_index"] for c in corpo["captures"]] == [0, 1]
     primeira = corpo["captures"][0]
-    assert primeira["phase"] == "baseline"
+    # Índice 0 é a basal: é só o que distingue as duas agora.
+    assert primeira["capture_index"] == 0
     # O que reconstrói a sobreposição: a afim e a largura da matriz.
     assert (primeira["align_a"], primeira["align_tx"]) == (0.5, 3.0)
     assert primeira["measurements"] == [{"label": "Punho", "stats": {"mean": 33.2}}]
-    assert float(primeira["agreement_normalized"]) == 0.87
+    # O indicador continua acessível, dentro do JSON de onde a coluna o copiava.
+    assert primeira["agreement"]["normalized"] == 0.87
     # URLs de leitura assinadas, uma por arquivo declarado.
     assert sorted(primeira["files"]) == ["matrix", "optical"]
     assert primeira["files"]["matrix"]["url"].endswith("leitura=1")

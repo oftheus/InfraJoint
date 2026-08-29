@@ -137,7 +137,7 @@ function medicoes(capture: CaptureDetail): readonly JointRoi[] {
 export function capturaReferencia(
   captures: readonly CaptureDetail[],
 ): CaptureDetail | null {
-  return captures.find((c) => c.phase === 'baseline') ?? captures[0] ?? null;
+  return captures.find((c) => c.capture_index === 0) ?? captures[0] ?? null;
 }
 
 /**
@@ -159,10 +159,11 @@ export function capturaFinal(captures: readonly CaptureDetail[]): CaptureDetail 
 /** Os quadros que a curva consome. Vazio na avulsa, que não tem eixo de tempo. */
 export function quadrosDaCurva(captures: readonly CaptureDetail[]): CurveFrame[] {
   return captures
-    .filter((c) => c.phase !== null && c.elapsed_seconds !== null)
+    // Índice nulo é a avulsa, que não tem eixo de tempo e portanto não tem curva.
+    .filter((c) => c.capture_index !== null && c.elapsed_seconds !== null)
     .map((c) => ({
       timeSeconds: c.elapsed_seconds as number,
-      kind: c.phase as 'baseline' | 'dynamic',
+      kind: (c.capture_index === 0 ? 'baseline' : 'dynamic') as 'baseline' | 'dynamic',
       rois: medicoes(c),
     }));
 }
@@ -284,23 +285,14 @@ const METODO: Record<string, string> = {
   manual: 'ajuste manual',
 };
 
-function mediana(valores: readonly number[]): number {
-  if (valores.length === 0) {
-    return NaN;
-  }
-  const ordenados = [...valores].sort((a, b) => a - b);
-  const meio = Math.floor(ordenados.length / 2);
-  return ordenados.length % 2 === 0
-    ? (ordenados[meio - 1] + ordenados[meio]) / 2
-    : ordenados[meio];
-}
-
 /**
  * A qualidade do dado em uma frase.
  *
- * A concordância sai como número **sem classificação**: não há limiar clínico
- * definido para ela, e o relatório não é o lugar de inventar um. Quem lê recebe o
- * valor e decide por si.
+ * **A concordância de silhueta não entra aqui, e a ausência é a decisão.** Ela não
+ * tem limiar clínico definido, e um número sem escala num laudo convida a uma
+ * interpretação que o número não sustenta — o leitor não tem como saber se 0,72 é
+ * bom. Ela continua gravada em `agreement`, para quem for analisar a série com o
+ * contexto que o laudo não tem.
  */
 export function linhaDeQualidade(captures: readonly CaptureDetail[]): string {
   if (captures.length === 0) {
@@ -318,13 +310,6 @@ export function linhaDeQualidade(captures: readonly CaptureDetail[]): string {
     .sort((a, b) => b[1] - a[1])
     .map(([metodo, n]) => `${METODO[metodo] ?? metodo} em ${n} de ${captures.length}`);
   partes.push(metodos.length > 0 ? `Alinhamento por ${metodos.join(', ')}` : 'Sem alinhamento registrado');
-
-  const concordancias = captures
-    .map((c) => c.agreement_normalized)
-    .filter((v): v is number => typeof v === 'number');
-  if (concordancias.length > 0) {
-    partes.push(`concordância mediana ${numero(mediana(concordancias), 2)}`);
-  }
 
   const comRessalva = captures.filter((c) => c.issue).length;
   if (comRessalva > 0) {

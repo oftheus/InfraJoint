@@ -41,9 +41,8 @@ function roi(side: HandSide, landmarkId: number, mean: number, label = 'Punho'):
 function captura(partial: Partial<CaptureDetail> = {}): CaptureDetail {
   return {
     id: 'c1',
-    capture_index: 0,
-    phase: null,
-    label: null,
+    // Índice nulo é a avulsa. Quem quiser sequência sobrescreve com 0 (basal) ou N.
+    capture_index: null,
     elapsed_seconds: null,
     align_a: 1,
     align_b: 0,
@@ -52,7 +51,6 @@ function captura(partial: Partial<CaptureDetail> = {}): CaptureDetail {
     align_d: 1,
     align_ty: 0,
     alignment_method: 'silhouette',
-    agreement_normalized: 0.8,
     agreement: null,
     fiducial_correction: null,
     measurements: [],
@@ -158,9 +156,9 @@ describe('capturaReferencia e capturaFinal', () => {
 
   it('na sequência, a basal é a referência e a mais tardia é a final', () => {
     const captures = [
-      captura({ id: 'base', phase: 'baseline', elapsed_seconds: 0 }),
-      captura({ id: 'd1', phase: 'dynamic', elapsed_seconds: 30 }),
-      captura({ id: 'd2', phase: 'dynamic', elapsed_seconds: 600 }),
+      captura({ id: 'base', capture_index: 0, elapsed_seconds: 0 }),
+      captura({ id: 'd1', capture_index: 1, elapsed_seconds: 30 }),
+      captura({ id: 'd2', capture_index: 2, elapsed_seconds: 600 }),
     ];
     expect(capturaReferencia(captures)?.id).toBe('base');
     expect(capturaFinal(captures)?.id).toBe('d2');
@@ -168,9 +166,9 @@ describe('capturaReferencia e capturaFinal', () => {
 
   it('acha a final mesmo quando as capturas vêm fora de ordem', () => {
     const captures = [
-      captura({ id: 'd2', phase: 'dynamic', elapsed_seconds: 600 }),
-      captura({ id: 'base', phase: 'baseline', elapsed_seconds: 0 }),
-      captura({ id: 'd1', phase: 'dynamic', elapsed_seconds: 30 }),
+      captura({ id: 'd2', capture_index: 2, elapsed_seconds: 600 }),
+      captura({ id: 'base', capture_index: 0, elapsed_seconds: 0 }),
+      captura({ id: 'd1', capture_index: 1, elapsed_seconds: 30 }),
     ];
     expect(capturaReferencia(captures)?.id).toBe('base');
     expect(capturaFinal(captures)?.id).toBe('d2');
@@ -192,11 +190,11 @@ describe('linhasDeMedicao', () => {
 
   it('na sequência, calcula a variação entre basal e final', () => {
     const ref = captura({
-      phase: 'baseline',
+      capture_index: 0,
       measurements: [roi('Esquerda', 0, 31)] as unknown as Record<string, unknown>[],
     });
     const fim = captura({
-      phase: 'dynamic',
+      capture_index: 1,
       measurements: [roi('Esquerda', 0, 33.5)] as unknown as Record<string, unknown>[],
     });
     const punho = linhasDeMedicao(ref, fim).find((l) => l.label === 'Punho');
@@ -256,7 +254,7 @@ describe('curvasPorMao', () => {
   it('faz a média das articulações de cada mão em cada instante dinâmico', () => {
     const frames = quadrosDaCurva([
       captura({
-        phase: 'baseline',
+        capture_index: 0,
         elapsed_seconds: 0,
         measurements: [
           roi('Esquerda', 0, 30),
@@ -264,7 +262,7 @@ describe('curvasPorMao', () => {
         ] as unknown as Record<string, unknown>[],
       }),
       captura({
-        phase: 'dynamic',
+        capture_index: 1,
         elapsed_seconds: 60,
         measurements: [
           roi('Esquerda', 0, 32),
@@ -283,7 +281,7 @@ describe('curvasPorMao', () => {
   it('ignora a articulação ausente na média em vez de contá-la como zero', () => {
     const frames = quadrosDaCurva([
       captura({
-        phase: 'baseline',
+        capture_index: 0,
         elapsed_seconds: 0,
         measurements: [
           roi('Esquerda', 0, 30),
@@ -291,7 +289,7 @@ describe('curvasPorMao', () => {
         ] as unknown as Record<string, unknown>[],
       }),
       captura({
-        phase: 'dynamic',
+        capture_index: 1,
         elapsed_seconds: 60,
         // O punho sumiu neste quadro: a média do instante é só do MCP 2.
         measurements: [roi('Esquerda', 5, 34, 'MCP 2')] as unknown as Record<string, unknown>[],
@@ -309,20 +307,23 @@ describe('curvasPorMao', () => {
 // --- Qualidade --------------------------------------------------------------
 
 describe('linhaDeQualidade', () => {
-  it('conta o método e dá a concordância mediana', () => {
+  it('conta o método de alinhamento das capturas', () => {
     const frase = linhaDeQualidade([
-      captura({ alignment_method: 'silhouette', agreement_normalized: 0.8 }),
-      captura({ alignment_method: 'silhouette', agreement_normalized: 0.9 }),
-      captura({ alignment_method: 'manual', agreement_normalized: null }),
+      captura({ alignment_method: 'silhouette' }),
+      captura({ alignment_method: 'silhouette' }),
+      captura({ alignment_method: 'manual' }),
     ]);
 
     expect(frase).toContain('silhueta em 2 de 3');
     expect(frase).toContain('ajuste manual em 1 de 3');
-    expect(frase).toContain('concordância mediana 0,85');
   });
 
-  it('não cita concordância quando nenhuma captura tem', () => {
-    const frase = linhaDeQualidade([captura({ agreement_normalized: null })]);
+  it('nunca cita a concordância de silhueta, que não tem limiar clínico', () => {
+    // Um número sem escala num laudo convida a uma leitura que ele não sustenta.
+    // O dado continua em `agreement`, para quem analisar a série com contexto.
+    const frase = linhaDeQualidade([
+      captura({ agreement: { normalized: 0.85, dice: 0.6, ceiling: 0.7 } }),
+    ]);
     expect(frase).not.toContain('concordância');
   });
 
@@ -376,9 +377,9 @@ describe('montarRelatorio', () => {
           analysis_status: 'ready',
           capture_count: 3,
           captures: [
-            captura({ id: 'b', phase: 'baseline', elapsed_seconds: 0 }),
-            captura({ id: 'd1', phase: 'dynamic', elapsed_seconds: 300 }),
-            captura({ id: 'd2', phase: 'dynamic', elapsed_seconds: 600 }),
+            captura({ id: 'b', capture_index: 0, elapsed_seconds: 0 }),
+            captura({ id: 'd1', capture_index: 1, elapsed_seconds: 300 }),
+            captura({ id: 'd2', capture_index: 2, elapsed_seconds: 600 }),
           ],
         }),
         recursos,
@@ -506,9 +507,9 @@ describe('o pdfmake aceita a definição', () => {
       unknown
     >[];
     const captures = [
-      captura({ id: 'b', phase: 'baseline', elapsed_seconds: 0, measurements: medicoes }),
-      captura({ id: 'd1', phase: 'dynamic', elapsed_seconds: 300, measurements: medicoes }),
-      captura({ id: 'd2', phase: 'dynamic', elapsed_seconds: 600, measurements: medicoes }),
+      captura({ id: 'b', capture_index: 0, elapsed_seconds: 0, measurements: medicoes }),
+      captura({ id: 'd1', capture_index: 1, elapsed_seconds: 300, measurements: medicoes }),
+      captura({ id: 'd2', capture_index: 2, elapsed_seconds: 600, measurements: medicoes }),
     ];
     const doc = montarRelatorio(
       { ...completa, captures, capture_count: 3 },

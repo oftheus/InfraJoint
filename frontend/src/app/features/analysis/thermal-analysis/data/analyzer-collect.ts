@@ -32,8 +32,11 @@ export interface AnalyzerReadout {
 }
 
 /** Chave que casa uma URL assinada com o arquivo dela. */
-export function uploadKey(captureIndex: number, kind: CaptureFileKind): string {
-  return `${captureIndex}:${kind}`;
+export function uploadKey(captureIndex: number | null, kind: CaptureFileKind): string {
+  // O nulo da avulsa precisa atravessar a chave sem virar 0: o backend devolve o
+  // `capture_index` como o gravou, e é por esta chave que a URL assinada reencontra
+  // o arquivo. Normalizar aqui e não lá faria o `get` devolver undefined no envio.
+  return `${captureIndex ?? 'avulsa'}:${kind}`;
 }
 
 export interface CollectedAnalysis {
@@ -43,9 +46,8 @@ export interface CollectedAnalysis {
 
 /** Uma captura da sequência, já processada, com as ROIs que a curva desenhou. */
 export interface SequenceReadout {
+  /** Posição na sequência: 0 é a basal. Sozinho, já diz o que `kind` dizia. */
   readonly index: number;
-  readonly kind: 'baseline' | 'dynamic';
-  readonly label: string;
   readonly timeSeconds: number;
   readonly matrix: ThermalMatrix;
   readonly alignment: AffineMatrix | null;
@@ -95,8 +97,6 @@ export function collectSequenceAnalysis(
     const alinhamento = captura.alignment;
     return {
       capture_index: captura.index,
-      phase: captura.kind,
-      label: captura.label,
       elapsed_seconds: captura.timeSeconds,
 
       align_a: alinhamento?.a ?? null,
@@ -143,7 +143,8 @@ export function collectSingleAnalysis(readout: AnalyzerReadout): CollectedAnalys
         // Precisa ser o mesmo que o backend assina e o browser envia; divergir dá 403.
         content_type: file.type || 'application/octet-stream',
       };
-      arquivos.set(uploadKey(0, kind), file);
+      // Avulsa: índice nulo, o mesmo que `captureFromSingle` vai enviar.
+      arquivos.set(uploadKey(null, kind), file);
     }
   }
   if (arquivos.size === 0) {

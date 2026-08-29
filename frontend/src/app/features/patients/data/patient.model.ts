@@ -160,9 +160,8 @@ export interface CaptureFileDetail {
 /** Uma captura como foi gravada — é isto que reconstrói a tela do analisador. */
 export interface CaptureDetail {
   readonly id: string;
-  readonly capture_index: number;
-  readonly phase: 'baseline' | 'dynamic' | null;
-  readonly label: string | null;
+  /** `null` = avulsa, `0` = basal, `N` = dinâmica N. A tela deriva o `kind` daqui. */
+  readonly capture_index: number | null;
   readonly elapsed_seconds: number | null;
 
   readonly align_a: number | null;
@@ -180,7 +179,6 @@ export interface CaptureDetail {
    */
   readonly alignment_method: 'silhouette' | 'fiducial' | 'manual' | null;
 
-  readonly agreement_normalized: number | null;
   readonly agreement: Record<string, unknown> | null;
   readonly fiducial_correction: Record<string, unknown> | null;
   readonly measurements: readonly Record<string, unknown>[];

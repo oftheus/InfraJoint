@@ -5,8 +5,6 @@ function captura(partial: Partial<CaptureDetail> = {}): CaptureDetail {
   return {
     id: 'c1',
     capture_index: 0,
-    phase: 'baseline',
-    label: 'Base',
     elapsed_seconds: 0,
     align_a: 0.5,
     align_b: 0,
@@ -15,7 +13,6 @@ function captura(partial: Partial<CaptureDetail> = {}): CaptureDetail {
     align_d: 0.5,
     align_ty: 7,
     alignment_method: 'silhouette',
-    agreement_normalized: 0.87,
     agreement: null,
     fiducial_correction: null,
     measurements: [],

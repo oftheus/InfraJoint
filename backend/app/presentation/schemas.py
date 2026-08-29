@@ -249,11 +249,11 @@ class CaptureFileIn(BaseModel):
 class CaptureIn(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    capture_index: int = Field(ge=0, lt=MAX_CAPTURES)
-    # Nulos na análise avulsa: uma captura solta pode ser basal, pós-estresse ou teste
-    # de bancada, e o banco precisa distinguir "não sei" de "é basal".
-    phase: Literal["baseline", "dynamic"] | None = None
-    label: str | None = Field(default=None, max_length=60)
+    # Posição da captura, em uma coluna só: None = avulsa, 0 = basal, N = dinâmica N.
+    # Nulo na avulsa porque uma captura solta pode ser basal, pós-estresse ou teste de
+    # bancada — o banco precisa distinguir "não sei" de "é basal", e é o nulo que faz
+    # isso agora que não há mais uma coluna `phase` ao lado para divergir dela.
+    capture_index: int | None = Field(default=None, ge=0, lt=MAX_CAPTURES)
     elapsed_seconds: float | None = Field(default=None, ge=0, le=100_000)
 
     align_a: float | None = None
@@ -277,15 +277,6 @@ class CaptureIn(BaseModel):
     # texto livre permitiria `../` e escapar do prefixo do dono.
     files: dict[Literal["optical", "thermal", "matrix"], CaptureFileIn]
 
-    @property
-    def agreement_normalized(self) -> float | None:
-        """O backend deriva a coluna a partir do JSON, em vez de confiar no cliente."""
-        if not self.agreement:
-            return None
-        valor = self.agreement.get("normalized")
-        return float(valor) if isinstance(valor, int | float) else None
-
-
 class AnalysisCreate(BaseModel):
     """Corpo do `POST /encounters/{id}/captures`.
 
@@ -299,20 +290,20 @@ class AnalysisCreate(BaseModel):
 
     @field_validator("captures")
     @classmethod
-    def _indices_e_basal(cls, value: list[CaptureIn]) -> list[CaptureIn]:
+    def _indices(cls, value: list[CaptureIn]) -> list[CaptureIn]:
         indices = [c.capture_index for c in value]
         if len(set(indices)) != len(indices):
             raise ValueError("capture_index repetido")
-        # O banco também cobra isto (índice parcial único), mas recusar aqui dá uma
-        # mensagem legível em vez de um erro de constraint.
-        if sum(1 for c in value if c.phase == "baseline") > 1:
-            raise ValueError("uma sequência tem no máximo uma captura basal")
+        # A basal única não precisa de checagem própria: ela é a captura de índice 0, e
+        # a linha acima já recusa índice repetido. `unique (encounter_id, capture_index)`
+        # cobra o mesmo no banco; recusar aqui só troca o erro de constraint por uma
+        # mensagem legível.
         return value
 
 
 class SignedUploadOut(BaseModel):
     capture_id: UUID
-    capture_index: int
+    capture_index: int | None
     kind: Literal["optical", "thermal", "matrix"]
     url: str
 
@@ -349,9 +340,8 @@ class CaptureDetailOut(BaseModel):
     """
 
     id: UUID
-    capture_index: int
-    phase: Literal["baseline", "dynamic"] | None
-    label: str | None
+    # None = avulsa, 0 = basal, N = dinâmica N. A tela deriva o `kind` daqui.
+    capture_index: int | None
     elapsed_seconds: float | None
 
     align_a: float | None
@@ -362,7 +352,6 @@ class CaptureDetailOut(BaseModel):
     align_ty: float | None
     alignment_method: Literal["silhouette", "fiducial", "manual"] | None
 
-    agreement_normalized: float | None
     agreement: dict[str, Any] | None
     fiducial_correction: dict[str, Any] | None
     measurements: list[dict[str, Any]]
