@@ -1,7 +1,9 @@
 import { AffineMatrix, DetectedHand, Point, ThermalMatrix } from './image-analyzer.model';
 import {
   JOINT_ROI_DEFS,
+  JointRoi,
   JointRoiOverride,
+  applyJointOverrides,
   captureJointRois,
   jointRoiKey,
   jointRoiRadii,
@@ -123,5 +125,91 @@ describe('captureJointRois', () => {
     expect(wristNoMask.skinCoverage).toBe(1);
     expect(wristMasked.skinCoverage).toBeGreaterThan(0);
     expect(wristMasked.skinCoverage).toBeLessThan(1);
+  });
+});
+
+describe('applyJointOverrides', () => {
+  const matrix = uniformMatrix(640, 480, 30);
+
+  /** O que a consulta gravou: uma ROI já medida, sem landmark por trás. */
+  function gravada(overrides: Partial<JointRoi> = {}): JointRoi {
+    return {
+      side: 'Esquerda',
+      landmarkId: 0,
+      label: 'Punho',
+      key: jointRoiKey('Esquerda', 0),
+      rgb: { x: 200, y: 200 },
+      csv: { x: 100, y: 100 },
+      shape: 'ellipse',
+      rxCsv: 27,
+      ryCsv: 17,
+      stats: { mean: 30, median: 30, max: 30, min: 30, area: 1, count: 1 },
+      skinCoverage: 1,
+      edited: false,
+      ...overrides,
+    };
+  }
+
+  it('escala as ROIs gravadas pelo slider global', () => {
+    const [roi] = applyJointOverrides([gravada()], matrix, HALF_SCALE, { sizeScale: 0.5 });
+    expect(roi.rxCsv).toBe(13.5); // 27 × 0.5, relativo ao raio GRAVADO
+    expect(roi.ryCsv).toBe(8.5);
+    expect(roi.stats.mean).toBeCloseTo(30); // remedida na matriz, não herdada
+  });
+
+  it('não marca como editada a ROI que só seguiu o slider', () => {
+    const [roi] = applyJointOverrides([gravada()], matrix, HALF_SCALE, { sizeScale: 1.5 });
+    expect(roi.edited).toBe(false);
+  });
+
+  it('devolve os números gravados intactos quando não há ajuste nem escala', () => {
+    const base = [gravada()];
+    expect(applyJointOverrides(base, matrix, HALF_SCALE)).toBe(base);
+    expect(applyJointOverrides(base, matrix, HALF_SCALE, { sizeScale: 1 })).toBe(base);
+  });
+
+  it('fixa a ROI redimensionada à mão e deixa a movida seguir o slider', () => {
+    const punho = gravada();
+    const mcp = gravada({
+      landmarkId: 5,
+      label: 'MCP 2',
+      key: jointRoiKey('Esquerda', 5),
+      shape: 'circle',
+      rxCsv: 10,
+      ryCsv: 10,
+    });
+    const overrides = new Map<string, JointRoiOverride>([
+      [punho.key, { rxCsv: 20, ryCsv: 12 }], // redimensionada: fica fixa
+      [mcp.key, { rgb: { x: 300, y: 260 } }], // só movida: continua seguindo
+    ]);
+
+    const [comTamanho, soMovida] = applyJointOverrides([punho, mcp], matrix, HALF_SCALE, {
+      sizeScale: 2,
+      overrides,
+    });
+
+    expect(comTamanho.rxCsv).toBe(20); // o ajuste manual vence o slider
+    expect(comTamanho.ryCsv).toBe(12);
+    expect(soMovida.rxCsv).toBe(20); // 10 × 2, do slider
+    expect(soMovida.csv).toEqual({ x: 150, y: 130 }); // centro movido, pelo alinhamento
+    expect(comTamanho.edited).toBe(true);
+    expect(soMovida.edited).toBe(true);
+  });
+
+  it('recalcula skinCoverage ao mudar o raio, em vez de herdar a gravada', () => {
+    // Pele quente só à esquerda de CSV x=105; o resto é fundo frio.
+    const split = uniformMatrix(640, 480, 20);
+    for (let y = 0; y < 480; y++) {
+      for (let x = 0; x < 640; x++) {
+        split.values[y * 640 + x] = x < 105 ? 32 : 20;
+      }
+    }
+    const [roi] = applyJointOverrides([gravada()], split, HALF_SCALE, {
+      sizeScale: 1.5,
+      skinTest: (x) => x < 105,
+    });
+
+    expect(roi.skinCoverage).toBeLessThan(1); // a gravada dizia 1
+    expect(roi.skinCoverage).toBeCloseTo(roi.stats.count / roi.stats.area);
   });
 });

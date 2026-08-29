@@ -54,3 +54,7 @@ Desktop.ini
 ### Temporary files
 *.tmp
 *.temp
+# coverage (backend)
+htmlcov/
+.coverage
+coverage.xml
