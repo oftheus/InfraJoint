@@ -471,13 +471,11 @@ export class ImageAnalyzerPage {
         : undefined;
 
     if (capture.restoredJoints) {
-      return applyJointOverrides(
-        capture.restoredJoints,
-        capture.jointOverrides,
-        capture.matrix,
-        capture.alignment,
+      return applyJointOverrides(capture.restoredJoints, capture.matrix, capture.alignment, {
+        sizeScale,
         skinTest,
-      );
+        overrides: capture.jointOverrides,
+      });
     }
     if (capture.hands.length === 0) {
       return [];
@@ -618,17 +616,17 @@ export class ImageAnalyzerPage {
       return [];
     }
 
-    // Consulta reaberta: a base são as medições gravadas, e mover uma ROI recalcula
-    // a estatística da matriz. Sem landmarks, e sem precisar deles.
+    // Consulta reaberta: a base são as medições gravadas, e mover, redimensionar ou
+    // escalar uma ROI recalcula a estatística da matriz. Sem landmarks, e sem
+    // precisar deles — o slider vale aqui como na sessão viva, só que relativo ao
+    // tamanho gravado.
     const restauradas = this.activeSequenceCapture()?.restoredJoints ?? this.restoredJoints();
     if (restauradas) {
-      return applyJointOverrides(
-        restauradas,
-        this.jointOverrides(),
-        matrix,
-        alignment,
-        this.skinTestAtual(alignment),
-      );
+      return applyJointOverrides(restauradas, matrix, alignment, {
+        sizeScale: this.jointSizePct() / 100,
+        skinTest: this.skinTestAtual(alignment),
+        overrides: this.jointOverrides(),
+      });
     }
     if (!hands) {
       return [];

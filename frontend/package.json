@@ -9,7 +9,8 @@
     "test": "ng test",
     "serve:ssr:InfraJoint": "node dist/InfraJoint/server/server.mjs",
     "lint": "ng lint",
-    "start:prod": "ng serve --configuration development"
+    "start:prod": "ng serve --configuration development",
+    "test:coverage": "ng test --coverage --watch=false --coverage-reporters=text-summary --coverage-reporters=html"
   },
   "private": true,
   "packageManager": "npm@11.13.0",
@@ -44,6 +45,7 @@
     "@eslint/js": "^10.0.1",
     "@types/express": "^5.0.1",
     "@types/node": "^20.17.19",
+    "@vitest/coverage-v8": "^4.1.11",
     "angular-eslint": "21.4.0",
     "eslint": "^10.3.0",
     "jsdom": "^28.0.0",

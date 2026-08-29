@@ -150,34 +150,60 @@ export function captureJointRois(
 }
 
 /**
- * Aplica ajustes manuais sobre ROIs articulares **já calculadas**.
+ * Aplica ajustes manuais e a escala global sobre ROIs articulares **já calculadas**.
  *
- * Existe para o caminho em que as posições não vêm de landmarks: a consulta
- * reaberta parte das medições gravadas, e mover uma ROI é mudar o centro e
- * recalcular a estatística da matriz — sem redetectar mão nenhuma.
+ * Existe para o caminho em que as posições não vêm de landmarks: a consulta reaberta
+ * parte das medições gravadas, e mover ou redimensionar uma ROI é mudar centro/raios
+ * e recalcular a estatística da matriz — sem redetectar mão nenhuma.
  *
- * `captureJointRois` continua sendo o caminho da sessão viva, onde há landmarks.
+ * `captureJointRois` continua sendo o caminho da sessão viva, onde há landmarks. As
+ * duas assinaturas são deliberadamente iguais a partir de `matrix`: a razão de o
+ * slider global não funcionar em consulta reaberta era esta função não aceitar
+ * `sizeScale`, e os chamadores não terem onde passá-lo. Divergir de novo agora exige
+ * mudar uma assinatura que a outra função espelha.
+ *
+ * **`sizeScale` é relativo ao gravado**, não ao padrão do `core.py`: os raios da base
+ * já embutem a escala em vigor quando a análise foi salva. 100% é o tamanho com que
+ * se mediu, que é o que o registro clínico afirma.
  */
 export function applyJointOverrides(
   base: readonly JointRoi[],
-  overrides: ReadonlyMap<string, JointRoiOverride>,
   matrix: ThermalMatrix,
   alignment: AffineMatrix,
-  skinTest?: (csvX: number, csvY: number) => boolean,
+  options: JointRoiOptions = {},
 ): readonly JointRoi[] {
-  if (overrides.size === 0) {
+  const sizeScale = options.sizeScale ?? 1;
+  const overrides = options.overrides;
+  // Sem ajuste manual e com o slider no tamanho gravado não há o que recalcular, e
+  // devolver `base` é mais do que economia: preserva os números exatos do registro.
+  // Recalcular aqui os reproduziria sob o teste de pele em vigor AGORA, que pode não
+  // ser o de quando se mediu — e voltar o slider a 100% deixaria de restaurar o que
+  // a consulta gravou.
+  if (!overrides?.size && sizeScale === 1) {
     return base;
   }
   return base.map((roi) => {
-    const ajuste = overrides.get(roi.key);
-    if (!ajuste) {
-      return roi;
-    }
-    const rgb = ajuste.rgb ?? roi.rgb;
-    const rxCsv = ajuste.rxCsv ?? roi.rxCsv;
-    const ryCsv = ajuste.ryCsv ?? roi.ryCsv;
+    const ajuste = overrides?.get(roi.key);
+    const rgb = ajuste?.rgb ?? roi.rgb;
+    // Mesma precedência da sessão viva: quem redimensionou à mão fica fixo, quem só
+    // moveu (ou nem tocou) continua seguindo o slider.
+    const rxCsv = ajuste?.rxCsv ?? roi.rxCsv * sizeScale;
+    const ryCsv = ajuste?.ryCsv ?? roi.ryCsv * sizeScale;
     const csv = applyAffine(alignment, rgb.x, rgb.y);
-    const stats = computeRoiStats(matrix, roi.shape, csv.x, csv.y, rxCsv, ryCsv, skinTest);
-    return { ...roi, rgb, csv, rxCsv, ryCsv, stats, edited: true };
+    const stats = computeRoiStats(matrix, roi.shape, csv.x, csv.y, rxCsv, ryCsv, options.skinTest);
+    return {
+      ...roi,
+      rgb,
+      csv,
+      rxCsv,
+      ryCsv,
+      stats,
+      // Recalculada junto com `stats`, e não herdada: mudar o raio muda a fração da
+      // ROI que é pele, e a assimetria descarta o par abaixo de 40%. Herdar deixaria
+      // esse corte decidido por uma cobertura que já não descreve a ROI desenhada.
+      skinCoverage: stats.area > 0 ? stats.count / stats.area : 0,
+      // Escala global não é edição: ela não fixa a ROI nem a destaca no overlay.
+      edited: roi.edited || ajuste !== undefined,
+    };
   });
 }
