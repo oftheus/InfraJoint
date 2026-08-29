@@ -13,8 +13,6 @@ from app.domain.entities import Capture, CaptureFile, FileKind
 # router valida os campos, e esta lista é a única que o SQL conhece.
 _INSERT_COLUMNS = (
     "capture_index",
-    "phase",
-    "label",
     "elapsed_seconds",
     "align_a",
     "align_b",
@@ -23,7 +21,6 @@ _INSERT_COLUMNS = (
     "align_d",
     "align_ty",
     "alignment_method",
-    "agreement_normalized",
     "agreement",
     "fiducial_correction",
     "measurements",

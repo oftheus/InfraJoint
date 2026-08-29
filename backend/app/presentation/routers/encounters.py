@@ -41,8 +41,6 @@ async def create_captures(
     captures = []
     for captura in payload.captures:
         linha = captura.model_dump(exclude={"files"})
-        # A coluna é derivada do JSON pelo backend, nunca enviada pelo cliente.
-        linha["agreement_normalized"] = captura.agreement_normalized
         linha["files"] = {k: v.model_dump() for k, v in captura.files.items()}
         captures.append(linha)
 

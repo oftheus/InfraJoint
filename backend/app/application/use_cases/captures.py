@@ -24,7 +24,7 @@ from app.domain.repositories import (
 @dataclass(frozen=True, slots=True)
 class SignedUpload:
     capture_id: UUID
-    capture_index: int
+    capture_index: int | None
     kind: FileKind
     url: str
 
@@ -135,7 +135,14 @@ class MarkAnalysisReady:
             for kind in sorted(capture.files):
                 alvo = CaptureFile(capture.owner_id, encounter_id, capture.id, FileKind(kind))
                 if not await self.storage.exists(alvo):
-                    faltando.append(f"captura {capture.capture_index}: {kind}")
+                    # Índice nulo é a análise avulsa: nomeá-la "captura None" mandaria
+                    # o médico procurar uma posição que não existe na tela dele.
+                    onde = (
+                        "captura avulsa"
+                        if capture.capture_index is None
+                        else f"captura {capture.capture_index}"
+                    )
+                    faltando.append(f"{onde}: {kind}")
 
         if faltando:
             raise ConflictError("; ".join(faltando))

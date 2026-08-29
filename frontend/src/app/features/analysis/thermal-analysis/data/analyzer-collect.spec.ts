@@ -37,10 +37,12 @@ describe('collectSingleAnalysis', () => {
       'optical',
       'thermal',
     ]);
+    // Chaveado por índice nulo, igual ao que o payload envia: é por esta chave que
+    // a URL assinada reencontra o arquivo no envio.
     expect([...coletado.files.keys()].sort()).toEqual([
-      uploadKey(0, 'matrix'),
-      uploadKey(0, 'optical'),
-      uploadKey(0, 'thermal'),
+      uploadKey(null, 'matrix'),
+      uploadKey(null, 'optical'),
+      uploadKey(null, 'thermal'),
     ]);
   });
 
@@ -57,7 +59,7 @@ describe('collectSingleAnalysis', () => {
 
   it('omite o arquivo que não foi carregado', () => {
     const coletado = collectSingleAnalysis(readout({ thermalFile: null }))!;
-    expect(coletado.files.has(uploadKey(0, 'thermal'))).toBe(false);
+    expect(coletado.files.has(uploadKey(null, 'thermal'))).toBe(false);
     expect(coletado.files.size).toBe(2);
   });
 
@@ -77,8 +79,8 @@ describe('collectSingleAnalysis', () => {
       string,
       unknown
     >;
-    expect(captura['capture_index']).toBe(0);
-    expect(captura['phase']).toBeNull();
+    // A avulsa se declara pelo índice nulo — não há mais uma `phase` ao lado.
+    expect(captura['capture_index']).toBeNull();
     expect(captura['elapsed_seconds']).toBeNull();
   });
 });
@@ -86,8 +88,6 @@ describe('collectSingleAnalysis', () => {
 function captura(index: number, overrides: Partial<SequenceReadout> = {}): SequenceReadout {
   return {
     index,
-    kind: index === 0 ? 'baseline' : 'dynamic',
-    label: index === 0 ? 'Est' : `Din${String(index).padStart(2, '0')}`,
     timeSeconds: index * 15,
     matrix: { width: 640, height: 480, values: new Float64Array(1) },
     alignment: { a: 0.5, b: 0, tx: 1, c: 0, d: 0.5, ty: 2 },
@@ -115,13 +115,16 @@ describe('collectSequenceAnalysis', () => {
 
   it('preserva a posição de cada captura na sequência', () => {
     const coletado = collectSequenceAnalysis([captura(0), captura(1), captura(2)])!;
-    const fases = coletado.payload.captures.map((c) => (c as Record<string, unknown>)['phase']);
+    const indices = coletado.payload.captures.map(
+      (c) => (c as Record<string, unknown>)['capture_index'],
+    );
     const tempos = coletado.payload.captures.map(
       (c) => (c as Record<string, unknown>)['elapsed_seconds'],
     );
 
-    // Exatamente uma basal — o banco cobra isso com índice parcial único.
-    expect(fases).toEqual(['baseline', 'dynamic', 'dynamic']);
+    // Uma basal só: ela é o índice 0, e `unique (encounter_id, capture_index)` no
+    // banco garante que não haja duas.
+    expect(indices).toEqual([0, 1, 2]);
     expect(tempos).toEqual([0, 15, 30]);
   });
 

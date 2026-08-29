@@ -133,7 +133,8 @@ class Capture:
     id: UUID
     encounter_id: UUID
     owner_id: UUID
-    capture_index: int
+    # None na análise avulsa, 0 na basal, N na dinâmica N.
+    capture_index: int | None
     files: Mapping[str, Any]
 
 
