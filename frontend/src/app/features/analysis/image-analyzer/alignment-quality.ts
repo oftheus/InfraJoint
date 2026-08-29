@@ -67,32 +67,42 @@ import { AffineMatrix, RgbPixels, ThermalMatrix } from './image-analyzer.model';
 import { binaryOpen, connectedComponents, otsuThreshold } from './image-ops';
 
 /**
- * Bumped whenever anything feeding the numbers changes — the formula or the
- * masks — so captures collected under different definitions are never pooled by
- * accident once these values are exported.
+ * Silhouette agreement of one alignment: the reported indicator plus the two
+ * areas that give it meaning.
  *
- * - 1: area Dice over the ceiling, matrix at full resolution, no FOV restriction.
- * - 2: the optical mask is denoised like the thermal one (it previously went in
- *   raw). Raises the indicator by up to ~1.2 points, but only on captures where
- *   the optical mask is the smaller of the two — elsewhere it cancels out of
- *   `I/min(A,B)`. Version 1 values are not comparable with these.
+ * **Three fields, and the other four are derivable from them** — which is why
+ * they are not carried. `dice`, `ceiling` and `intersection` were stored
+ * alongside and are each a rearrangement of what is here:
+ *
+ * ```
+ * ceiling      = 2·min(A,B) / (A+B)
+ * dice         = normalized × ceiling
+ * intersection = normalized × min(A,B)
+ * ```
+ *
+ * A `version` field was carried too, stamping which definition of the metric
+ * produced the number, so captures from different definitions were never pooled
+ * by accident (v1 fed the optical mask in raw; v2 denoises it like the thermal
+ * one, worth up to ~1.2 points where the optical mask is the smaller). It went
+ * out while the system is still pre-launch and every row is test data, where a
+ * uniform stamp says nothing and `created_at` plus the git history recovers the
+ * same cut. **The day this file changes with real patient captures already
+ * recorded, decide how to mark the boundary before deploying** — reinstating the
+ * stamp, or writing down the cutoff date.
+ *
+ * The two areas stay because they are the one thing here that no formula brings
+ * back, and without them the indicator is ambiguous: it reads as "share of the
+ * optical silhouette on warm cells" when A ≤ B and as "share of the warm mask
+ * covered" when B < A. Which side bounded the ceiling is unrecoverable once the
+ * areas are gone, and pooled analysis has to stratify by it.
  */
-export const AGREEMENT_METRIC_VERSION = 2;
-
-/** Silhouette agreement of one alignment, with the parts kept for analysis. */
 export interface SilhouetteAgreement {
-  /** Area Dice of the two masks under the evaluated transform (0–1). */
-  readonly dice: number;
-  /** Highest Dice these two masks could reach: 2·min(A,B)/(A+B). */
-  readonly ceiling: number;
-  /** `dice / ceiling` — the reported indicator. */
+  /** `dice / ceiling` — the reported indicator, and the only one the UI shows. */
   readonly normalized: number;
   /** A: optical skin cells landing inside the matrix. */
   readonly opticalArea: number;
   /** B: warm cells of the thermal silhouette. */
   readonly thermalArea: number;
-  readonly intersection: number;
-  readonly version: number;
 }
 
 /**
@@ -123,18 +133,14 @@ export function measureSilhouetteAgreement(
     return null;
   }
 
+  // As três grandezas continuam sendo calculadas — não dá para chegar ao
+  // indicador sem elas. O que mudou é que só o indicador e as duas áreas são
+  // devolvidos: `dice`, `ceiling` e `intersection` voltam por conta de quem
+  // precisar (ver as fórmulas em `SilhouetteAgreement`).
   const total = opticalArea + thermalArea;
   const dice = (2 * intersection) / total;
   const ceiling = (2 * Math.min(opticalArea, thermalArea)) / total;
-  return {
-    dice,
-    ceiling,
-    normalized: dice / ceiling,
-    opticalArea,
-    thermalArea,
-    intersection,
-    version: AGREEMENT_METRIC_VERSION,
-  };
+  return { normalized: dice / ceiling, opticalArea, thermalArea };
 }
 
 /**

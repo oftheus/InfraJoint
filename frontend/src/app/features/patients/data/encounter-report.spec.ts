@@ -322,7 +322,7 @@ describe('linhaDeQualidade', () => {
     // Um número sem escala num laudo convida a uma leitura que ele não sustenta.
     // O dado continua em `agreement`, para quem analisar a série com contexto.
     const frase = linhaDeQualidade([
-      captura({ agreement: { normalized: 0.85, dice: 0.6, ceiling: 0.7 } }),
+      captura({ agreement: { normalized: 0.85, opticalArea: 900, thermalArea: 1100 } }),
     ]);
     expect(frase).not.toContain('concordância');
   });
