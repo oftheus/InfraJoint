@@ -1,4 +1,4 @@
-import { measureSilhouetteAgreement } from './alignment-quality';
+import { SilhouetteAgreement, measureSilhouetteAgreement } from './alignment-quality';
 import { AffineMatrix, RgbPixels, ThermalMatrix } from './image-analyzer.model';
 
 interface Rect {
@@ -58,6 +58,21 @@ function grown(rects: Rect[], by: number): Rect[] {
   return rects.map((r) => ({ x: r.x - by, y: r.y - by, w: r.w + 2 * by, h: r.h + 2 * by }));
 }
 
+/**
+ * O `ceiling` e o `dice`, recalculados a partir dos três campos guardados.
+ *
+ * Existem aqui, e não no módulo, porque é exatamente isto que os testes abaixo
+ * precisam afirmar: que reduzir a forma persistida a três campos não perdeu
+ * nada. Se alguma das fórmulas de `SilhouetteAgreement` estiver errada, é aqui
+ * que quebra.
+ */
+function ceilingDe(a: SilhouetteAgreement): number {
+  return (2 * Math.min(a.opticalArea, a.thermalArea)) / (a.opticalArea + a.thermalArea);
+}
+function diceDe(a: SilhouetteAgreement): number {
+  return a.normalized * ceilingDe(a);
+}
+
 describe('measureSilhouetteAgreement', () => {
   it('scores identical silhouettes at their ceiling', () => {
     const pixels = rgbScene(320, 240, ARMS);
@@ -65,7 +80,7 @@ describe('measureSilhouetteAgreement', () => {
 
     const agreement = measureSilhouetteAgreement(pixels, matrix, scaled(0.5))!;
     expect(agreement).not.toBeNull();
-    expect(agreement.dice).toBeGreaterThan(0.9);
+    expect(diceDe(agreement)).toBeGreaterThan(0.9);
     expect(agreement.normalized).toBeGreaterThan(0.98);
   });
 
@@ -78,7 +93,7 @@ describe('measureSilhouetteAgreement', () => {
 
     const agreement = measureSilhouetteAgreement(pixels, matrix, scaled(0.5))!;
     expect(agreement.thermalArea).toBeGreaterThan(agreement.opticalArea);
-    expect(agreement.dice).toBeLessThan(0.9); // raw Dice punishes the halo
+    expect(diceDe(agreement)).toBeLessThan(0.9); // raw Dice punishes the halo
     expect(agreement.normalized).toBeGreaterThan(0.99); // the ceiling absorbs it
   });
 
@@ -91,7 +106,7 @@ describe('measureSilhouetteAgreement', () => {
 
     const agreement = measureSilhouetteAgreement(pixels, matrix, scaled(0.5))!;
     expect(agreement.thermalArea).toBeLessThan(agreement.opticalArea);
-    expect(agreement.dice).toBeLessThan(0.95);
+    expect(diceDe(agreement)).toBeLessThan(0.95);
     expect(agreement.normalized).toBeGreaterThan(0.99);
   });
 
