@@ -423,7 +423,12 @@ export class ThermalAnalysisPage {
             url: upload.url,
             body: file,
             contentType: file.type || 'application/octet-stream',
-            describe: `captura ${upload.capture_index}: ${upload.kind}`,
+            // Índice nulo é a avulsa: "captura null" mandaria o médico procurar uma
+            // posição que não existe na tela dele. Mesma regra do erro do backend.
+            describe:
+              upload.capture_index === null
+                ? `captura avulsa: ${upload.kind}`
+                : `captura ${upload.capture_index}: ${upload.kind}`,
           };
         });
       }
