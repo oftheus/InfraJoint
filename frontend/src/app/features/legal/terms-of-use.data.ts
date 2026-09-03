@@ -2,10 +2,10 @@ import { LEGAL_CONTACT_EMAIL } from './legal-contact';
 import { LegalSection } from './legal-document.model';
 
 /** Machine-readable date for the `<time>` element. */
-export const TERMS_OF_USE_LAST_UPDATED_ISO = '2026-08-06';
+export const TERMS_OF_USE_LAST_UPDATED_ISO = '2026-09-03';
 
 /** Human-readable date shown to the user. */
-export const TERMS_OF_USE_LAST_UPDATED = '6 de agosto de 2026';
+export const TERMS_OF_USE_LAST_UPDATED = '3 de setembro de 2026';
 
 /**
  * Content of the terms of use, in the same section format as the privacy
@@ -109,6 +109,10 @@ export const TERMS_OF_USE_SECTIONS: LegalSection[] = [
             label: 'Interpretação dos resultados',
             text: 'avaliar criticamente os resultados obtidos, ciente das limitações de uma ferramenta acadêmica em desenvolvimento.',
           },
+          {
+            label: 'Acervo compartilhado de pesquisa',
+            text: 'se a sua conta tem perfil de pesquisador, os registros que você cadastra ficam visíveis e editáveis pelos demais pesquisadores da plataforma. Ao cadastrar, você declara que a base legal, o consentimento do participante e a aprovação do comitê de ética cobrem esse compartilhamento. Ao acessar registros de outro pesquisador, use-os apenas para as finalidades do projeto e preserve a confidencialidade dos participantes.',
+          },
         ],
       },
     ],
@@ -135,7 +139,13 @@ export const TERMS_OF_USE_SECTIONS: LegalSection[] = [
             text: 'utilizar robôs, scripts ou automações que sobrecarreguem ou prejudiquem o funcionamento do serviço;',
           },
           { text: 'carregar conteúdo ilícito, ofensivo ou que viole direitos de terceiros;' },
-          { text: 'compartilhar as suas credenciais de acesso com outras pessoas.' },
+          { text: 'compartilhar as suas credenciais de acesso com outras pessoas;' },
+          {
+            text: 'extrair, copiar ou reutilizar os registros clínicos do acervo de pesquisa para finalidades alheias ao projeto, inclusive para compor conjuntos de dados ou treinar modelos de inteligência artificial;',
+          },
+          {
+            text: 'divulgar a terceiros dados de pacientes cadastrados por outro pesquisador sem a autorização dele e sem a base legal exigida pela LGPD.',
+          },
         ],
       },
       {
@@ -155,6 +165,10 @@ export const TERMS_OF_USE_SECTIONS: LegalSection[] = [
       {
         kind: 'paragraph',
         text: 'Os arquivos e os dados de pesquisa que você utiliza continuam sendo seus. Ao divulgar resultados obtidos com apoio da ferramenta em trabalhos acadêmicos, pedimos que o InfraJoint seja devidamente citado.',
+      },
+      {
+        kind: 'paragraph',
+        text: 'Carregar arquivos na plataforma não nos concede licença sobre eles além do necessário para armazená-los e devolvê-los a você. Não utilizamos as imagens, os arquivos de temperatura e os dados clínicos para treinar modelos de inteligência artificial, não os cedemos a terceiros e não os empregamos em finalidade diversa da que motivou o registro, conforme detalhado na Política de Privacidade.',
       },
     ],
   },

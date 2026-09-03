@@ -30,9 +30,10 @@
             · {{ label }}
           }
         </p>
-        <!-- Só vem preenchido para admin. Esta tela tem o botão de excluir, que leva o
-             histórico clínico inteiro por cascata: saber de quem é o prontuário é o que
-             separa uma decisão de um acidente. -->
+        <!-- Só vem preenchido em prontuário alheio: do acervo de pesquisa, para o
+             pesquisador, ou de qualquer médico, para o admin. Esta tela tem o botão de
+             excluir, que leva o histórico clínico inteiro por cascata: saber de quem é o
+             prontuário é o que separa uma decisão de um acidente. -->
         @if (detail.owner_name) {
           <p
             class="mt-3 inline-flex items-center gap-1.5 rounded-full bg-brand-50 px-3 py-1.5 text-sm font-medium text-secondary"
@@ -41,26 +42,37 @@
             Paciente de {{ detail.owner_name }}
           </p>
         }
+        <!-- Quem editou por último, quando não foi quem está lendo. Num acervo
+             compartilhado, é o que explica um cadastro que mudou sozinho. -->
+        @if (detail.editor_name) {
+          <p class="mt-2 text-sm text-muted">
+            Última edição por {{ detail.editor_name }}
+          </p>
+        }
       </div>
 
       <div class="flex gap-3">
-        <!-- Editar some no paciente de outro médico. `owner_name` preenchido significa
-             exatamente isso, e é onde `patients_update` recusaria: sem esconder aqui, o
-             admin preencheria o formulário inteiro para receber 403 no Salvar.
-             Excluir continua — ele administra o acervo, e o rótulo acima diz de quem é. -->
-        @if (!detail.owner_name) {
+        <!-- Cada botão pergunta ao campo que corresponde à policy que o recusaria:
+             `can_edit` a `patients_update`, `can_delete` a `patients_delete`. Deduzir
+             os dois de `owner_name` funcionava enquanto "é de outra pessoa" implicava
+             "não posso mexer" — o acervo de pesquisa desfez essa implicação, e as duas
+             respostas passaram a divergir. O admin lê e apaga sem editar; o
+             pesquisador edita o acervo do par sem apagar. -->
+        @if (detail.can_edit) {
           <button type="button" class="btn-secondary h-11 px-6 text-sm" (click)="toggleEditing()">
             {{ editing() ? 'Cancelar' : 'Editar' }}
           </button>
         }
-        <button
-          type="button"
-          class="inline-flex h-11 items-center justify-center rounded-full border border-red-200 bg-red-50 px-6 text-sm font-semibold text-red-600 transition-colors hover:bg-red-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-400"
-          (click)="toggleConfirmDelete()"
-        >
-          <svg [lucideIcon]="'trash-2'" class="mr-2 h-4 w-4" aria-hidden="true"></svg>
-          Excluir
-        </button>
+        @if (detail.can_delete) {
+          <button
+            type="button"
+            class="inline-flex h-11 items-center justify-center rounded-full border border-red-200 bg-red-50 px-6 text-sm font-semibold text-red-600 transition-colors hover:bg-red-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-400"
+            (click)="toggleConfirmDelete()"
+          >
+            <svg [lucideIcon]="'trash-2'" class="mr-2 h-4 w-4" aria-hidden="true"></svg>
+            Excluir
+          </button>
+        }
       </div>
     </div>
 
@@ -189,14 +201,20 @@
           a mesma origem e possa carregar body map e escores. Este botão apenas
           abre o fluxo com o paciente já escolhido.
         -->
-        <a
-          class="btn-primary inline-flex h-11 items-center px-6 text-sm"
-          [routerLink]="['/analise', 'analise-termica']"
-          [queryParams]="{ paciente: id() }"
-        >
-          <svg [lucideIcon]="'stethoscope'" class="mr-2 h-4 w-4" aria-hidden="true"></svg>
-          Nova consulta
-        </a>
+        <!-- Mesma pergunta do botão Editar: registrar consulta é escrever no
+             paciente, e `CreateEncounter` recusa com 403 quem não pode. O admin
+             enxerga prontuário alheio, então sem isto ele atravessaria o fluxo de
+             Análise Térmica inteiro para bater na recusa ao gravar. -->
+        @if (detail.can_edit) {
+          <a
+            class="btn-primary inline-flex h-11 items-center px-6 text-sm"
+            [routerLink]="['/analise', 'analise-termica']"
+            [queryParams]="{ paciente: id() }"
+          >
+            <svg [lucideIcon]="'stethoscope'" class="mr-2 h-4 w-4" aria-hidden="true"></svg>
+            Nova consulta
+          </a>
+        }
       </div>
 
       @if (encounters().length === 0) {
@@ -215,6 +233,11 @@
                 {{ encounter.occurred_at | date: 'dd/MM/yyyy HH:mm' }}
               </p>
               <p class="mt-1 text-base">{{ encounter.reason || 'Sem motivo informado' }}</p>
+              <!-- Só aparece no acervo compartilhado: a consulta pertence ao dono do
+                   paciente, então sem este rótulo ela pareceria registrada por ele. -->
+              @if (encounter.author_name) {
+                <p class="mt-1 text-sm text-muted">Registrada por {{ encounter.author_name }}</p>
+              }
 
               <!-- Índices de atividade gravados no fluxo de Análise Térmica -->
               @if (scoresOf(encounter); as indices) {

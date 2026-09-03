@@ -17,6 +17,10 @@ function paciente(id: string, created_at: string, partial: Partial<Patient> = {}
     primary_diagnosis: null,
     created_at,
     updated_at: created_at,
+    // O caso comum das fixtures: prontuário do próprio leitor, que pode tudo. Os
+    // testes de linha alheia sobrescrevem por `partial`.
+    can_edit: true,
+    can_delete: true,
     ...partial,
   };
 }

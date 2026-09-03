@@ -43,7 +43,7 @@ export const appRoutes: Routes = [
       {
         path: 'pacientes',
         canActivate: [roleGuard],
-        data: { roles: ['medico', 'admin'] },
+        data: { roles: ['medico', 'pesquisador', 'admin'] },
         loadChildren: () =>
           import('./features/patients/patients.routes').then((m) => m.patientsRoutes),
       },

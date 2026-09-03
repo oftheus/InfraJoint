@@ -92,7 +92,7 @@ export class AuthShell {
       label: 'Pacientes',
       icon: 'user-round',
       route: '/pacientes',
-      requiredRoles: ['medico', 'admin'],
+      requiredRoles: ['medico', 'pesquisador', 'admin'],
     },
     {
       kind: 'group',
@@ -119,7 +119,7 @@ export class AuthShell {
           label: 'Análise térmica',
           icon: 'thermometer',
           route: '/analise/analise-termica',
-          requiredRoles: ['medico', 'admin'],
+          requiredRoles: ['medico', 'pesquisador', 'admin'],
         },
       ],
     },

@@ -65,11 +65,12 @@ class CreateCaptures:
         if encounter is None:
             raise NotFoundError("consulta não encontrada")
 
-        # Mesma regra da criação da consulta: a análise é de quem atendeu. O admin
-        # enxerga a consulta alheia, então o 404 acima não o pega — e sem esta guarda
-        # ele receberia 500 vindo da policy de escrita das capturas.
-        if encounter.owner_id != user.id:
-            raise ForbiddenError("apenas o médico responsável pela consulta grava a análise")
+        # Mesma regra da criação da consulta: quem grava a análise é quem pode
+        # escrever na consulta — o dono, ou um par do acervo de pesquisa. O admin
+        # enxerga a consulta alheia e não escreve nela, então o 404 acima não o pega —
+        # e sem esta guarda ele receberia 500 vindo da policy de escrita das capturas.
+        if not encounter.can_edit:
+            raise ForbiddenError("apenas o responsável pela consulta grava a análise")
 
         if await self.captures.list_for_encounter(encounter_id):
             raise ConflictError("esta consulta já tem uma análise de imagem")
@@ -137,8 +138,8 @@ class MarkAnalysisReady:
         # escrita, mas o 404 acima não pega o admin, que enxerga a consulta alheia:
         # sem esta linha ele fecharia a análise de outro médico, ou receberia um 500
         # vindo da policy no lugar do 403 que descreve o que aconteceu.
-        if encounter.owner_id != user.id:
-            raise ForbiddenError("apenas o médico responsável pela consulta fecha a análise")
+        if not encounter.can_edit:
+            raise ForbiddenError("apenas o responsável pela consulta fecha a análise")
 
         if not await self.captures.list_for_encounter(encounter_id):
             raise NotFoundError("esta consulta não tem análise de imagem")

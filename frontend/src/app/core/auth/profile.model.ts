@@ -1,5 +1,11 @@
-/** Role values mirror the `public.user_role` enum in the database. */
-export type UserRole = 'user' | 'medico' | 'admin';
+/**
+ * Role values mirror the `public.user_role` enum in the database.
+ *
+ * `pesquisador` escreve dado clínico como o médico e, ao contrário dele, enxerga e
+ * edita o acervo dos outros pesquisadores. O que ele alcança é decidido pela RLS
+ * (`app.same_research_pool`), nunca aqui: no cliente o papel só decide o que mostrar.
+ */
+export type UserRole = 'user' | 'medico' | 'pesquisador' | 'admin';
 
 /** A row from the `public.users` profile table. */
 export interface UserProfile {

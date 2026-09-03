@@ -17,12 +17,17 @@
 --   8. As funções de autorização são totais — nunca devolvem NULL
 --   9. Tabela nova não nasce acessível ao anon
 --  10. anon não alcança as tabelas
+--  11. Pesquisadores compartilham o acervo entre si
+--  12. O par edita cadastro alheio sem tomar a posse, e a edição fica assinada
+--  13. O par não apaga nada do outro
+--  14. O pool não alcança médico nenhum, e nenhum médico o alcança
 
 \set ON_ERROR_STOP on
 \set QUIET on
 
 -- ─────────────────────────────────────────────────────────────────────────────
--- Cenário: 2 médicos, 1 leitor, 1 admin. Ids fixos para o script ser relegível.
+-- Cenário: 2 médicos, 1 leitor, 1 admin, 2 pesquisadores. Ids fixos para o script
+-- ser relegível.
 -- ─────────────────────────────────────────────────────────────────────────────
 begin;
 
@@ -36,13 +41,26 @@ insert into auth.users (id, instance_id, aud, role, email, raw_user_meta_data) v
   ('cccccccc-0000-0000-0000-000000000003','00000000-0000-0000-0000-000000000000',
    'authenticated','authenticated','rlstest-l@local','{"full_name":"Leitor"}'),
   ('dddddddd-0000-0000-0000-000000000004','00000000-0000-0000-0000-000000000000',
-   'authenticated','authenticated','rlstest-x@local','{"full_name":"Admin"}')
+   'authenticated','authenticated','rlstest-x@local','{"full_name":"Admin"}'),
+  ('eeeeeeee-0000-0000-0000-000000000005','00000000-0000-0000-0000-000000000000',
+   'authenticated','authenticated','rlstest-p1@local','{"full_name":"Pesquisadora P1"}'),
+  ('ffffffff-0000-0000-0000-000000000006','00000000-0000-0000-0000-000000000000',
+   'authenticated','authenticated','rlstest-p2@local','{"full_name":"Pesquisador P2"}')
 on conflict (id) do nothing;
 
 update public.users set role = 'medico' where id in
   ('aaaaaaaa-0000-0000-0000-000000000001','bbbbbbbb-0000-0000-0000-000000000002');
 update public.users set role = 'user'  where id = 'cccccccc-0000-0000-0000-000000000003';
 update public.users set role = 'admin' where id = 'dddddddd-0000-0000-0000-000000000004';
+update public.users set role = 'pesquisador' where id in
+  ('eeeeeeee-0000-0000-0000-000000000005','ffffffff-0000-0000-0000-000000000006');
+
+-- O nome vai no UPDATE também: quem rodou o script antes desta mudança já tem a linha
+-- criada pelo trigger, e o ON CONFLICT acima não a corrigiria. O cenário 18 assere
+-- sobre esses nomes.
+update public.users u set full_name = a.raw_user_meta_data->>'full_name'
+  from auth.users a where a.id = u.id and u.id in
+  ('eeeeeeee-0000-0000-0000-000000000005','ffffffff-0000-0000-0000-000000000006');
 
 commit;
 
@@ -343,8 +361,16 @@ begin
   assert app.is_clinician() is not null, 'is_clinician() devolveu NULL para uid sem perfil';
   assert app.can_access('99999999-9999-9999-9999-999999999999') is not null,
     'can_access() devolveu NULL';
+  assert app.is_researcher() is not null, 'is_researcher() devolveu NULL para uid sem perfil';
+  assert app.can_curate('99999999-9999-9999-9999-999999999999') is not null,
+    'can_curate() devolveu NULL';
+  assert app.can_discard('99999999-9999-9999-9999-999999999999') is not null,
+    'can_discard() devolveu NULL';
+  assert app.same_research_pool('99999999-9999-9999-9999-999999999999') is not null,
+    'same_research_pool() devolveu NULL';
   assert app.is_admin() = false and app.is_clinician() = false,
     'uid sem perfil não deveria ser admin nem clínico';
+  assert app.is_researcher() = false, 'uid sem perfil não deveria ser pesquisador';
 end $$;
 commit;
 
@@ -375,6 +401,224 @@ begin
   exception when insufficient_privilege then
     null;  -- o revoke do §6 da migration
   end;
+end $$;
+commit;
+
+-- ─────────────────────────────────────────────────────────────────────────────
+\echo '11. Pesquisadores compartilham o acervo: P2 enxerga o paciente de P1'
+-- ─────────────────────────────────────────────────────────────────────────────
+-- A partir daqui entra o pool. Estes cenários rodam DEPOIS do 10 de propósito: o
+-- cenário 5 conta quantos pacientes RLS-TEST o admin enxerga, e um paciente de
+-- pesquisador criado antes dele mudaria essa conta.
+begin;
+set local role authenticated;
+select set_config('request.jwt.claims',
+  '{"sub":"eeeeeeee-0000-0000-0000-000000000005","role":"authenticated"}', true);
+
+insert into public.patients (id, full_name, birth_date)
+values ('11111111-eeee-0000-0000-000000000005', 'RLS-TEST paciente de P1', '1970-01-01');
+commit;
+
+begin;
+set local role authenticated;
+select set_config('request.jwt.claims',
+  '{"sub":"ffffffff-0000-0000-0000-000000000006","role":"authenticated"}', true);
+do $$
+declare n int;
+begin
+  select count(*) into n from public.patients
+   where id = '11111111-eeee-0000-0000-000000000005';
+  assert n = 1, 'P2 deveria enxergar o paciente de P1';
+end $$;
+commit;
+
+-- ─────────────────────────────────────────────────────────────────────────────
+\echo '12. P2 EDITA o paciente de P1, sem tomar a posse e assinando a edição'
+-- ─────────────────────────────────────────────────────────────────────────────
+-- As três asserções são a mudança inteira desta migration em uma tela:
+-- editar pode, o dono não muda, e fica registrado quem editou.
+begin;
+set local role authenticated;
+select set_config('request.jwt.claims',
+  '{"sub":"ffffffff-0000-0000-0000-000000000006","role":"authenticated"}', true);
+do $$
+declare dono uuid; editor uuid;
+begin
+  update public.patients set primary_diagnosis = 'RLS-TEST editado por P2'
+   where id = '11111111-eeee-0000-0000-000000000005';
+  assert found, 'FALHA: P2 não conseguiu editar o paciente do par';
+
+  select owner_id, updated_by into dono, editor from public.patients
+   where id = '11111111-eeee-0000-0000-000000000005';
+  assert dono = 'eeeeeeee-0000-0000-0000-000000000005',
+    format('a edição do par mudou o dono para %s', dono);
+  assert editor = 'ffffffff-0000-0000-0000-000000000006',
+    format('updated_by deveria ser P2, veio %s', editor);
+end $$;
+commit;
+
+-- ─────────────────────────────────────────────────────────────────────────────
+\echo '13. P2 não toma a posse do paciente de P1'
+-- ─────────────────────────────────────────────────────────────────────────────
+-- Sem `patients_freeze_owner`, este UPDATE passaria: `can_curate` deixa P2 escrever
+-- na linha, e o WITH CHECK ficaria satisfeito com o novo dono sendo ele mesmo. E
+-- como dono, P2 ganharia o direito de apagar que o cenário 14 lhe nega.
+begin;
+set local role authenticated;
+select set_config('request.jwt.claims',
+  '{"sub":"ffffffff-0000-0000-0000-000000000006","role":"authenticated"}', true);
+do $$
+declare dono uuid;
+begin
+  update public.patients set owner_id = 'ffffffff-0000-0000-0000-000000000006'
+   where id = '11111111-eeee-0000-0000-000000000005';
+
+  select owner_id into dono from public.patients
+   where id = '11111111-eeee-0000-0000-000000000005';
+  assert dono = 'eeeeeeee-0000-0000-0000-000000000005',
+    format('FALHA: P2 tomou a posse do paciente de P1, dono agora é %s', dono);
+end $$;
+commit;
+
+-- ─────────────────────────────────────────────────────────────────────────────
+\echo '14. P2 NÃO apaga o paciente de P1'
+-- ─────────────────────────────────────────────────────────────────────────────
+-- A metade "não apaga" da decisão de produto. O par edita coleta alheia porque o
+-- acervo é comum; destruí-la continua sendo só do dono (e do admin).
+begin;
+set local role authenticated;
+select set_config('request.jwt.claims',
+  '{"sub":"ffffffff-0000-0000-0000-000000000006","role":"authenticated"}', true);
+do $$
+declare n int;
+begin
+  delete from public.patients where id = '11111111-eeee-0000-0000-000000000005';
+  select count(*) into n from public.patients
+   where id = '11111111-eeee-0000-0000-000000000005';
+  assert n = 1, 'FALHA: P2 apagou o paciente do par';
+end $$;
+commit;
+
+-- ─────────────────────────────────────────────────────────────────────────────
+\echo '15. P2 registra consulta no paciente de P1, e a autoria fica com P2'
+-- ─────────────────────────────────────────────────────────────────────────────
+-- `owner_id` da consulta é de P1 (o trigger copia do paciente) e `created_by` é de
+-- P2. É a divergência que devolveu a coluna de autoria ao schema: sem ela, este
+-- registro pareceria escrito por P1.
+begin;
+set local role authenticated;
+select set_config('request.jwt.claims',
+  '{"sub":"ffffffff-0000-0000-0000-000000000006","role":"authenticated"}', true);
+insert into public.encounters (id, patient_id, reason)
+values ('22222222-ffff-0000-0000-000000000006',
+        '11111111-eeee-0000-0000-000000000005', 'RLS-TEST consulta de P2');
+
+do $$
+declare dono uuid; autor uuid; n int;
+begin
+  select owner_id, created_by into dono, autor from public.encounters
+   where id = '22222222-ffff-0000-0000-000000000006';
+  assert dono = 'eeeeeeee-0000-0000-0000-000000000005',
+    format('a consulta deveria pertencer ao dono do paciente, veio %s', dono);
+  assert autor = 'ffffffff-0000-0000-0000-000000000006',
+    format('created_by deveria ser P2, veio %s', autor);
+
+  -- E apagar continua fora do alcance do par, aqui também.
+  delete from public.encounters where id = '22222222-ffff-0000-0000-000000000006';
+  select count(*) into n from public.encounters
+   where id = '22222222-ffff-0000-0000-000000000006';
+  assert n = 1, 'FALHA: P2 apagou a consulta do par';
+end $$;
+commit;
+
+-- ─────────────────────────────────────────────────────────────────────────────
+\echo '16. O pool não vaza para fora: médico e pesquisador seguem separados'
+-- ─────────────────────────────────────────────────────────────────────────────
+-- `same_research_pool` exige que os DOIS lados sejam pesquisadores. É o que garante
+-- que promover alguém a pesquisador não mexe em quem já usava a plataforma.
+begin;
+set local role authenticated;
+select set_config('request.jwt.claims',
+  '{"sub":"eeeeeeee-0000-0000-0000-000000000005","role":"authenticated"}', true);
+do $$
+declare n int;
+begin
+  select count(*) into n from public.patients where full_name = 'RLS-TEST paciente de A';
+  assert n = 0, 'FALHA: pesquisador enxergou o paciente de um médico';
+end $$;
+commit;
+
+begin;
+set local role authenticated;
+select set_config('request.jwt.claims',
+  '{"sub":"bbbbbbbb-0000-0000-0000-000000000002","role":"authenticated"}', true);
+do $$
+declare n int;
+begin
+  select count(*) into n from public.patients where full_name = 'RLS-TEST paciente de P1';
+  assert n = 0, 'FALHA: médico enxergou o paciente de um pesquisador';
+end $$;
+commit;
+
+-- ─────────────────────────────────────────────────────────────────────────────
+\echo '17. O admin continua sem editar, agora também no acervo de pesquisa'
+-- ─────────────────────────────────────────────────────────────────────────────
+-- `can_curate` não inclui o admin, e é por isso que ela existe separada de
+-- `can_access`. Ele lê o acervo do pool e não assina dentro dele.
+begin;
+set local role authenticated;
+select set_config('request.jwt.claims',
+  '{"sub":"dddddddd-0000-0000-0000-000000000004","role":"authenticated"}', true);
+do $$
+declare n int;
+begin
+  select count(*) into n from public.patients
+   where id = '11111111-eeee-0000-0000-000000000005';
+  assert n = 1, 'admin deveria LER o paciente do pool';
+
+  update public.patients set full_name = 'RLS-TEST renomeado pelo admin'
+   where id = '11111111-eeee-0000-0000-000000000005';
+  assert not found, 'FALHA: admin editou o cadastro de um paciente do pool';
+end $$;
+commit;
+
+-- ─────────────────────────────────────────────────────────────────────────────
+\echo '18. O nome do par aparece; o do próprio chamador, não'
+-- ─────────────────────────────────────────────────────────────────────────────
+-- É o que a tela usa para dizer "paciente de outra pessoa". Preenchido nas próprias
+-- linhas, o rótulo repetiria o nome do chamador em toda a lista e não diria nada.
+begin;
+set local role authenticated;
+select set_config('request.jwt.claims',
+  '{"sub":"ffffffff-0000-0000-0000-000000000006","role":"authenticated"}', true);
+do $$
+begin
+  assert app.user_display_name('eeeeeeee-0000-0000-0000-000000000005') = 'Pesquisadora P1',
+    'P2 deveria enxergar o nome de P1';
+  assert app.user_display_name('ffffffff-0000-0000-0000-000000000006') is null,
+    'o próprio nome não deveria vir preenchido';
+  assert app.user_display_name('aaaaaaaa-0000-0000-0000-000000000001') is null,
+    'FALHA: pesquisador leu o nome de um médico fora do pool';
+end $$;
+commit;
+
+-- ─────────────────────────────────────────────────────────────────────────────
+\echo '19. Leitor não entra no pool'
+-- ─────────────────────────────────────────────────────────────────────────────
+-- Uma conta rebaixada a 'user' perde o acervo compartilhado junto com a escrita: o
+-- pool é do papel, não de um vínculo gravado em algum lugar.
+begin;
+set local role authenticated;
+select set_config('request.jwt.claims',
+  '{"sub":"cccccccc-0000-0000-0000-000000000003","role":"authenticated"}', true);
+do $$
+declare n int;
+begin
+  select count(*) into n from public.patients where full_name like 'RLS-TEST paciente de P1';
+  assert n = 0, 'FALHA: leitor enxergou o acervo do pool';
+  assert app.is_researcher() = false, 'leitor não é pesquisador';
+  assert app.can_curate('eeeeeeee-0000-0000-0000-000000000005') = false,
+    'leitor não deveria poder escrever no acervo do pool';
 end $$;
 commit;
 

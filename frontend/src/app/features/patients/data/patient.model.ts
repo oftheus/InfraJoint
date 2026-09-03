@@ -36,14 +36,34 @@ export interface Patient {
   readonly created_at: string;
   readonly updated_at: string;
   /**
-   * Nome do médico dono, e `null` para quem não é admin.
+   * Nome de quem cadastrou o paciente, e `null` quando é o próprio leitor.
    *
-   * Quem decide se ele vem preenchido é o banco, não a tela: um médico comum só
-   * enxerga os próprios pacientes, e o rótulo repetiria o nome dele em toda linha.
-   * Renderizar quando existir é, portanto, suficiente — não há checagem de papel a
-   * fazer aqui.
+   * Quem decide se ele vem preenchido é o banco, não a tela: só admin e par do
+   * acervo de pesquisa enxergam prontuário alheio, e nas linhas do próprio leitor o
+   * campo cala para não repetir o nome dele na lista inteira. Renderizar quando
+   * existir é, portanto, suficiente — não há checagem de papel a fazer aqui.
+   *
+   * O que ele **não** diz mais é o que o leitor pode fazer com a linha. Antes do
+   * acervo de pesquisa, preenchido significava "de outra pessoa, logo somente
+   * leitura"; para o pesquisador significa o contrário, "compartilhado comigo".
+   * Quem responde isso agora são `can_edit` e `can_delete`.
    */
   readonly owner_name?: string | null;
+  /** Quem gravou a última edição, quando não foi o próprio leitor. */
+  readonly editor_name?: string | null;
+  /**
+   * O que este leitor pode fazer com esta linha, calculado pelo banco com as mesmas
+   * funções que as policies de RLS chamam (`app.can_curate` e `app.can_discard`).
+   *
+   * Esconder o botão continua sendo cosmético: quem recusa de verdade é a policy. O
+   * que estes campos evitam é oferecer uma ação que vai voltar 403 depois do
+   * formulário preenchido.
+   *
+   * As duas respostas não andam juntas. O admin lê e apaga o acervo sem poder
+   * editá-lo; o pesquisador edita o acervo do par sem poder apagá-lo.
+   */
+  readonly can_edit: boolean;
+  readonly can_delete: boolean;
 }
 
 /** Um achado articular, como o backend grava em `encounters.joint_evaluations`. */
@@ -106,6 +126,18 @@ export interface Encounter {
    */
   readonly capture_count: number;
   readonly created_at: string;
+  /**
+   * Quem registrou a consulta, quando não foi o próprio leitor.
+   *
+   * No acervo de pesquisa a consulta pertence ao dono do PACIENTE, e não a quem a
+   * registrou: um pesquisador que atende o paciente de um par grava uma consulta que
+   * é do par. Sem este campo, o registro apareceria como escrito por quem não
+   * atendeu.
+   */
+  readonly author_name?: string | null;
+  /** Mesma semântica de `Patient.can_edit` / `can_delete`. */
+  readonly can_edit: boolean;
+  readonly can_delete: boolean;
 }
 
 /** Resposta de `GET /patients/{id}`: já traz as consultas, evitando um 2º request. */

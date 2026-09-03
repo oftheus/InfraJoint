@@ -14,6 +14,18 @@ _COLUMNS = """
     joint_evaluations, scores, analysis_status, created_at, updated_at
 """
 
+# Nas leituras vão junto quem registrou a consulta e o que este chamador pode fazer
+# com ela. Mesmas funções que as policies chamam, pelo mesmo motivo de
+# `repositories/patients.py`: a tela erra junto com a policy, ou acerta junto.
+#
+# `author_name` só é diferente do dono no acervo de pesquisa, onde a consulta que um
+# pesquisador registra no paciente de um par nasce com o owner do par. Fora dele vem
+# NULL, porque `app.user_display_name()` cala sobre as linhas do próprio chamador.
+_COLUMNS_DE_LEITURA = f"""{_COLUMNS.rstrip()},
+    app.user_display_name(created_by) AS author_name,
+    app.can_curate(owner_id)  AS can_edit,
+    app.can_discard(owner_id) AS can_delete"""
+
 
 def _encode(value: Mapping[str, Any] | None) -> str | None:
     """asyncpg não converte dict para jsonb sozinho; o SQL faz o cast de $n::jsonb."""
@@ -45,6 +57,11 @@ def _to_entity(row: asyncpg.Record) -> Encounter:
         capture_count=row.get("capture_count") or 0,
         created_at=row["created_at"],
         updated_at=row["updated_at"],
+        # Ausentes nos caminhos de escrita, pela mesma razão de `Patient`: ali a linha
+        # é a que o próprio chamador acabou de gravar.
+        author_name=row.get("author_name"),
+        can_edit=row.get("can_edit", True),
+        can_delete=row.get("can_delete", True),
     )
 
 
@@ -58,7 +75,7 @@ class PostgresEncounterRepository:
         # o detalhe respondia sempre 0 — número errado, não ausência de número.
         row = await self._connection.fetchrow(
             f"""
-            SELECT {_COLUMNS},
+            SELECT {_COLUMNS_DE_LEITURA},
                    (SELECT count(*) FROM public.analysis_captures c
                      WHERE c.encounter_id = public.encounters.id) AS capture_count
               FROM public.encounters
@@ -104,7 +121,7 @@ class PostgresEncounterRepository:
     async def list_for_patient(self, patient_id: UUID) -> Sequence[Encounter]:
         rows = await self._connection.fetch(
             f"""
-            SELECT {_COLUMNS},
+            SELECT {_COLUMNS_DE_LEITURA},
                    (SELECT count(*) FROM public.analysis_captures c
                      WHERE c.encounter_id = public.encounters.id) AS capture_count
               FROM public.encounters
@@ -117,8 +134,10 @@ class PostgresEncounterRepository:
 
     async def create(self, patient_id: UUID, data: NewEncounter) -> Encounter:
         # owner_id vem do trigger app.inherit_owner(), que copia do paciente lendo-o
-        # sob a RLS de quem escreve — e a policy de escrita exige que ele seja o
-        # próprio autor, então a consulta é sempre de quem a registrou.
+        # sob a RLS de quem escreve. No acervo de pesquisa isso significa que a
+        # consulta registrada no paciente de um par pertence ao PAR — por isso o
+        # RETURNING traz as colunas derivadas, e não as cruas: devolvê-las no default
+        # faria a tela oferecer excluir uma consulta que a policy não deixa apagar.
         #
         # O fluxo de Análise Térmica grava tudo numa instrução só: a consulta nasce
         # já com o body map e os escores. Não há passo intermediário no banco, então
@@ -128,7 +147,7 @@ class PostgresEncounterRepository:
             INSERT INTO public.encounters
                 (patient_id, occurred_at, reason, joint_evaluations, scores)
             VALUES ($1, COALESCE($2, now()), $3, $4::jsonb, COALESCE($5::jsonb, '{{}}'::jsonb))
-            RETURNING {_COLUMNS}
+            RETURNING {_COLUMNS_DE_LEITURA}
             """,
             patient_id,
             data.occurred_at,

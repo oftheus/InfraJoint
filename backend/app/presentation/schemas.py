@@ -74,10 +74,18 @@ class PatientOut(BaseModel):
     primary_diagnosis: str | None
     created_at: datetime
     updated_at: datetime
-    # O nome do médico dono, nunca o `owner_id`: a tela precisa saber de quem é a linha,
-    # e o id do tenant não interessa ao cliente. Nulo para quem não é admin — ver
-    # `app.owner_display_name()`.
+    # O nome de quem é a linha, nunca o `owner_id`: a tela precisa saber de quem é o
+    # prontuário, e o id do tenant não interessa ao cliente. Nulo nas linhas do próprio
+    # chamador e para quem não é admin nem par de pool — ver `app.user_display_name()`.
     owner_name: str | None = None
+    # Quem gravou a última edição, quando não foi quem está lendo. Só aparece no acervo
+    # de pesquisa, onde alguém além do dono pode ter editado.
+    editor_name: str | None = None
+    # O que este chamador pode fazer com esta linha, calculado pelo banco com as mesmas
+    # funções que as policies usam. A tela não deduz mais isso de `owner_name`: no
+    # acervo de pesquisa "é de outra pessoa" deixou de significar "não posso editar".
+    can_edit: bool = True
+    can_delete: bool = True
 
     @classmethod
     def from_entity(cls, patient: Patient) -> PatientOut:
@@ -91,6 +99,9 @@ class PatientOut(BaseModel):
             created_at=patient.created_at,
             updated_at=patient.updated_at,
             owner_name=patient.owner_name,
+            editor_name=patient.editor_name,
+            can_edit=patient.can_edit,
+            can_delete=patient.can_delete,
         )
 
 
@@ -211,6 +222,11 @@ class EncounterOut(BaseModel):
     analysis_status: Literal["uploading", "ready"] | None
     capture_count: int
     created_at: datetime
+    # Quem registrou a consulta, quando não foi quem está lendo. No acervo de pesquisa
+    # o dono da consulta é o dono do PACIENTE, então ele não responde essa pergunta.
+    author_name: str | None = None
+    can_edit: bool = True
+    can_delete: bool = True
 
     @classmethod
     def from_entity(cls, encounter: Encounter) -> EncounterOut:
@@ -226,6 +242,9 @@ class EncounterOut(BaseModel):
             else None,
             scores=dict(encounter.scores),
             created_at=encounter.created_at,
+            author_name=encounter.author_name,
+            can_edit=encounter.can_edit,
+            can_delete=encounter.can_delete,
         )
 
 

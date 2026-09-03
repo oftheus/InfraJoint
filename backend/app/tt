@@ -1,0 +1,59 @@
+-- WARNING: This schema is for context only and is not meant to be run.
+-- Table order and constraints may not be valid for execution.
+
+CREATE TABLE public.users (
+  id uuid NOT NULL,
+  full_name text,
+  avatar_url text,
+  role USER-DEFINED NOT NULL DEFAULT 'user'::user_role,
+  CONSTRAINT users_pkey PRIMARY KEY (id),
+  CONSTRAINT users_id_fkey FOREIGN KEY (id) REFERENCES auth.users(id)
+);
+CREATE TABLE public.patients (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  owner_id uuid NOT NULL,
+  full_name text NOT NULL,
+  birth_date date NOT NULL,
+  sex text CHECK (sex = ANY (ARRAY['F'::text, 'M'::text, 'O'::text, 'N'::text])),
+  phone text,
+  primary_diagnosis text,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT patients_pkey PRIMARY KEY (id),
+  CONSTRAINT patients_owner_id_fkey FOREIGN KEY (owner_id) REFERENCES public.users(id)
+);
+CREATE TABLE public.encounters (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  patient_id uuid NOT NULL,
+  owner_id uuid NOT NULL,
+  occurred_at timestamp with time zone NOT NULL DEFAULT now(),
+  reason text,
+  joint_evaluations jsonb,
+  scores jsonb NOT NULL DEFAULT '{}'::jsonb,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  analysis_status text CHECK (analysis_status = ANY (ARRAY['uploading'::text, 'ready'::text])),
+  CONSTRAINT encounters_pkey PRIMARY KEY (id),
+  CONSTRAINT encounters_patient_id_fkey FOREIGN KEY (patient_id) REFERENCES public.patients(id)
+);
+CREATE TABLE public.analysis_captures (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  encounter_id uuid NOT NULL,
+  owner_id uuid NOT NULL,
+  capture_index smallint,
+  elapsed_seconds numeric,
+  align_a double precision,
+  align_b double precision,
+  align_tx double precision,
+  align_c double precision,
+  align_d double precision,
+  align_ty double precision,
+  alignment_method text CHECK (alignment_method = ANY (ARRAY['silhouette'::text, 'fiducial'::text, 'manual'::text])),
+  agreement jsonb,
+  fiducial_correction jsonb,
+  measurements jsonb NOT NULL DEFAULT '[]'::jsonb,
+  issue text,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT analysis_captures_pkey PRIMARY KEY (id),
+  CONSTRAINT analysis_captures_encounter_id_fkey FOREIGN KEY (encounter_id) REFERENCES public.encounters(id)
+);

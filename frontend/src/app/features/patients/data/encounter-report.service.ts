@@ -84,8 +84,10 @@ export class EncounterReportService {
   /**
    * Monta o PDF da consulta e dispara o download.
    *
-   * `medico` vem de fora — o perfil autenticado é o dono da consulta, e este
-   * serviço não precisa conhecer autenticação para dizer isso no cabeçalho.
+   * `medico` vem de fora, e é o responsável pela consulta, não necessariamente quem
+   * está exportando: desde o acervo de pesquisa, um pesquisador abre e exporta a
+   * consulta registrada por outro. Quem resolve os dois casos é a tela; este serviço
+   * não precisa conhecer autenticação para escrever um nome no cabeçalho.
    */
   async download(detail: EncounterDetail, medico: string | null): Promise<void> {
     if (!this.isBrowser) {

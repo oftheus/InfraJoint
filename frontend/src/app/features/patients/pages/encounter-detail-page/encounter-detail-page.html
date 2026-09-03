@@ -19,6 +19,11 @@
           {{ consulta.occurred_at | date: 'HH:mm' }} ·
           {{ consulta.reason || 'Sem motivo informado' }}
         </p>
+        <!-- Só no acervo compartilhado: a consulta pertence ao dono do paciente, então
+             sem este rótulo ela pareceria registrada por ele. -->
+        @if (consulta.author_name) {
+          <p class="mt-1 text-sm text-muted">Registrada por {{ consulta.author_name }}</p>
+        }
       </div>
 
       <div class="flex flex-wrap gap-3">
@@ -32,14 +37,19 @@
           {{ exporting() ? 'Gerando PDF…' : 'Exportar PDF' }}
         </button>
 
-        <button
-          type="button"
-          class="inline-flex h-11 items-center justify-center rounded-full border border-red-200 bg-red-50 px-6 text-sm font-semibold text-red-600 transition-colors hover:bg-red-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-400"
-          (click)="toggleConfirmDelete()"
-        >
-          <svg [lucideIcon]="'trash-2'" class="mr-2 h-4 w-4" aria-hidden="true"></svg>
-          Excluir consulta
-        </button>
+        <!-- Mesma regra da tela do paciente: quem pergunta é o campo que espelha a
+             policy. No acervo de pesquisa, o par abre a consulta do outro e não pode
+             apagá-la; exportar o PDF acima continua livre para quem consegue ler. -->
+        @if (consulta.can_delete) {
+          <button
+            type="button"
+            class="inline-flex h-11 items-center justify-center rounded-full border border-red-200 bg-red-50 px-6 text-sm font-semibold text-red-600 transition-colors hover:bg-red-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-400"
+            (click)="toggleConfirmDelete()"
+          >
+            <svg [lucideIcon]="'trash-2'" class="mr-2 h-4 w-4" aria-hidden="true"></svg>
+            Excluir consulta
+          </button>
+        }
       </div>
     </div>
 
