@@ -12,6 +12,8 @@ function encounter(partial: Partial<Encounter> = {}): Encounter {
     analysis_status: null,
     capture_count: 0,
     created_at: '2026-08-15T12:00:00Z',
+    can_edit: true,
+    can_delete: true,
     ...partial,
   };
 }

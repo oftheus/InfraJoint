@@ -23,7 +23,7 @@ export const analysisRoutes: Routes = [
     // atravesse metade de um fluxo clínico para bater em 403 no fim.
     path: 'analise-termica',
     canActivate: [roleGuard],
-    data: { roles: ['medico', 'admin'] },
+    data: { roles: ['medico', 'pesquisador', 'admin'] },
     loadChildren: () =>
       import('./thermal-analysis/thermal-analysis.routes').then((m) => m.thermalAnalysisRoutes),
   },

@@ -380,7 +380,7 @@ function identificacao(detail: EncounterDetail, recursos: RecursosDoRelatorio): 
       widths: ['auto', '*', 'auto', '*'],
       body: [
         [...par('Paciente', paciente.full_name), ...par('Consulta', dataHora(detail.occurred_at))],
-        [...par('Nascimento', nascimento), ...par('Médico', recursos.medico ?? ausente)],
+        [...par('Nascimento', nascimento), ...par('Responsável', recursos.medico ?? ausente)],
         [
           ...par('Sexo', paciente.sex ? (SEXO[paciente.sex] ?? paciente.sex) : ausente),
           ...par('Emitido em', dataHora(recursos.emitidoEm.toISOString())),

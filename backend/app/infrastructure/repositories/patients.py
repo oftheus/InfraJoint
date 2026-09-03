@@ -22,11 +22,23 @@ _COLUMNS = """
     phone, primary_diagnosis, created_at, updated_at
 """
 
-# Nas leituras, o nome do médico dono vai junto. A função é SECURITY DEFINER e só
-# responde para admin — para os demais devolve NULL, que é o certo: um médico comum
-# só enxerga os próprios pacientes, e um rótulo com o nome dele em toda linha seria
-# ruído. Ver a migration `owner_display_name`.
-_COLUMNS_COM_DONO = f"{_COLUMNS.rstrip()}, app.owner_display_name(owner_id) AS owner_name"
+# Nas leituras vão junto o nome de quem é a linha, o de quem a editou por último e o
+# que este chamador pode fazer com ela.
+#
+# As quatro colunas são calculadas pelo BANCO, pelas mesmas funções que as policies
+# chamam. É de propósito: reimplementar `can_curate` em Python daria duas fontes da
+# verdade para a mesma regra, e a que aparece na tela seria a errada no dia em que
+# divergissem. Aqui a tela erra junto com a policy, ou acerta junto.
+#
+# Os nomes são SECURITY DEFINER e só respondem a quem já enxerga o prontuário inteiro
+# daquela pessoa (admin ou par de pool), nunca nas linhas do próprio chamador — ver
+# `app.user_display_name()`. Para um médico comum os dois vêm NULL, que é o certo: ele
+# só enxerga os próprios pacientes, e o rótulo repetiria o nome dele em toda linha.
+_COLUMNS_DE_LEITURA = f"""{_COLUMNS.rstrip()},
+    app.owner_display_name(owner_id) AS owner_name,
+    app.user_display_name(updated_by) AS editor_name,
+    app.can_curate(owner_id)  AS can_edit,
+    app.can_discard(owner_id) AS can_delete"""
 
 # Whitelist de colunas editáveis. O nome vem do schema Pydantic do router, mas o SQL
 # é montado por interpolação — então a lista precisa existir aqui, na única camada
@@ -53,9 +65,12 @@ def _to_entity(row: asyncpg.Record) -> Patient:
         primary_diagnosis=row["primary_diagnosis"],
         created_at=row["created_at"],
         updated_at=row["updated_at"],
-        # Ausente nos caminhos de escrita, que não selecionam a coluna — e ali a
+        # Ausentes nos caminhos de escrita, que não selecionam as colunas — e ali a
         # resposta é sobre a linha que o próprio chamador acabou de gravar.
         owner_name=row.get("owner_name"),
+        editor_name=row.get("editor_name"),
+        can_edit=row.get("can_edit", True),
+        can_delete=row.get("can_delete", True),
     )
 
 
@@ -65,31 +80,42 @@ class PostgresPatientRepository:
 
     async def list_all(self) -> Sequence[Patient]:
         rows = await self._connection.fetch(
-            f"SELECT {_COLUMNS_COM_DONO} FROM public.patients ORDER BY created_at DESC"
+            f"SELECT {_COLUMNS_DE_LEITURA} FROM public.patients ORDER BY created_at DESC"
         )
         return [_to_entity(row) for row in rows]
 
     async def get(self, patient_id: UUID) -> Patient | None:
         row = await self._connection.fetchrow(
-            f"SELECT {_COLUMNS_COM_DONO} FROM public.patients WHERE id = $1",
+            f"SELECT {_COLUMNS_DE_LEITURA} FROM public.patients WHERE id = $1",
             patient_id,
         )
         return _to_entity(row) if row else None
 
     async def find_by_name(self, full_name: str) -> Sequence[Patient]:
-        """Homônimos **do próprio médico**, pelo nome normalizado.
+        """Homônimos no acervo de quem cadastra, pelo nome normalizado.
 
-        `owner_id = auth.uid()` explícito, e não só a RLS: para o admin ela deixa ver
-        todo mundo, e o aviso de duplicata passaria a falar de pacientes de outros
-        médicos. Não é owner_id vindo do chamador — é a mesma origem que a policy usa.
+        `app.can_curate(owner_id)` explícito, e não só a RLS: para o admin a RLS deixa
+        ver todo mundo, e o aviso de duplicata passaria a falar de pacientes de outros
+        médicos. Não é filtro vindo do chamador — é a mesma função que a policy de
+        escrita usa, então o recorte é exatamente "os pacientes que eu poderia editar".
+
+        No acervo de pesquisa isso inclui os dos pares, e é o comportamento certo: o
+        aviso existe para oferecer *abrir o existente* em vez de criar um segundo
+        cadastro da mesma pessoa, e num acervo compartilhado o cadastro que já existe
+        costuma ser o de outra pessoa da equipe.
+
+        O índice único continua sendo por dono (`patients_sem_duplicado`), então o
+        homônimo de um par não é RECUSADO pelo banco, só avisado aqui. É a diferença
+        entre as duas camadas, e ela é assumida: dois pesquisadores podem mesmo
+        precisar de cadastros próprios do mesmo paciente.
 
         A comparação passa pela `app.normalized_name()` do índice único, então o que a
         tela avisa e o que o banco recusa são a mesma noção de "mesmo nome".
         """
         rows = await self._connection.fetch(
             f"""
-            SELECT {_COLUMNS} FROM public.patients
-             WHERE owner_id = auth.uid()
+            SELECT {_COLUMNS_DE_LEITURA} FROM public.patients
+             WHERE app.can_curate(owner_id)
                AND app.normalized_name(full_name) = app.normalized_name($1)
              ORDER BY created_at DESC
             """,
@@ -100,6 +126,9 @@ class PostgresPatientRepository:
     async def create(self, data: NewPatient) -> Patient:
         # owner_id não aparece no INSERT: o trigger app.own_row() o define a partir de
         # auth.uid(). Enviá-lo daqui seria descartado de qualquer forma.
+        #
+        # RETURNING nas colunas cruas: paciente recém-criado é sempre do chamador, e os
+        # defaults da entidade já dizem exatamente isso.
         try:
             row = await self._connection.fetchrow(
                 f"""
@@ -136,12 +165,17 @@ class PostgresPatientRepository:
 
         # A edição também esbarra no índice: renomear um paciente para o nome e a data
         # de outro é a mesma duplicata, chegando pelo outro caminho.
+        #
+        # O RETURNING traz as colunas de leitura, e não as cruas como no INSERT: quem
+        # edita nem sempre é o dono desde o acervo de pesquisa, e devolver `can_delete`
+        # no default faria a tela reexibir o botão de excluir logo depois de um par
+        # salvar a edição — oferecendo justamente o que a policy vai recusar.
         try:
             row = await self._connection.fetchrow(
                 f"""
                 UPDATE public.patients SET {assignments}
                  WHERE id = $1
-                RETURNING {_COLUMNS}
+                RETURNING {_COLUMNS_DE_LEITURA}
                 """,
                 patient_id,
                 *values,

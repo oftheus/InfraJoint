@@ -2,10 +2,10 @@ import { LEGAL_CONTACT_EMAIL } from './legal-contact';
 import { LegalSection } from './legal-document.model';
 
 /** Machine-readable date for the `<time>` element. */
-export const PRIVACY_POLICY_LAST_UPDATED_ISO = '2026-08-23';
+export const PRIVACY_POLICY_LAST_UPDATED_ISO = '2026-09-03';
 
 /** Human-readable date shown to the user. */
-export const PRIVACY_POLICY_LAST_UPDATED = '23 de agosto de 2026';
+export const PRIVACY_POLICY_LAST_UPDATED = '3 de setembro de 2026';
 
 /**
  * Content of the privacy policy, kept as data so the page, the table of
@@ -15,6 +15,13 @@ export const PRIVACY_POLICY_LAST_UPDATED = '23 de agosto de 2026';
  * and profile data live in Supabase; analysis always runs in the browser, but the
  * capture files of an analysis attached to an encounter are stored in a private
  * Cloudflare R2 bucket, while the standalone analyzer keeps everything in memory.
+ *
+ * Duas seções descrevem regras que vivem no schema, e não neste arquivo: a
+ * visibilidade dos registros clínicos é a RLS (`app.can_access` e
+ * `app.same_research_pool`, na migration `acervo_de_pesquisa`), e o acesso aos
+ * arquivos é a URL assinada de `infrastructure/storage.py`. Mudar uma sem a outra
+ * deixa publicada uma promessa que o código não cumpre, que foi exatamente o que a
+ * migration do acervo de pesquisa obrigou a corrigir aqui.
  */
 export const PRIVACY_POLICY_SECTIONS: LegalSection[] = [
   {
@@ -60,7 +67,7 @@ export const PRIVACY_POLICY_SECTIONS: LegalSection[] = [
           },
           {
             label: 'Perfil de acesso',
-            text: 'um indicador de papel (usuário, médico ou administrador) definido pela equipe do projeto e utilizado para liberar áreas administrativas.',
+            text: 'um indicador de papel (usuário, médico, pesquisador ou administrador) definido pela equipe do projeto e utilizado para liberar áreas da plataforma e determinar quais registros clínicos você alcança.',
           },
           {
             label: 'Registros técnicos',
@@ -113,11 +120,20 @@ export const PRIVACY_POLICY_SECTIONS: LegalSection[] = [
         text: 'Anotações clínicas e diagnóstico são dados pessoais sensíveis de saúde, protegidos pelo art. 11 da LGPD. A plataforma não exige identificadores diretos além do nome: sempre que a finalidade da pesquisa permitir, recomendamos usar códigos de participante no lugar do nome real.',
       },
       {
+        kind: 'note',
+        title: 'Antes de cadastrar em uma conta de pesquisador',
+        text: 'No perfil de pesquisador, cadastrar um paciente significa disponibilizá-lo a toda a equipe de pesquisa da plataforma, e não apenas a você. Cabe a você garantir que a base legal, o consentimento do participante e a aprovação do comitê de ética cubram esse compartilhamento antes de registrar os dados. Se o participante não consentiu com o acesso da equipe, use códigos no lugar do nome ou não registre o caso na plataforma.',
+      },
+      {
         kind: 'list',
         items: [
           {
             label: 'Visibilidade',
-            text: 'cada registro clínico é visível apenas para quem o criou. Contas administrativas têm acesso de leitura ao conteúdo da plataforma para supervisão e suporte, mas não podem registrar nem alterar consultas em nome de outro profissional.',
+            text: 'a regra depende do seu perfil de acesso. Para o perfil de médico, cada registro clínico é visível apenas para quem o criou. Para o perfil de pesquisador, os registros são compartilhados com os demais pesquisadores da plataforma, conforme descrito no item seguinte. Contas administrativas têm acesso de leitura ao conteúdo da plataforma para supervisão e suporte, mas não podem registrar nem alterar consultas em nome de outro profissional.',
+          },
+          {
+            label: 'Acervo compartilhado de pesquisa',
+            text: 'contas com perfil de pesquisador formam um acervo comum: cada pesquisador vê e pode editar os pacientes, as consultas e as análises cadastrados pelos demais pesquisadores, incluindo nome, telefone e diagnóstico. Excluir registros continua restrito a quem os criou. Toda edição fica registrada com a identificação de quem a realizou, e a tela indica de quem é cada prontuário. Esse compartilhamento não alcança contas com perfil de médico, cujos registros permanecem visíveis apenas a elas.',
           },
           {
             label: 'Exclusão',
@@ -159,7 +175,7 @@ export const PRIVACY_POLICY_SECTIONS: LegalSection[] = [
       },
       {
         kind: 'paragraph',
-        text: 'O envio vai direto do seu navegador para o bucket, por meio de URLs temporárias assinadas pela nossa API: os arquivos não trafegam pelos nossos servidores de aplicação. O bucket não é público: cada arquivo só pode ser lido através de uma URL assinada de curta duração, emitida apenas para a pessoa dona da consulta.',
+        text: 'O envio vai direto do seu navegador para o bucket, por meio de URLs temporárias assinadas pela nossa API: os arquivos não trafegam pelos nossos servidores de aplicação. O bucket não é público: cada arquivo só pode ser lido através de uma URL assinada de curta duração, emitida apenas a quem tem acesso àquela consulta, ou seja, a pessoa dona do registro e, no acervo de pesquisa, os demais pesquisadores.',
       },
       {
         kind: 'paragraph',
@@ -209,13 +225,22 @@ export const PRIVACY_POLICY_SECTIONS: LegalSection[] = [
           },
           {
             label: 'Evolução da plataforma',
-            text: 'compreender de forma agregada como os recursos são utilizados para orientar melhorias e a pesquisa acadêmica associada ao projeto.',
+            text: 'compreender de forma agregada como os recursos são utilizados para orientar melhorias e a pesquisa acadêmica associada ao projeto. Essa análise se limita a métricas de uso da interface e não abrange as imagens, os arquivos de temperatura nem os dados clínicos dos pacientes.',
           },
         ],
       },
       {
         kind: 'paragraph',
         text: 'Não utilizamos os seus dados para decisões automatizadas que produzam efeitos jurídicos ou que afetem significativamente os seus interesses.',
+      },
+      {
+        kind: 'note',
+        title: 'Não treinamos modelos de inteligência artificial com esses dados',
+        text: 'As imagens termográficas, as fotografias, os arquivos de temperatura e os dados clínicos dos pacientes são usados exclusivamente para executar as operações que você solicita na plataforma. Não os utilizamos para treinar, ajustar ou avaliar modelos de inteligência artificial, não os incorporamos a conjuntos de dados para essa finalidade e não os cedemos a terceiros que o façam. Os algoritmos de análise da plataforma são determinísticos, rodam dentro do seu navegador e não aprendem com o material processado.',
+      },
+      {
+        kind: 'paragraph',
+        text: 'Se um dia o projeto pretender utilizar esse material para treinar modelos ou para pesquisa além do atendimento que o originou, isso dependerá de consentimento específico e destacado do titular, obtido para essa finalidade, e da aprovação do comitê de ética. Enquanto esse consentimento não existir, o uso permanece vedado.',
       },
     ],
   },
@@ -290,6 +315,14 @@ export const PRIVACY_POLICY_SECTIONS: LegalSection[] = [
             text: 'hospedagem da API que intermedeia os registros clínicos e assina as URLs de acesso aos arquivos.',
           },
         ],
+      },
+      {
+        kind: 'paragraph',
+        text: 'Esses prestadores fornecem infraestrutura e atuam apenas sob as nossas instruções. Não os autorizamos a acessar, analisar ou reutilizar o conteúdo armazenado para finalidades próprias, inclusive para treinar modelos de inteligência artificial. O bucket de imagens é privado e nenhum arquivo é disponibilizado a terceiros fora dessa relação de operação.',
+      },
+      {
+        kind: 'paragraph',
+        text: 'Não compartilhamos imagens, arquivos de temperatura ou registros clínicos com outras instituições, empresas ou pesquisadores externos à plataforma. Dentro dela, o acesso segue exclusivamente as regras da seção sobre dados de pacientes, e qualquer divulgação de resultados em trabalhos acadêmicos é responsabilidade do pesquisador que conduz o estudo, com dados agregados ou anonimizados.',
       },
       {
         kind: 'paragraph',

@@ -37,7 +37,20 @@ NOW = datetime(2026, 8, 9, 12, 0, tzinfo=UTC)
 NASCIMENTO = date(1970, 1, 1)
 
 
-def _patient(owner: UUID, name: str = "Ana") -> Patient:
+def _patient(
+    owner: UUID, name: str = "Ana", *, can_edit: bool = True, can_delete: bool = True
+) -> Patient:
+    """Um paciente como o repositório o devolveria.
+
+    `can_edit`/`can_delete` são calculados pelo BANCO (`app.can_curate` e
+    `app.can_discard`) e chegam prontos na entidade, então quem simula o repositório
+    precisa dizer que resposta o banco daria para o chamador daquele teste. Os
+    defaults valem para o dono, que é o caso da maioria deles; os testes de admin e de
+    par de pool passam o valor explícito.
+
+    Quem prova que esses valores são os que o Postgres realmente devolve é
+    `supabase/tests/rls_isolation.sql`, não esta suíte.
+    """
     return Patient(
         id=uuid4(),
         owner_id=owner,
@@ -48,6 +61,8 @@ def _patient(owner: UUID, name: str = "Ana") -> Patient:
         primary_diagnosis=None,
         created_at=NOW,
         updated_at=NOW,
+        can_edit=can_edit,
+        can_delete=can_delete,
     )
 
 
@@ -182,7 +197,7 @@ async def test_admin_nao_edita_paciente_de_outro_medico() -> None:
     guarda que impede a edição virar erro de policy lá embaixo, e que devolve 403 em
     vez de um 404 sobre um paciente que a listagem dele acabou de mostrar.
     """
-    do_medico = _patient(MEDICO.id)
+    do_medico = _patient(MEDICO.id, can_edit=False)
     repo = FakePatientRepository([do_medico])
 
     with pytest.raises(ForbiddenError):
@@ -216,7 +231,7 @@ async def test_admin_nao_registra_consulta_no_paciente_de_outro_medico() -> None
     O admin **enxerga** o paciente alheio, então o 404 de invisibilidade não o pega —
     é esta guarda que impede a escrita virar erro de policy lá embaixo.
     """
-    do_medico = _patient(MEDICO.id)
+    do_medico = _patient(MEDICO.id, can_edit=False)
     patients = FakePatientRepository([do_medico])
     encounters = FakeEncounterRepository()
 

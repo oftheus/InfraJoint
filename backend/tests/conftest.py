@@ -26,6 +26,9 @@ MEDICO_A = UUID("aaaaaaaa-1111-0000-0000-00000000000a")
 MEDICO_B = UUID("bbbbbbbb-1111-0000-0000-00000000000b")
 LEITOR = UUID("cccccccc-1111-0000-0000-00000000000c")
 ADMIN = UUID("dddddddd-1111-0000-0000-00000000000d")
+# Os dois pesquisadores compartilham o acervo entre si, e com mais ninguém.
+PESQUISADOR_1 = UUID("eeeeeeee-1111-0000-0000-00000000000e")
+PESQUISADOR_2 = UUID("ffffffff-1111-0000-0000-00000000000f")
 
 # O nome não é enfeite: `app.owner_display_name()` o devolve para o admin saber de
 # quem é cada paciente, e sem ele o teste dessa visibilidade não teria o que assertar.
@@ -36,6 +39,8 @@ _SEED = [
     (MEDICO_B, "api-b@local", "medico", "Dr. API B"),
     (LEITOR, "api-l@local", "user", "Leitor API"),
     (ADMIN, "api-x@local", "admin", "Admin API"),
+    (PESQUISADOR_1, "api-p1@local", "pesquisador", "Pesquisadora API P1"),
+    (PESQUISADOR_2, "api-p2@local", "pesquisador", "Pesquisador API P2"),
 ]
 
 

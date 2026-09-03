@@ -9,7 +9,14 @@ from __future__ import annotations
 
 from typing import Any
 
-from tests.conftest import ADMIN, LEITOR, MEDICO_A, MEDICO_B
+from tests.conftest import (
+    ADMIN,
+    LEITOR,
+    MEDICO_A,
+    MEDICO_B,
+    PESQUISADOR_1,
+    PESQUISADOR_2,
+)
 
 # Data padrão dos pacientes de teste. `birth_date` é obrigatória desde a migration
 # `birth_date_obrigatoria`, e os testes que exercitam a duplicata passam uma data
@@ -568,3 +575,148 @@ async def test_sem_token_recebe_401(_seeded: None) -> None:
     async with app.router.lifespan_context(app):
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as http:
             assert (await http.get("/patients")).status_code == 401
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Acervo de pesquisa
+#
+# O que estes testes cobrem que `rls_isolation.sql` não cobre: o caminho inteiro,
+# incluindo as guardas da API. É onde se vê a diferença entre 403 e 404 — a policy
+# sozinha só sabe recusar, e quem escolhe a resposta é o caso de uso.
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+async def test_pesquisador_enxerga_e_edita_o_paciente_do_par(client: tuple[Any, dict]) -> None:
+    """A mudança inteira em um teste: P2 vê, sabe de quem é, e edita.
+
+    `can_edit`/`can_delete` vêm do banco, das mesmas funções que as policies chamam.
+    A tela os usa para não oferecer o botão que a policy vai recusar.
+    """
+    http, acting = client
+
+    acting["user_id"] = PESQUISADOR_1
+    paciente = await _criar_paciente(http, "API-TEST Paciente do pool")
+
+    acting["user_id"] = PESQUISADOR_2
+    assert await _nomes_de_teste(http) == ["API-TEST Paciente do pool"]
+
+    detalhe = await http.get(f"/patients/{paciente['id']}")
+    assert detalhe.status_code == 200
+    corpo = detalhe.json()
+    assert corpo["owner_name"] == "Pesquisadora API P1", "o rótulo diz que a linha é do par"
+    assert corpo["can_edit"] is True
+    assert corpo["can_delete"] is False, "editar sim, apagar não"
+
+    edicao = await http.patch(f"/patients/{paciente['id']}", json={"phone": "21999999999"})
+    assert edicao.status_code == 200, edicao.text
+    assert edicao.json()["phone"] == "21999999999"
+    # A resposta do PATCH também precisa dizer a verdade sobre a linha: devolvê-la com
+    # o default `can_delete=True` reexibiria o botão de excluir logo após salvar.
+    assert edicao.json()["can_delete"] is False
+
+
+async def test_a_edicao_do_par_fica_assinada(client: tuple[Any, dict]) -> None:
+    """`updated_by` responde o que `updated_at` sozinho não responde: quem editou.
+
+    P1 é quem enxerga o nome de P2, e não o contrário: o campo cala sobre as edições
+    do próprio chamador, senão repetiria o nome dele em toda linha da lista.
+    """
+    http, acting = client
+
+    acting["user_id"] = PESQUISADOR_1
+    paciente = await _criar_paciente(http, "API-TEST Paciente editado pelo par")
+    assert (await http.get(f"/patients/{paciente['id']}")).json()["editor_name"] is None
+
+    acting["user_id"] = PESQUISADOR_2
+    await http.patch(f"/patients/{paciente['id']}", json={"primary_diagnosis": "AR"})
+
+    acting["user_id"] = PESQUISADOR_1
+    detalhe = await http.get(f"/patients/{paciente['id']}")
+    assert detalhe.json()["editor_name"] == "Pesquisador API P2"
+
+
+async def test_pesquisador_nao_apaga_o_paciente_do_par(client: tuple[Any, dict]) -> None:
+    """403, e não 404: P2 ENXERGA o paciente, o que falta é ser o responsável.
+
+    Sem a guarda do caso de uso, o DELETE não acharia linha sob a policy e a API
+    responderia 404 por um paciente que a listagem dele acabou de mostrar.
+    """
+    http, acting = client
+
+    acting["user_id"] = PESQUISADOR_1
+    paciente = await _criar_paciente(http, "API-TEST Paciente que o par não apaga")
+
+    acting["user_id"] = PESQUISADOR_2
+    exclusao = await http.delete(f"/patients/{paciente['id']}")
+    assert exclusao.status_code == 403, exclusao.text
+
+    acting["user_id"] = PESQUISADOR_1
+    assert (await http.get(f"/patients/{paciente['id']}")).status_code == 200
+
+
+async def test_consulta_do_par_pertence_ao_dono_e_a_autoria_e_de_quem_registrou(
+    client: tuple[Any, dict],
+) -> None:
+    """P2 registra no paciente de P1: a consulta é de P1, a autoria é de P2.
+
+    É a divergência que devolveu `created_by` ao schema. Sem ela, o registro
+    apareceria como escrito por P1, que não atendeu.
+    """
+    http, acting = client
+
+    acting["user_id"] = PESQUISADOR_1
+    paciente = await _criar_paciente(http, "API-TEST Paciente com consulta do par")
+
+    acting["user_id"] = PESQUISADOR_2
+    criada = await http.post(
+        f"/patients/{paciente['id']}/encounters", json={"reason": "coleta do par"}
+    )
+    assert criada.status_code == 201, criada.text
+    consulta = criada.json()
+    assert consulta["can_edit"] is True
+    assert consulta["can_delete"] is False
+
+    acting["user_id"] = PESQUISADOR_1
+    detalhe = await http.get(f"/patients/{paciente['id']}")
+    registrada = detalhe.json()["encounters"][0]
+    assert registrada["author_name"] == "Pesquisador API P2"
+
+    acting["user_id"] = PESQUISADOR_2
+    assert (await http.delete(f"/encounters/{consulta['id']}")).status_code == 403
+
+
+async def test_o_acervo_de_pesquisa_nao_alcanca_medico_nenhum(client: tuple[Any, dict]) -> None:
+    """`same_research_pool` exige os dois lados pesquisadores.
+
+    É o que garante que promover alguém a pesquisador não mexe em quem já usava a
+    plataforma: para o médico, nada mudou.
+    """
+    http, acting = client
+
+    acting["user_id"] = MEDICO_A
+    do_medico = await _criar_paciente(http, "API-TEST Paciente do medico")
+
+    acting["user_id"] = PESQUISADOR_1
+    assert (await http.get(f"/patients/{do_medico['id']}")).status_code == 404
+    do_pesquisador = await _criar_paciente(http, "API-TEST Paciente do pesquisador")
+
+    acting["user_id"] = MEDICO_A
+    assert (await http.get(f"/patients/{do_pesquisador['id']}")).status_code == 404
+    assert await _nomes_de_teste(http) == ["API-TEST Paciente do medico"]
+
+
+async def test_admin_le_o_acervo_de_pesquisa_e_nao_escreve_nele(client: tuple[Any, dict]) -> None:
+    """A regra do admin não afrouxou: `can_curate` não o inclui, nem no pool."""
+    http, acting = client
+
+    acting["user_id"] = PESQUISADOR_1
+    paciente = await _criar_paciente(http, "API-TEST Paciente visto pelo admin")
+
+    acting["user_id"] = ADMIN
+    detalhe = await http.get(f"/patients/{paciente['id']}")
+    assert detalhe.status_code == 200
+    assert detalhe.json()["can_edit"] is False
+    assert detalhe.json()["can_delete"] is True, "o admin administra o acervo"
+
+    edicao = await http.patch(f"/patients/{paciente['id']}", json={"phone": "11888888888"})
+    assert edicao.status_code == 403, edicao.text

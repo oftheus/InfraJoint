@@ -5,6 +5,10 @@
  * `encounter-summary.ts`, e pela mesma razão — assim o resumo é testável com um
  * objeto literal, sem montar componente nem HTTP.
  *
+ * "Acervo", e não "conta": para o perfil de pesquisador `GET /patients` devolve
+ * também os pacientes dos pares, então os números daqui contam o acervo compartilhado.
+ * Para o médico os dois termos coincidem, porque o acervo dele é só o dele.
+ *
  * O dashboard se apoia **só em `GET /patients`**. Não há endpoint que liste consultas
  * de todos os pacientes, e montar "consultas recentes" custaria uma requisição por
  * paciente. Um painel que fica lento à medida que a conta cresce é pior que um painel
@@ -96,14 +100,14 @@ export const ACOES_RAPIDAS: readonly AcaoRapida[] = [
     descricao: 'Captura, medição e registro na consulta do paciente.',
     icone: 'thermometer',
     rota: '/analise/analise-termica',
-    papeis: ['medico', 'admin'],
+    papeis: ['medico', 'pesquisador', 'admin'],
   },
   {
     label: 'Pacientes',
-    descricao: 'Cadastre e acompanhe os pacientes da sua conta.',
+    descricao: 'Cadastre e acompanhe os pacientes do seu acervo.',
     icone: 'user-round',
     rota: '/pacientes',
-    papeis: ['medico', 'admin'],
+    papeis: ['medico', 'pesquisador', 'admin'],
   },
   {
     label: 'Analisador de imagens',
@@ -132,5 +136,5 @@ export function acoesPara(papel: UserRole | undefined): readonly AcaoRapida[] {
 
 /** Quem pode ver os painéis clínicos. Espelha `is_clinician()` no banco. */
 export function ehClinico(papel: UserRole | undefined): boolean {
-  return papel === 'medico' || papel === 'admin';
+  return papel === 'medico' || papel === 'pesquisador' || papel === 'admin';
 }

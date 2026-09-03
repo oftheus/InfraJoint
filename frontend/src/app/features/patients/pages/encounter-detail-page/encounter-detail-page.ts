@@ -95,7 +95,14 @@ export class EncounterDetailPage {
     this.exporting.set(true);
     this.error.set(null);
     try {
-      await this.report.download(consulta, this.auth.profile()?.full_name ?? null);
+      // Quem assina o relatório é quem REGISTROU a consulta, não quem clicou em
+      // exportar. `author_name` só vem preenchido quando é outra pessoa (no acervo de
+      // pesquisa, ou para o admin lendo consulta alheia); vindo nulo, o leitor é o
+      // autor e o nome sai do perfil dele.
+      await this.report.download(
+        consulta,
+        consulta.author_name ?? this.auth.profile()?.full_name ?? null,
+      );
     } catch (cause: unknown) {
       // Não passa por `messageFromError`: aquele helper traduz falha de HTTP, e aqui
       // não há requisição — o PDF é montado inteiro no navegador. Mandar um erro de

@@ -15,6 +15,10 @@ class UserRole(StrEnum):
 
     USER = "user"
     MEDICO = "medico"
+    # O pesquisador escreve dado clínico como o médico, e enxerga o acervo dos
+    # outros pesquisadores. Quem decide isso é a RLS (`app.same_research_pool`),
+    # nunca esta camada: aqui o papel só serve para recusar cedo, com mensagem.
+    PESQUISADOR = "pesquisador"
     ADMIN = "admin"
 
 
@@ -37,8 +41,13 @@ class AuthenticatedUser:
         Espelha app.is_clinician() no banco de propósito: a API rejeita cedo para dar
         uma mensagem clara, e a policy rejeita de novo por ser a fronteira real. Se as
         duas discordarem, quem vence é o banco.
+
+        Responde só "este papel escreve dado clínico?". **Em qual linha** ele pode
+        escrever é outra pergunta, e ela não se responde a partir do papel desde que
+        o acervo de pesquisa existe: quem responde é `Patient.can_edit`, que vem
+        calculado pelo banco linha a linha.
         """
-        return self.role in (UserRole.MEDICO, UserRole.ADMIN)
+        return self.role in (UserRole.MEDICO, UserRole.PESQUISADOR, UserRole.ADMIN)
 
 
 @dataclass(frozen=True, slots=True)
@@ -54,10 +63,22 @@ class Patient:
     primary_diagnosis: str | None
     created_at: datetime
     updated_at: datetime
-    # Nome do médico dono, e não o id: serve à tela, não à autorização. Só vem
-    # preenchido para admin — `app.owner_display_name()` devolve NULL para os demais,
-    # e para um médico comum ele diria o nome dele mesmo em toda linha.
+    # Nome do dono, e não o id: serve à tela, não à autorização. Vem preenchido para
+    # o admin e para o par de pool, e só nas linhas alheias — `app.user_display_name()`
+    # devolve NULL nos demais casos, e para um médico comum ele diria o nome dele
+    # mesmo em toda linha.
     owner_name: str | None = None
+    # Quem gravou a última edição, quando não foi quem está lendo. Só faz sentido no
+    # acervo compartilhado, e é NULL fora dele.
+    editor_name: str | None = None
+    # Espelho das policies, calculado pelo banco linha a linha (`app.can_curate` e
+    # `app.can_discard`). A tela usa para não oferecer o que a policy vai recusar, e
+    # os casos de uso para responder 403 em vez de 404 a quem ENXERGA a linha.
+    #
+    # O default vale para os caminhos de escrita, que não selecionam as colunas: ali
+    # a linha é sempre a que o próprio chamador acabou de gravar.
+    can_edit: bool = True
+    can_delete: bool = True
 
 
 @dataclass(frozen=True, slots=True)
@@ -87,6 +108,13 @@ class Encounter:
     capture_count: int
     created_at: datetime
     updated_at: datetime
+    # Quem registrou a consulta, quando não foi quem está lendo. No acervo de
+    # pesquisa `owner_id` deixou de responder isso: a consulta que um pesquisador
+    # registra no paciente de um par nasce com o owner do par.
+    author_name: str | None = None
+    # Mesmo espelho de `Patient`, e pelos mesmos motivos.
+    can_edit: bool = True
+    can_delete: bool = True
 
 
 class FileKind(StrEnum):

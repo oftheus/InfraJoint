@@ -69,6 +69,8 @@ const paciente: Patient = {
   primary_diagnosis: 'Artrite reumatoide',
   created_at: '2026-01-01T00:00:00Z',
   updated_at: '2026-01-01T00:00:00Z',
+  can_edit: true,
+  can_delete: true,
 };
 
 function consulta(partial: Partial<EncounterDetail> = {}): EncounterDetail {
@@ -84,6 +86,8 @@ function consulta(partial: Partial<EncounterDetail> = {}): EncounterDetail {
     capture_count: 0,
     created_at: '2026-08-15T12:00:00Z',
     captures: [],
+    can_edit: true,
+    can_delete: true,
     ...partial,
   };
 }

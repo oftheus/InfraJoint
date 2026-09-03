@@ -49,6 +49,11 @@ class CreatePatient:
         nascimento diferente é pessoa diferente e passa. Com a mesma data, o índice
         continua recusando — e aí a recusa é a correta, porque nem o médico teria como
         distinguir os dois depois.
+
+        No acervo de pesquisa o aviso alcança os pacientes dos pares (ver
+        `find_by_name`), e é lá que ele rende mais: o cadastro que já existe costuma
+        ser o de outra pessoa da equipe. O índice único, esse continua por dono, então
+        o homônimo de um par é avisado e não recusado.
         """
         if not user.is_clinician:
             raise ForbiddenError("apenas médicos e administradores criam pacientes")
@@ -56,9 +61,7 @@ class CreatePatient:
         if not allow_duplicate:
             homonimos = await self.patients.find_by_name(data.full_name)
             if homonimos:
-                raise DuplicatePatientError(
-                    "já existe paciente com este nome no seu cadastro", homonimos
-                )
+                raise DuplicatePatientError("já existe paciente com este nome no acervo", homonimos)
 
         return await self.patients.create(data)
 
@@ -88,6 +91,14 @@ class DeletePatient:
         if not user.is_clinician:
             raise ForbiddenError("apenas médicos e administradores excluem pacientes")
 
+        # Ler antes de apagar existe pelo acervo de pesquisa: o par ENXERGA o paciente
+        # do outro e não pode apagá-lo. Sem esta guarda o DELETE não acharia linha sob
+        # a policy e a resposta seria 404 — por um paciente que a listagem dele acabou
+        # de mostrar. Mesma razão da guarda de `UpdatePatient`, e o mesmo 403.
+        paciente = await GetPatient(self.patients).execute(patient_id)
+        if not paciente.can_delete:
+            raise ForbiddenError("apenas o responsável pelo paciente exclui o cadastro")
+
         # Coletar ANTES do DELETE: depois não há linha de onde derivar as chaves.
         orfaos = await self.captures.list_files_for_patient(patient_id)
         if not await self.patients.delete(patient_id):
@@ -102,15 +113,25 @@ class UpdatePatient:
     async def execute(
         self, user: AuthenticatedUser, patient_id: UUID, changes: Mapping[str, Any]
     ) -> Patient:
-        """Edita o cadastro. Só o médico dono edita — nem o admin.
+        """Edita o cadastro: o dono, ou um par do acervo de pesquisa. Nunca o admin.
 
-        Espelha `patients_update` no banco, que é a fronteira real. A regra é a mesma
-        de `consulta_e_do_dono`, agora estendida ao paciente: o admin administra o
-        acervo e não assina no lugar de quem atendeu. Editar cadastro alheio gravaria
-        conteúdo dele sob o nome de outro médico, sem nada na tela denunciando.
+        Espelha `patients_update` no banco, que é a fronteira real. Quem responde é a
+        própria linha (`can_edit`, calculado por `app.can_curate()` na leitura), e não
+        uma comparação de ids aqui: a resposta depende do papel do dono, que esta
+        camada não enxerga, e duplicar a regra em Python daria duas fontes da verdade.
 
-        Apagar continua sendo do admin (ver `DeletePatient`), e a assimetria é
-        deliberada: remover não falsifica, editar sim.
+        As duas metades da regra:
+
+          · o admin não edita. `paciente_e_do_dono` estabeleceu o princípio, e ele
+            continua valendo: editar cadastro alheio gravaria conteúdo dele sob o nome
+            de outra pessoa, sem nada na tela denunciando.
+          · o par de pool edita. O acervo de pesquisa é comum, e foi para isso que ele
+            existe. A autoria da edição fica em `patients.updated_by`.
+
+        Apagar continua sendo do dono e do admin (ver `DeletePatient`), e a assimetria
+        é deliberada nos dois sentidos: o admin apaga e não edita porque remover não
+        falsifica; o par edita e não apaga porque destruir coleta alheia é o que o
+        acervo compartilhado não autoriza.
         """
         if not user.is_clinician:
             raise ForbiddenError("apenas médicos e administradores editam pacientes")
@@ -122,8 +143,8 @@ class UpdatePatient:
         # mostrar. 403 é a resposta honesta: a identidade não é segredo para ele, o
         # que falta é ser o responsável.
         patient = await GetPatient(self.patients).execute(patient_id)
-        if patient.owner_id != user.id:
-            raise ForbiddenError("apenas o médico responsável edita o cadastro do paciente")
+        if not patient.can_edit:
+            raise ForbiddenError("apenas o responsável pelo paciente edita o cadastro")
 
         if not changes:
             return patient

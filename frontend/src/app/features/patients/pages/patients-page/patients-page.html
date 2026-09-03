@@ -71,7 +71,12 @@
       </div>
 
       <!-- Homônimo não é erro, é uma pergunta: quase sempre o médico queria abrir
-           quem já está cadastrado, e é por isso que a lista vem antes do botão. -->
+           quem já está cadastrado, e é por isso que a lista vem antes do botão.
+
+           No acervo de pesquisa a lista alcança os pacientes dos pares, então o texto
+           não pode mais dizer "no seu cadastro", e cada item precisa dizer de quem é:
+           abrir o prontuário de outra pessoa sem saber disso é o acidente que o
+           rótulo evita. -->
       @if (duplicates().length > 0) {
         <section
           role="alert"
@@ -79,9 +84,9 @@
         >
           <p class="font-semibold">
             @if (duplicates().length === 1) {
-              Já existe um paciente com este nome no seu cadastro:
+              Já existe um paciente com este nome no acervo:
             } @else {
-              Já existem {{ duplicates().length }} pacientes com este nome no seu cadastro:
+              Já existem {{ duplicates().length }} pacientes com este nome no acervo:
             }
           </p>
 
@@ -98,6 +103,11 @@
                   <span class="ml-2 text-xs text-amber-800">
                     Nascimento {{ existente.birth_date | date: 'dd/MM/yyyy' }}
                   </span>
+                  @if (existente.owner_name) {
+                    <span class="ml-2 text-xs font-medium text-amber-800">
+                      Cadastrado por {{ existente.owner_name }}
+                    </span>
+                  }
                 </span>
                 <a
                   [routerLink]="['/pacientes', existente.id]"
@@ -151,7 +161,9 @@
             <p class="mt-1 text-sm text-muted">
               Nascimento {{ patient.birth_date | date: 'dd/MM/yyyy' }}
             </p>
-            <!-- Só vem preenchido para admin; ver `owner_name` em patient.model.ts. -->
+            <!-- Só vem preenchido em prontuário alheio: para o admin, o de qualquer
+                 médico; para o pesquisador, o dos pares do acervo. Ver `owner_name` em
+                 patient.model.ts. -->
             @if (patient.owner_name) {
               <p class="mt-2 inline-flex items-center gap-1.5 rounded-full bg-brand-50 px-2.5 py-1 text-xs font-medium text-secondary">
                 <svg [lucideIcon]="'stethoscope'" class="h-3.5 w-3.5" aria-hidden="true"></svg>
