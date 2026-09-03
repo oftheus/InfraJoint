@@ -37,7 +37,11 @@ function source(overrides: Partial<CaptureSource> = {}): CaptureSource {
     agreement: null,
     correction: null,
     jointRois: [jointRoi('Punho')],
-    files: { optical: { size: 100 }, thermal: { size: 200 }, matrix: { size: 300 } },
+    files: {
+      optical: { size: 100, content_type: 'image/jpeg' },
+      thermal: { size: 200, content_type: 'image/jpeg' },
+      matrix: { size: 300, content_type: 'text/csv' },
+    },
     ...overrides,
   };
 }

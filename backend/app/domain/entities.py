@@ -90,10 +90,14 @@ class Encounter:
 
 
 class FileKind(StrEnum):
-    """Os três arquivos de uma captura.
+    """Os três arquivos de uma captura, e a lista completa deles.
 
     É enum, e não texto livre, porque este valor entra na chave do objeto no R2 —
     texto livre permitiria `../` e escapar do prefixo do dono.
+
+    Toda captura tem os três, sempre: é o que o schema de entrada cobra. Por isso
+    iterar este enum **é** a lista de arquivos de qualquer captura, e não existe mais
+    uma coluna `files` no banco repetindo a mesma informação linha a linha.
     """
 
     OPTICAL = "optical"
@@ -135,7 +139,6 @@ class Capture:
     owner_id: UUID
     # None na análise avulsa, 0 na basal, N na dinâmica N.
     capture_index: int | None
-    files: Mapping[str, Any]
 
 
 @dataclass(frozen=True, slots=True)

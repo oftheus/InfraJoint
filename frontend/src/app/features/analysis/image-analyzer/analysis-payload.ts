@@ -23,11 +23,24 @@ import { JointRoi } from './joint-rois';
 /** Como o alinhamento foi obtido. Espelha o check de `alignment_method`. */
 export type AlignmentMethod = 'silhouette' | 'fiducial' | 'manual';
 
-/** Arquivos declarados no POST — tipo e tamanho, não conteúdo. */
+/** O arquivo declarado no POST — tipo e tamanho, não conteúdo. */
+export interface CaptureFileDeclaration {
+  readonly size: number;
+  /** O mesmo que o backend assina e o browser envia; divergir dá 403 no R2. */
+  readonly content_type: string;
+}
+
+/**
+ * Os arquivos declarados no POST. Os três, sempre: uma captura é o conjunto.
+ *
+ * Nenhum é opcional porque uma captura sem a matriz não tem medição e uma sem as
+ * duas imagens não tem o que alinhar. O backend recusa o subconjunto com 422, e o
+ * tipo opcional aqui deixava esse 422 só aparecer em produção.
+ */
 export interface CaptureFilesPayload {
-  readonly optical?: { readonly size: number };
-  readonly thermal?: { readonly size: number };
-  readonly matrix?: { readonly size: number };
+  readonly optical: CaptureFileDeclaration;
+  readonly thermal: CaptureFileDeclaration;
+  readonly matrix: CaptureFileDeclaration;
 }
 
 /** O corpo de uma captura no `POST /encounters/{id}/captures`. */

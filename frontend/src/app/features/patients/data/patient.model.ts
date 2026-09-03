@@ -149,10 +149,13 @@ export interface AnalysisCreated {
   readonly uploads: readonly SignedUpload[];
 }
 
-/** Arquivo da captura, com URL de leitura assinada (15 min). */
+/**
+ * Arquivo da captura, com URL de leitura assinada (15 min).
+ *
+ * Só a URL: `size` e `content_type` vinham junto e nenhuma tela os lia — a reabertura
+ * baixa o arquivo pela URL e mais nada.
+ */
 export interface CaptureFileDetail {
-  readonly size: number;
-  readonly content_type: string;
   /** Nula quando o R2 não está configurado: a consulta abre, só sem imagens. */
   readonly url: string | null;
 }

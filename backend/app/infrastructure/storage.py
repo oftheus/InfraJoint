@@ -12,7 +12,6 @@ from collections.abc import Sequence
 
 import boto3
 from botocore.config import Config
-from botocore.exceptions import ClientError
 from starlette.concurrency import run_in_threadpool
 
 from app.domain.entities import CaptureFile
@@ -79,20 +78,6 @@ class R2Storage:
             Params={"Bucket": self._bucket, "Key": object_key(file)},
             ExpiresIn=self._read_ttl,
         )
-
-    async def exists(self, file: CaptureFile) -> bool:
-        # O boto3 é síncrono e isto é I/O de rede: rodar direto bloquearia o event
-        # loop inteiro, do mesmo jeito que a busca do JWKS bloquearia.
-        def _head() -> bool:
-            try:
-                self._client.head_object(Bucket=self._bucket, Key=object_key(file))
-                return True
-            except ClientError as exc:
-                if exc.response["Error"]["Code"] in ("404", "NoSuchKey", "NotFound"):
-                    return False
-                raise
-
-        return await run_in_threadpool(_head)
 
     async def delete(self, files: Sequence[CaptureFile]) -> None:
         """Apaga em lote, em blocos de 1000 — o limite do delete_objects do S3.

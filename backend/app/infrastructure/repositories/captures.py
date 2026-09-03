@@ -24,47 +24,42 @@ _INSERT_COLUMNS = (
     "agreement",
     "fiducial_correction",
     "measurements",
-    "files",
     "issue",
 )
 
 # Colunas jsonb: o asyncpg não converte dict/list sozinho, o SQL faz o cast.
-_JSON_COLUMNS = frozenset({"agreement", "fiducial_correction", "measurements", "files"})
+_JSON_COLUMNS = frozenset({"agreement", "fiducial_correction", "measurements"})
 
 
 def _to_entity(row: asyncpg.Record) -> Capture:
-    files = row["files"]
     return Capture(
         id=row["id"],
         encounter_id=row["encounter_id"],
         owner_id=row["owner_id"],
         capture_index=row["capture_index"],
-        files=json.loads(files) if isinstance(files, str) else (files or {}),
     )
 
 
 def _to_files(rows: Sequence[asyncpg.Record]) -> list[CaptureFile]:
-    """Deriva uma chave de bucket por arquivo declarado das linhas de captura.
+    """Deriva as três chaves de bucket de cada linha de captura.
 
-    As duas listagens — por paciente e por consulta — diferem só no recorte do
-    WHERE; a expansão `files` → `CaptureFile` é a mesma, e é onde estaria o bug de
-    apagar a chave errada.
+    Os três `FileKind` são a lista de arquivos de qualquer captura — o schema de
+    entrada não aceita menos —, então não há uma coluna a consultar. Chave que nunca
+    subiu não atrapalha: o `delete` do R2 trata ausência como sucesso.
+
+    As duas listagens — por paciente e por consulta — diferem só no recorte do WHERE;
+    a expansão é esta, e é onde estaria o bug de apagar a chave errada.
     """
-    arquivos: list[CaptureFile] = []
-    for row in rows:
-        declarados = row["files"]
-        if isinstance(declarados, str):
-            declarados = json.loads(declarados)
-        for kind in declarados or {}:
-            arquivos.append(
-                CaptureFile(
-                    owner_id=row["owner_id"],
-                    encounter_id=row["encounter_id"],
-                    capture_id=row["id"],
-                    kind=FileKind(kind),
-                )
-            )
-    return arquivos
+    return [
+        CaptureFile(
+            owner_id=row["owner_id"],
+            encounter_id=row["encounter_id"],
+            capture_id=row["id"],
+            kind=kind,
+        )
+        for row in rows
+        for kind in FileKind
+    ]
 
 
 class PostgresCaptureRepository:
@@ -107,7 +102,7 @@ class PostgresCaptureRepository:
             f"""
             INSERT INTO public.analysis_captures ({colunas})
             VALUES {", ".join(linhas)}
-            RETURNING id, encounter_id, owner_id, capture_index, files
+            RETURNING id, encounter_id, owner_id, capture_index
             """,
             *valores,
         )
@@ -136,7 +131,7 @@ class PostgresCaptureRepository:
     async def list_files_for_patient(self, patient_id: UUID) -> Sequence[CaptureFile]:
         rows = await self._connection.fetch(
             """
-            SELECT c.id, c.encounter_id, c.owner_id, c.files
+            SELECT c.id, c.encounter_id, c.owner_id
               FROM public.analysis_captures c
               JOIN public.encounters e ON e.id = c.encounter_id
              WHERE e.patient_id = $1
@@ -148,7 +143,7 @@ class PostgresCaptureRepository:
     async def list_files_for_encounter(self, encounter_id: UUID) -> Sequence[CaptureFile]:
         rows = await self._connection.fetch(
             """
-            SELECT id, encounter_id, owner_id, files
+            SELECT id, encounter_id, owner_id
               FROM public.analysis_captures
              WHERE encounter_id = $1
             """,
@@ -159,7 +154,7 @@ class PostgresCaptureRepository:
     async def list_for_encounter(self, encounter_id: UUID) -> Sequence[Capture]:
         rows = await self._connection.fetch(
             """
-            SELECT id, encounter_id, owner_id, capture_index, files
+            SELECT id, encounter_id, owner_id, capture_index
               FROM public.analysis_captures
              WHERE encounter_id = $1
              ORDER BY capture_index

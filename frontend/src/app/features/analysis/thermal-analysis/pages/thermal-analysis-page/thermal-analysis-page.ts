@@ -132,9 +132,11 @@ export class ThermalAnalysisPage {
   /**
    * O analisador tem resultado gravável?
    *
-   * Sem matriz e sem alinhamento não há medição — é a mesma condição que faz
-   * `collectSingleAnalysis` devolver `null`. Enquanto for falsa, a tela do
-   * analisador ainda está na etapa de carregar arquivos.
+   * Espelha exatamente a condição que faz `collectSingleAnalysis` devolver `null`:
+   * sem matriz e sem alinhamento não há medição, e sem os três arquivos a captura
+   * fica incompleta. As duas precisam andar juntas — se esta afrouxar, o botão
+   * habilita e o Finalizar descarta a análise em silêncio, tratando-a como etapa
+   * não preenchida. Enquanto for falsa, a tela ainda está carregando arquivos.
    */
   protected readonly analysisReady = computed(() => {
     const analisador = this.analyzer();
@@ -144,7 +146,13 @@ export class ThermalAnalysisPage {
     if (analisador.sequenceActive()) {
       return analisador.sequenceService.captures().length > 0;
     }
-    return analisador.matrix() !== null && analisador.activeMatrix() !== null;
+    return (
+      analisador.matrix() !== null &&
+      analisador.activeMatrix() !== null &&
+      analisador.rgbFile() !== null &&
+      analisador.jpegFile() !== null &&
+      analisador.csvFile() !== null
+    );
   });
 
   /**
@@ -423,7 +431,12 @@ export class ThermalAnalysisPage {
             url: upload.url,
             body: file,
             contentType: file.type || 'application/octet-stream',
-            describe: `captura ${upload.capture_index}: ${upload.kind}`,
+            // Índice nulo é a avulsa: "captura null" mandaria o médico procurar uma
+            // posição que não existe na tela dele. Mesma regra do erro do backend.
+            describe:
+              upload.capture_index === null
+                ? `captura avulsa: ${upload.kind}`
+                : `captura ${upload.capture_index}: ${upload.kind}`,
           };
         });
       }

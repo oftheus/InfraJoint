@@ -186,10 +186,8 @@ def create_captures(
     return CreateCaptures(encounters, captures, storage)
 
 
-def mark_analysis_ready(
-    encounters: EncounterRepo, captures: CaptureRepo, storage: Storage
-) -> MarkAnalysisReady:
-    return MarkAnalysisReady(encounters, captures, storage)
+def mark_analysis_ready(encounters: EncounterRepo, captures: CaptureRepo) -> MarkAnalysisReady:
+    return MarkAnalysisReady(encounters, captures)
 
 
 def get_encounter_detail(

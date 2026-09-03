@@ -19,7 +19,12 @@ _NASCIMENTO = "1970-01-01"
 
 
 class FakeStorage:
-    """Guarda as chaves que 'existem'. `presign_put` devolve a própria chave."""
+    """Duplo do R2. `presign_put` devolve a própria chave e a registra.
+
+    `existentes` é o conteúdo do bucket, e quem o preenche são os testes: não há mais
+    um `exists` — o backend deixou de conferir os objetos ao fechar a análise. O que
+    ele ainda serve é aos testes de exclusão, que provam que nada sobra no bucket.
+    """
 
     def __init__(self, existentes: set[str] | None = None) -> None:
         self.existentes = existentes if existentes is not None else set()
@@ -37,9 +42,6 @@ class FakeStorage:
         chave = self._key(file)
         self.assinadas.append(chave)
         return f"https://bucket.local/{chave}?assinada=1&ct={content_type}"
-
-    async def exists(self, file: CaptureFile) -> bool:
-        return self._key(file) in self.existentes
 
     async def delete(self, files: Any) -> None:
         for file in files:
@@ -62,7 +64,13 @@ def _captura(indice: int | None) -> dict[str, Any]:
         "alignment_method": "silhouette",
         "agreement": {"normalized": 0.87, "dice": 0.61, "ceiling": 0.70},
         "measurements": [{"label": "Punho", "stats": {"mean": 33.2}}],
-        "files": {"optical": {"size": 1000}, "matrix": {"size": 2000}},
+        # Os três, sempre: o schema recusa um subconjunto, porque uma captura sem a
+        # matriz não tem medição e sem as duas imagens não tem o que alinhar.
+        "files": {
+            "optical": {"size": 1000, "content_type": "image/jpeg"},
+            "thermal": {"size": 1500, "content_type": "image/jpeg"},
+            "matrix": {"size": 2000, "content_type": "text/csv"},
+        },
     }
 
 
@@ -88,8 +96,8 @@ async def test_avulsa_e_sequencia_pelo_mesmo_endpoint(client_com_storage: tuple)
 
         r = await http.post(f"/encounters/{eid}/captures", json={"captures": capturas})
         assert r.status_code == 201, r.text
-        # Dois arquivos declarados por captura ⇒ duas URLs assinadas por captura.
-        assert len(r.json()["uploads"]) == n * 2
+        # Três arquivos por captura ⇒ três URLs assinadas por captura.
+        assert len(r.json()["uploads"]) == n * 3
 
 
 async def test_chave_derivada_do_dono_da_linha(client_com_storage: tuple) -> None:
@@ -103,7 +111,7 @@ async def test_chave_derivada_do_dono_da_linha(client_com_storage: tuple) -> Non
     # {owner_id}/{encounter_id}/{capture_id}/{kind} — e o dono é o do paciente.
     for chave in storage.assinadas:
         assert chave.startswith(f"{MEDICO_A}/{eid}/")
-        assert chave.rsplit("/", 1)[1] in {"optical", "matrix"}
+        assert chave.rsplit("/", 1)[1] in {"optical", "thermal", "matrix"}
 
 
 async def test_segundo_post_na_mesma_consulta_vira_409(client_com_storage: tuple) -> None:
@@ -119,8 +127,13 @@ async def test_segundo_post_na_mesma_consulta_vira_409(client_com_storage: tuple
     assert repetido.status_code == 409, repetido.text
 
 
-async def test_ready_recusa_enquanto_faltar_arquivo(client_com_storage: tuple) -> None:
-    """`files` declara o que seria enviado; só o HEAD prova que chegou."""
+async def test_ready_fecha_a_analise_sem_conferir_o_bucket(client_com_storage: tuple) -> None:
+    """Fechar a análise é decisão do cliente, que viu a resposta de cada PUT.
+
+    Havia aqui um HEAD por objeto, e este teste cobrava o 409 enquanto faltasse
+    arquivo. Ele saiu: o 204 com o bucket vazio é o preço aceito, e está registrado
+    para que a mudança apareça se alguém reintroduzir a conferência sem querer.
+    """
     http, acting, storage = client_com_storage
     acting["user_id"] = MEDICO_A
     eid = await _consulta_de(http, "API-TEST ready")
@@ -128,16 +141,17 @@ async def test_ready_recusa_enquanto_faltar_arquivo(client_com_storage: tuple) -
     r = await http.post(f"/encounters/{eid}/captures", json={"captures": [_captura(0)]})
     assert r.status_code == 201
 
-    negado = await http.patch(f"/encounters/{eid}/analysis-status")
-    assert negado.status_code == 409
-    assert "optical" in negado.json()["detail"]
-
-    # Só metade dos arquivos chegou: ainda não fecha.
-    storage.existentes.add(storage.assinadas[0])
-    assert (await http.patch(f"/encounters/{eid}/analysis-status")).status_code == 409
-
-    storage.existentes.update(storage.assinadas)
+    assert storage.existentes == set(), "nada subiu"
     assert (await http.patch(f"/encounters/{eid}/analysis-status")).status_code == 204
+
+
+async def test_ready_recusa_consulta_sem_analise(client_com_storage: tuple) -> None:
+    """Sem capturas gravadas não há o que fechar — 404, não um `ready` vazio."""
+    http, acting, _ = client_com_storage
+    acting["user_id"] = MEDICO_A
+    eid = await _consulta_de(http, "API-TEST sem analise")
+
+    assert (await http.patch(f"/encounters/{eid}/analysis-status")).status_code == 404
 
 
 async def test_analise_aparece_na_leitura_do_paciente(client_com_storage: tuple) -> None:
@@ -293,7 +307,7 @@ async def test_apagar_paciente_limpa_os_arquivos_do_bucket(client_com_storage: t
 
     storage.existentes.update(storage.assinadas)
     esperadas = sorted(storage.assinadas)
-    assert len(esperadas) == 4, "duas capturas, dois arquivos declarados em cada"
+    assert len(esperadas) == 6, "duas capturas, três arquivos em cada"
 
     assert (await http.delete(f"/patients/{pid}")).status_code == 204
 
@@ -335,7 +349,7 @@ async def test_apagar_consulta_limpa_so_os_arquivos_dela(client_com_storage: tup
     await http.post(f"/encounters/{outra}/captures", json={"captures": [_captura(0)]})
     storage.existentes.update(storage.assinadas)
     da_outra = sorted(set(storage.assinadas) - set(do_alvo))
-    assert len(do_alvo) == 4 and len(da_outra) == 2
+    assert len(do_alvo) == 6 and len(da_outra) == 3
 
     assert (await http.delete(f"/encounters/{alvo}")).status_code == 204
 
@@ -442,8 +456,9 @@ async def test_reabrir_consulta_devolve_tudo_identico(client_com_storage: tuple)
     assert primeira["measurements"] == [{"label": "Punho", "stats": {"mean": 33.2}}]
     # O indicador continua acessível, dentro do JSON de onde a coluna o copiava.
     assert primeira["agreement"]["normalized"] == 0.87
-    # URLs de leitura assinadas, uma por arquivo declarado.
-    assert sorted(primeira["files"]) == ["matrix", "optical"]
+    # URLs de leitura assinadas, uma por arquivo — os três, derivados do enum,
+    # porque não há mais coluna dizendo quais a captura tem.
+    assert sorted(primeira["files"]) == ["matrix", "optical", "thermal"]
     assert primeira["files"]["matrix"]["url"].endswith("leitura=1")
 
 
