@@ -277,6 +277,23 @@ class CaptureIn(BaseModel):
     # texto livre permitiria `../` e escapar do prefixo do dono.
     files: dict[Literal["optical", "thermal", "matrix"], CaptureFileIn]
 
+    @field_validator("files")
+    @classmethod
+    def _os_tres(cls, value: dict[str, CaptureFileIn]) -> dict[str, CaptureFileIn]:
+        """Uma captura é o conjunto dos três arquivos, nunca um subconjunto.
+
+        Sem a matriz não há medição, e sem as duas imagens não há o que alinhar —
+        uma captura incompleta é uma que ninguém consegue reabrir. E é esta regra que
+        sustenta o resto: como toda captura tem os três, a lista de arquivos é o enum
+        `FileKind`, e não uma coluna. Aceitar um subconjunto aqui faria a assinatura
+        de leitura e a exclusão mirarem um objeto que nunca existiu.
+        """
+        faltando = {"optical", "thermal", "matrix"} - set(value)
+        if faltando:
+            raise ValueError(f"captura sem os arquivos: {', '.join(sorted(faltando))}")
+        return value
+
+
 class AnalysisCreate(BaseModel):
     """Corpo do `POST /encounters/{id}/captures`.
 
@@ -324,10 +341,11 @@ class CaptureFileOut(BaseModel):
 
     `url` é nula quando o R2 não está configurado: a consulta ainda abre, com as
     medições e os escores, só sem as imagens.
+
+    Só a URL sai: `size` e `content_type` eram devolvidos e nenhuma tela os lia — a
+    reabertura usa `url` e mais nada.
     """
 
-    size: int
-    content_type: str
     url: str | None = None
 
 

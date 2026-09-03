@@ -8,6 +8,7 @@
 
 import {
   AlignmentMethod,
+  CaptureFileDeclaration,
   CaptureFilesPayload,
   captureFromSingle,
 } from '../../image-analyzer/analysis-payload';
@@ -42,6 +43,34 @@ export function uploadKey(captureIndex: number | null, kind: CaptureFileKind): s
 export interface CollectedAnalysis {
   readonly payload: AnalysisCreate;
   readonly files: ReadonlyMap<string, File>;
+}
+
+/**
+ * Declara os três arquivos de uma captura e os registra no mapa de envio.
+ *
+ * Os dois fluxos passam por aqui, e é o que garante que nenhum deles declare um
+ * subconjunto: o parâmetro exige os três, então uma captura incompleta não chega a
+ * compilar. O backend recusa o subconjunto com 422, mas só depois de a consulta já
+ * existir — e ela ficaria presa em `uploading`.
+ */
+function declararTres(
+  captureIndex: number | null,
+  files: { readonly optical: File; readonly thermal: File; readonly matrix: File },
+  destino: Map<string, File>,
+): CaptureFilesPayload {
+  const declarar = (kind: CaptureFileKind, file: File): CaptureFileDeclaration => {
+    destino.set(uploadKey(captureIndex, kind), file);
+    return {
+      size: file.size,
+      // Precisa ser o mesmo que o backend assina e o browser envia; divergir dá 403.
+      content_type: file.type || 'application/octet-stream',
+    };
+  };
+  return {
+    optical: declarar('optical', files.optical),
+    thermal: declarar('thermal', files.thermal),
+    matrix: declarar('matrix', files.matrix),
+  };
 }
 
 /** Uma captura da sequência, já processada, com as ROIs que a curva desenhou. */
@@ -80,19 +109,11 @@ export function collectSequenceAnalysis(
 
   const arquivos = new Map<string, File>();
   const payloads = capturas.map((captura) => {
-    const declarados: Record<string, { size: number; content_type: string }> = {};
-    const candidatos: readonly [CaptureFileKind, File][] = [
-      ['optical', captura.opticalFile],
-      ['thermal', captura.thermalFile],
-      ['matrix', captura.matrixFile],
-    ];
-    for (const [kind, file] of candidatos) {
-      declarados[kind] = {
-        size: file.size,
-        content_type: file.type || 'application/octet-stream',
-      };
-      arquivos.set(uploadKey(captura.index, kind), file);
-    }
+    const declarados = declararTres(
+      captura.index,
+      { optical: captura.opticalFile, thermal: captura.thermalFile, matrix: captura.matrixFile },
+      arquivos,
+    );
 
     const alinhamento = captura.alignment;
     return {
@@ -129,27 +150,22 @@ export function collectSingleAnalysis(readout: AnalyzerReadout): CollectedAnalys
     return null;
   }
 
-  const arquivos = new Map<string, File>();
-  const declarados: Record<string, { size: number; content_type: string }> = {};
-  const candidatos: readonly [CaptureFileKind, File | null][] = [
-    ['optical', readout.opticalFile],
-    ['thermal', readout.thermalFile],
-    ['matrix', readout.matrixFile],
-  ];
-  for (const [kind, file] of candidatos) {
-    if (file) {
-      declarados[kind] = {
-        size: file.size,
-        // Precisa ser o mesmo que o backend assina e o browser envia; divergir dá 403.
-        content_type: file.type || 'application/octet-stream',
-      };
-      // Avulsa: índice nulo, o mesmo que `captureFromSingle` vai enviar.
-      arquivos.set(uploadKey(null, kind), file);
-    }
-  }
-  if (arquivos.size === 0) {
+  // Os três, ou nenhum. Declarar um subconjunto gravaria uma análise que ninguém
+  // consegue reabrir, e o backend a recusa com 422 — mas só depois de a consulta já
+  // existir, deixando-a presa em `uploading`. Barrar antes do POST é o que evita isso.
+  const { opticalFile, thermalFile, matrixFile } = readout;
+  if (!opticalFile || !thermalFile || !matrixFile) {
     return null;
   }
+
+  const arquivos = new Map<string, File>();
+  // Índice nulo, o mesmo que `captureFromSingle` vai enviar: é por essa chave que a
+  // URL assinada reencontra o arquivo no envio.
+  const declarados = declararTres(
+    null,
+    { optical: opticalFile, thermal: thermalFile, matrix: matrixFile },
+    arquivos,
+  );
 
   const [captura] = captureFromSingle({
     matrix: readout.matrix,
@@ -159,7 +175,7 @@ export function collectSingleAnalysis(readout: AnalyzerReadout): CollectedAnalys
     agreement: readout.agreement,
     correction: readout.correction,
     jointRois: readout.jointRois,
-    files: declarados as CaptureFilesPayload,
+    files: declarados,
   });
 
   return {

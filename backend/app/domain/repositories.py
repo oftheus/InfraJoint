@@ -97,8 +97,8 @@ class CaptureRepository(Protocol):
 class ObjectStorage(Protocol):
     """Porta para o R2.
 
-    `presign_put` é cálculo local — assina sem tocar a rede. `exists` faz um HEAD e
-    portanto é I/O; a implementação é que decide como não bloquear o event loop.
+    As duas assinaturas são cálculo local: assinar não toca a rede. Só `delete` é I/O,
+    e é a implementação que decide como não bloquear o event loop.
     """
 
     def presign_put(self, file: CaptureFile, content_type: str) -> str: ...
@@ -106,8 +106,6 @@ class ObjectStorage(Protocol):
     def presign_get(self, file: CaptureFile) -> str:
         """URL de leitura, curta: ela vai para o browser e some da tela em minutos."""
         ...
-
-    async def exists(self, file: CaptureFile) -> bool: ...
 
     async def delete(self, files: Sequence[CaptureFile]) -> None:
         """Apaga em lote. Chave inexistente não é erro — o objeto já não está lá."""

@@ -57,11 +57,14 @@ describe('collectSingleAnalysis', () => {
     expect(files['optical'].content_type).toBe('image/jpeg');
   });
 
-  it('omite o arquivo que não foi carregado', () => {
-    const coletado = collectSingleAnalysis(readout({ thermalFile: null }))!;
-    expect(coletado.files.has(uploadKey(null, 'thermal'))).toBe(false);
-    expect(coletado.files.size).toBe(2);
-  });
+  it.each(['opticalFile', 'thermalFile', 'matrixFile'] as const)(
+    'devolve null sem o %s — a captura são os três arquivos',
+    (ausente) => {
+      // Um subconjunto grava uma análise que ninguém consegue reabrir, e o backend
+      // já a recusa com 422 — depois de a consulta existir, presa em `uploading`.
+      expect(collectSingleAnalysis(readout({ [ausente]: null }))).toBeNull();
+    },
+  );
 
   it('devolve null sem alinhamento — não há medição a gravar', () => {
     // Gravar assim deixaria a consulta presa em analysis_status='uploading'.
@@ -69,10 +72,6 @@ describe('collectSingleAnalysis', () => {
     expect(collectSingleAnalysis(readout({ matrix: null }))).toBeNull();
   });
 
-  it('devolve null quando nenhum arquivo foi carregado', () => {
-    const vazio = readout({ opticalFile: null, thermalFile: null, matrixFile: null });
-    expect(collectSingleAnalysis(vazio)).toBeNull();
-  });
 
   it('a captura avulsa não tem posição na sequência', () => {
     const captura = collectSingleAnalysis(readout())!.payload.captures[0] as Record<

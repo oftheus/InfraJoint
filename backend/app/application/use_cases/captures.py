@@ -79,39 +79,53 @@ class CreateCaptures:
 
         gravadas = await self.captures.create_many(encounter_id, captures)
 
+        # O `content_type` vem do corpo da requisição, e não de uma coluna: ele é
+        # usado só aqui, para assinar, na mesma chamada que o recebeu. Guardá-lo no
+        # banco era ida e volta para buscar o que já estava na mão.
+        #
+        # O casamento é por `capture_index`, e não pela ordem do RETURNING: o índice é
+        # único na consulta, e depender da ordem do INSERT assinaria a URL de uma
+        # captura com o tipo declarado de outra no dia em que ela mudasse.
+        declarados = {c.get("capture_index"): (c.get("files") or {}) for c in captures}
+
         # O endereço usa o owner_id que veio DA LINHA, não o id de quem chamou: se
         # algum dia os dois divergirem, o objeto ainda cai no prefixo do dono real.
         uploads = [
             SignedUpload(
                 capture_id=capture.id,
                 capture_index=capture.capture_index,
-                kind=FileKind(kind),
+                kind=kind,
                 url=self.storage.presign_put(
-                    CaptureFile(capture.owner_id, encounter_id, capture.id, FileKind(kind)),
-                    declared.get("content_type", "application/octet-stream"),
+                    CaptureFile(capture.owner_id, encounter_id, capture.id, kind),
+                    declarados.get(capture.capture_index, {})
+                    .get(kind.value, {})
+                    .get("content_type", "application/octet-stream"),
                 ),
             )
             for capture in gravadas
-            for kind, declared in sorted(capture.files.items())
+            for kind in FileKind
         ]
         return CreatedAnalysis(captures=gravadas, uploads=uploads)
 
 
 @dataclass(frozen=True, slots=True)
 class MarkAnalysisReady:
-    """Fecha a análise em `ready` — mas só depois de conferir que os bytes chegaram.
+    """Fecha a análise em `ready`.
 
-    `analysis_captures.files` é declaração do que o cliente disse que enviaria; ela
-    não prova nada. A prova é o HEAD em cada objeto. Sem esta checagem, uma consulta
-    ficaria marcada como pronta com arquivos que nunca subiram, e o erro só apareceria
-    meses depois, quando alguém tentasse reabrir a análise.
+    Quem confere que os bytes chegaram é o cliente: ele vê a resposta de cada PUT e
+    só chama este endpoint quando nenhum falhou. Havia aqui um HEAD por objeto
+    confirmando isso no bucket; ele saiu porque só pegava o caso de o cliente estar
+    errado sobre um envio que ele mesmo viu dar certo, e custava uma ida à rede por
+    arquivo — 63 numa sequência de 21 capturas.
+
+    O preço é conhecido: um cliente que chame isto sem ter subido tudo deixa a
+    consulta em `ready` com objeto faltando, e o buraco só aparece na reabertura.
     """
 
     encounters: EncounterRepository
     captures: CaptureRepository
-    storage: ObjectStorage
 
-    async def execute(self, user: AuthenticatedUser, encounter_id: UUID) -> Sequence[str]:
+    async def execute(self, user: AuthenticatedUser, encounter_id: UUID) -> None:
         if not user.is_clinician:
             raise ForbiddenError("apenas médicos e administradores gravam análises")
 
@@ -126,29 +140,10 @@ class MarkAnalysisReady:
         if encounter.owner_id != user.id:
             raise ForbiddenError("apenas o médico responsável pela consulta fecha a análise")
 
-        gravadas = await self.captures.list_for_encounter(encounter_id)
-        if not gravadas:
+        if not await self.captures.list_for_encounter(encounter_id):
             raise NotFoundError("esta consulta não tem análise de imagem")
 
-        faltando: list[str] = []
-        for capture in gravadas:
-            for kind in sorted(capture.files):
-                alvo = CaptureFile(capture.owner_id, encounter_id, capture.id, FileKind(kind))
-                if not await self.storage.exists(alvo):
-                    # Índice nulo é a análise avulsa: nomeá-la "captura None" mandaria
-                    # o médico procurar uma posição que não existe na tela dele.
-                    onde = (
-                        "captura avulsa"
-                        if capture.capture_index is None
-                        else f"captura {capture.capture_index}"
-                    )
-                    faltando.append(f"{onde}: {kind}")
-
-        if faltando:
-            raise ConflictError("; ".join(faltando))
-
         await self.encounters.set_analysis_status(encounter_id, AnalysisStatus.READY.value)
-        return []
 
 
 @dataclass(frozen=True, slots=True)
@@ -195,17 +190,25 @@ class GetEncounterDetail:
         capturas: list[Mapping[str, Any]] = []
         for linha in linhas:
             registro = dict(linha)
-            declarados = dict(registro.get("files") or {})
-            if self.storage is not None:
-                for kind, declarado in declarados.items():
-                    alvo = CaptureFile(
-                        owner_id=registro["owner_id"],
-                        encounter_id=encounter_id,
-                        capture_id=registro["id"],
-                        kind=FileKind(kind),
+            # Os três, sempre: é o que o POST cobra, e a chave de cada um é derivada
+            # dos ids da própria linha. Não há coluna a consultar.
+            registro["files"] = {
+                kind.value: {
+                    # Nula sem R2 configurado: a consulta ainda abre, com as medições
+                    # e os escores, só sem as imagens.
+                    "url": None
+                    if self.storage is None
+                    else self.storage.presign_get(
+                        CaptureFile(
+                            owner_id=registro["owner_id"],
+                            encounter_id=encounter_id,
+                            capture_id=registro["id"],
+                            kind=kind,
+                        )
                     )
-                    declarados[kind] = {**declarado, "url": self.storage.presign_get(alvo)}
-            registro["files"] = declarados
+                }
+                for kind in FileKind
+            }
             capturas.append(registro)
 
         return EncounterDetail(encounter=encounter, patient=patient, captures=capturas)
