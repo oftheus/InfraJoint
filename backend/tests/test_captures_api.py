@@ -75,7 +75,6 @@ def _captura(indice: int | None) -> dict[str, Any]:
                 "t_max": 33.9,
                 "area": 1438,
                 "sample_count": 1400,
-                "skin_coverage": 0.97,
                 "shape": "ellipse",
                 "rgb_x": 209.1,
                 "rgb_y": 269.8,

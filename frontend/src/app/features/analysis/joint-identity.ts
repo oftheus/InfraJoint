@@ -91,7 +91,6 @@ export interface MeasurementDto {
   readonly t_max: number | null;
   readonly area: number | null;
   readonly sample_count: number | null;
-  readonly skin_coverage: number | null;
   readonly shape: RoiShape | null;
   readonly rgb_x: number | null;
   readonly rgb_y: number | null;
@@ -123,7 +122,6 @@ export function toMeasurement(roi: JointRoi): MeasurementDto | null {
     t_max: roi.stats.max,
     area: roi.stats.area,
     sample_count: roi.stats.count,
-    skin_coverage: roi.skinCoverage,
     shape: roi.shape,
     rgb_x: roi.rgb.x,
     rgb_y: roi.rgb.y,
@@ -159,6 +157,8 @@ export function toJointRoi(medicao: MeasurementDto): JointRoi | null {
     return null;
   }
 
+  const area = medicao.area ?? 0;
+
   return {
     side: identidade.side,
     landmarkId: identidade.landmarkId,
@@ -177,7 +177,10 @@ export function toJointRoi(medicao: MeasurementDto): JointRoi | null {
       area: medicao.area ?? 0,
       count: medicao.sample_count ?? 0,
     },
-    skinCoverage: medicao.skin_coverage ?? Number.NaN,
+    // Recalculada, e não relida: a cobertura é `células válidas / células da região`,
+    // e guardá-la ao lado das duas seria repetir a mesma informação. É a mesma conta
+    // que `joint-rois.ts` faz ao medir.
+    skinCoverage: area > 0 ? (medicao.sample_count ?? 0) / area : 0,
     edited: medicao.edited,
   };
 }

@@ -315,7 +315,6 @@ class CaptureMeasurementIn(BaseModel):
 
     area: int | None = Field(default=None, ge=0)
     sample_count: int | None = Field(default=None, ge=0)
-    skin_coverage: float | None = Field(default=None, ge=0, le=1)
 
     shape: Literal["circle", "ellipse"] | None = None
     rgb_x: float | None = None

@@ -94,13 +94,16 @@ describe('ida e volta', () => {
     expect(medicao.joint_id).toBe('RIGHT_MCP_3');
     expect(medicao.t_mean).toBe(34.75);
     expect(medicao.sample_count).toBe(1400);
+    expect(medicao.area).toBe(1438);
 
     const voltou = toJointRoi(medicao)!;
     expect(voltou.side).toBe('Direita');
     expect(voltou.landmarkId).toBe(9);
     expect(voltou.stats).toEqual(original.stats);
     expect(voltou.rgb).toEqual(original.rgb);
-    expect(voltou.skinCoverage).toBe(original.skinCoverage);
+    // A cobertura não é gravada: volta calculada de `sample_count / area`, que é a
+    // mesma conta que o analisador faz ao medir.
+    expect(voltou.skinCoverage).toBeCloseTo(1400 / 1438);
   });
 
   it('a ROI sem articulação correspondente não vira medição', () => {
@@ -120,7 +123,6 @@ describe('ida e volta', () => {
       t_max: null,
       area: null,
       sample_count: null,
-      skin_coverage: null,
       shape: null,
       rgb_x: null,
       rgb_y: null,
@@ -133,7 +135,8 @@ describe('ida e volta', () => {
     const voltou = toJointRoi(vazia)!;
 
     expect(Number.isNaN(voltou.stats.mean)).toBe(true);
-    expect(Number.isNaN(voltou.skinCoverage)).toBe(true);
+    // Sem região medida não há cobertura a calcular, e zero é a verdade aqui.
+    expect(voltou.skinCoverage).toBe(0);
     // Contagem é cardinalidade, e nesse caso zero é a verdade: nenhuma célula agregada.
     expect(voltou.stats.count).toBe(0);
     expect(voltou.edited).toBe(true);

@@ -42,7 +42,6 @@ _MEASUREMENT_COLUMNS = (
     "t_max",
     "area",
     "sample_count",
-    "skin_coverage",
     "shape",
     "rgb_x",
     "rgb_y",
