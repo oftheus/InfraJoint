@@ -97,9 +97,9 @@
                 <span class="block text-sm font-semibold text-primary">
                   {{ paciente.full_name }}
                 </span>
-                @if (paciente.primary_diagnosis) {
+                @if (paciente.diagnoses.length > 0) {
                   <span class="block text-sm text-secondary">
-                    {{ paciente.primary_diagnosis }}
+                    {{ paciente.diagnoses[0].label }}
                   </span>
                 }
               </span>

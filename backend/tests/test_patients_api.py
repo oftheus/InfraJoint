@@ -430,6 +430,139 @@ async def test_escore_invalido_vira_422(client: tuple[Any, dict]) -> None:
         assert resposta.status_code == 422, f"{rotulo}: {resposta.status_code} {resposta.text[:90]}"
 
 
+async def test_catalogo_de_diagnosticos_e_legivel(client: tuple[Any, dict]) -> None:
+    """Dado de referência: qualquer autenticado lê, e ninguém escreve pela aplicação."""
+    http, acting = client
+    acting["user_id"] = LEITOR
+
+    resposta = await http.get("/diagnoses")
+    assert resposta.status_code == 200
+    catalogo = {d["code"]: d["label"] for d in resposta.json()}
+    assert catalogo["M05"] == "Artrite reumatoide soropositiva"
+    assert len(catalogo) >= 17
+
+
+async def test_paciente_com_varios_diagnosticos(client: tuple[Any, dict]) -> None:
+    """O limite que o campo de texto impunha: um diagnóstico por paciente.
+
+    Comorbidade em reumatologia é regra, não exceção. E o rótulo volta junto do código,
+    para a tela não precisar de um segundo request só para traduzir.
+    """
+    http, acting = client
+    acting["user_id"] = MEDICO_A
+
+    criado = await http.post(
+        "/patients",
+        json={
+            "full_name": "API-TEST comorbidade",
+            "birth_date": _NASCIMENTO,
+            "study_group": "caso",
+            "diagnoses": [
+                {"code": "M05", "is_primary": True},
+                {"code": "M79.7"},
+            ],
+        },
+    )
+    assert criado.status_code == 201, criado.text
+
+    detalhe = (await http.get(f"/patients/{criado.json()['id']}")).json()
+    assert detalhe["study_group"] == "caso"
+    # O principal vem primeiro, e os rótulos vêm do catálogo.
+    assert [d["code"] for d in detalhe["diagnoses"]] == ["M05", "M79.7"]
+    assert detalhe["diagnoses"][0]["label"] == "Artrite reumatoide soropositiva"
+    assert detalhe["diagnoses"][0]["is_primary"] is True
+    assert detalhe["diagnoses"][1]["is_primary"] is False
+
+
+async def test_diagnostico_fora_do_catalogo_e_recusado(client: tuple[Any, dict]) -> None:
+    """A chave estrangeira é a fronteira: 'AR' não é código, é abreviação."""
+    http, acting = client
+    acting["user_id"] = MEDICO_A
+
+    resposta = await http.post(
+        "/patients",
+        json={
+            "full_name": "API-TEST diagnóstico inválido",
+            "birth_date": _NASCIMENTO,
+            "diagnoses": [{"code": "AR"}],
+        },
+    )
+    assert resposta.status_code == 409, resposta.text
+    assert "catálogo" in resposta.json()["detail"]
+
+
+async def test_dois_diagnosticos_principais_sao_recusados(client: tuple[Any, dict]) -> None:
+    """ "Principal" só significa alguma coisa se houver no máximo um."""
+    http, acting = client
+    acting["user_id"] = MEDICO_A
+
+    resposta = await http.post(
+        "/patients",
+        json={
+            "full_name": "API-TEST dois principais",
+            "birth_date": _NASCIMENTO,
+            "diagnoses": [
+                {"code": "M05", "is_primary": True},
+                {"code": "M32", "is_primary": True},
+            ],
+        },
+    )
+    assert resposta.status_code == 409, resposta.text
+
+
+async def test_editar_diagnosticos_substitui_o_conjunto(client: tuple[Any, dict]) -> None:
+    """O PATCH manda o conjunto inteiro, e ele substitui o anterior."""
+    http, acting = client
+    acting["user_id"] = MEDICO_A
+
+    criado = await http.post(
+        "/patients",
+        json={
+            "full_name": "API-TEST troca de diagnóstico",
+            "birth_date": _NASCIMENTO,
+            "diagnoses": [{"code": "M05", "is_primary": True}],
+        },
+    )
+    id_paciente = criado.json()["id"]
+
+    editado = await http.patch(
+        f"/patients/{id_paciente}",
+        json={"diagnoses": [{"code": "M32", "is_primary": True}, {"code": "M10"}]},
+    )
+    assert editado.status_code == 200, editado.text
+    assert [d["code"] for d in editado.json()["diagnoses"]] == ["M32", "M10"]
+
+    # E o resto do cadastro não foi tocado por uma edição que só citou a relação.
+    assert editado.json()["full_name"] == "API-TEST troca de diagnóstico"
+
+
+async def test_articulacao_fora_do_catalogo_e_recusada(client: tuple[Any, dict]) -> None:
+    """A garantia que só existe desde que a avaliação virou tabela.
+
+    `RIGHT_MCP_9` passa no regex da borda: tem a forma de um id de articulação. O que ele
+    não tem é linha em `public.joints` — a mão tem cinco dedos. Antes desta tabela, ele
+    era gravado em silêncio e depois sumia de qualquer agregação, o que não dá erro, dá
+    número errado. Agora a chave estrangeira recusa.
+
+    A mensagem sai com a lista da avaliação de propósito: recusar um payload de 28
+    articulações sem dizer onde olhar não ajuda ninguém.
+    """
+    http, acting = client
+    acting["user_id"] = MEDICO_A
+
+    paciente = await _criar_paciente(http, "API-TEST articulação inexistente")
+    resposta = await http.post(
+        f"/patients/{paciente['id']}/encounters",
+        json={"joint_evaluations": {"RIGHT_MCP_9": {"pain": True, "swelling": False}}},
+    )
+    assert resposta.status_code == 409, resposta.text
+    assert "catálogo" in resposta.json()["detail"]
+
+    # E a consulta não ficou pela metade: a transação inteira foi desfeita.
+    detalhe = await http.get(f"/patients/{paciente['id']}")
+    assert detalhe.json()["encounters"] == []
+
+
 async def test_medico_b_nao_le_body_map_de_a(client: tuple[Any, dict]) -> None:
     """A RLS vale para o dado clínico novo como vale para o resto."""
     http, acting = client
@@ -628,7 +761,7 @@ async def test_a_edicao_do_par_fica_assinada(client: tuple[Any, dict]) -> None:
     assert (await http.get(f"/patients/{paciente['id']}")).json()["editor_name"] is None
 
     acting["user_id"] = PESQUISADOR_2
-    await http.patch(f"/patients/{paciente['id']}", json={"primary_diagnosis": "AR"})
+    await http.patch(f"/patients/{paciente['id']}", json={"phone": "21988887777"})
 
     acting["user_id"] = PESQUISADOR_1
     detalhe = await http.get(f"/patients/{paciente['id']}")

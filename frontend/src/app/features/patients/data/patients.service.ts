@@ -5,6 +5,7 @@ import { Observable } from 'rxjs';
 import { environment } from '../../../../environments/environment';
 import {
   AnalysisCreate,
+  DiagnosisCatalog,
   AnalysisCreated,
   Encounter,
   EncounterCreate,
@@ -24,6 +25,16 @@ export class PatientsService {
 
   list(): Observable<Patient[]> {
     return this.http.get<Patient[]>(this.baseUrl);
+  }
+
+  /**
+   * O catálogo de diagnósticos, para montar a escolha do formulário.
+   *
+   * Dado de referência: são cerca de 17 linhas que só mudam por migration, então não há
+   * paginação nem filtro — a tela busca uma vez e usa.
+   */
+  listDiagnoses(): Observable<DiagnosisCatalog[]> {
+    return this.http.get<DiagnosisCatalog[]>(`${environment.apiBaseUrl}/diagnoses`);
   }
 
   get(patientId: string): Observable<PatientDetail> {

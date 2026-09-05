@@ -41,6 +41,7 @@ from app.domain.repositories import (
 from app.infrastructure.auth import InvalidTokenError, JwtVerifier
 from app.infrastructure.database import Database
 from app.infrastructure.repositories.captures import PostgresCaptureRepository
+from app.infrastructure.repositories.catalogs import PostgresCatalogRepository
 from app.infrastructure.repositories.encounters import PostgresEncounterRepository
 from app.infrastructure.repositories.patients import PostgresPatientRepository
 
@@ -122,6 +123,18 @@ def get_storage_optional(request: Request) -> ObjectStorage | None:
     consequência. Sem storage, os objetos ficam órfãos — e isso é registrado.
     """
     return getattr(request.app.state, "storage", None)
+
+
+def get_catalog_repository(
+    connection: Annotated[asyncpg.Connection, Depends(get_connection)],
+) -> PostgresCatalogRepository:
+    """Sem porta de domínio: catálogo não é regra de negócio, é leitura de referência.
+
+    As outras três têm Protocol em `domain/repositories.py` porque casos de uso dependem
+    delas. Este é lido direto pelo router, então uma abstração aqui seria camada sem
+    ninguém do outro lado.
+    """
+    return PostgresCatalogRepository(connection)
 
 
 def get_capture_repository(

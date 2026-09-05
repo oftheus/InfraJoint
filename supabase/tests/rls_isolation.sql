@@ -21,6 +21,12 @@
 --  12. O par edita cadastro alheio sem tomar a posse, e a edição fica assinada
 --  13. O par não apaga nada do outro
 --  14. O pool não alcança médico nenhum, e nenhum médico o alcança
+--  15. O catálogo de articulações é de todos, e de ninguém para escrever
+--  16. A avaliação articular herda o isolamento da consulta
+--  17. O catálogo recusa articulação inexistente
+--  18. O escore cobra a forma do índice que declara ser
+--  19. Medição e avaliação cruzam pela mesma articulação
+--  20. Diagnóstico é relação com catálogo, e grupo de estudo é coluna à parte
 
 \set ON_ERROR_STOP on
 \set QUIET on
@@ -444,7 +450,7 @@ select set_config('request.jwt.claims',
 do $$
 declare dono uuid; editor uuid;
 begin
-  update public.patients set primary_diagnosis = 'RLS-TEST editado por P2'
+  update public.patients set phone = '(21) 90000-0000'
    where id = '11111111-eeee-0000-0000-000000000005';
   assert found, 'FALHA: P2 não conseguiu editar o paciente do par';
 
@@ -619,6 +625,374 @@ begin
   assert app.is_researcher() = false, 'leitor não é pesquisador';
   assert app.can_curate('eeeeeeee-0000-0000-0000-000000000005') = false,
     'leitor não deveria poder escrever no acervo do pool';
+end $$;
+commit;
+
+-- ─────────────────────────────────────────────────────────────────────────────
+\echo '20. O catálogo de articulações é legível por qualquer autenticado'
+-- ─────────────────────────────────────────────────────────────────────────────
+-- `public.joints` é dado de referência, não prontuário: as 28 linhas são as mesmas para
+-- todo mundo. É a primeira tabela do schema sem `owner_id`, então o que se prova aqui é
+-- o oposto do resto deste arquivo — que ela NÃO é recortada por tenant.
+begin;
+set local role authenticated;
+select set_config('request.jwt.claims',
+  '{"sub":"cccccccc-0000-0000-0000-000000000003","role":"authenticated"}', true);
+do $$
+declare n int;
+begin
+  select count(*) into n from public.joints;
+  assert n = 28, format('o leitor deveria ver as 28 articulações, viu %s', n);
+end $$;
+commit;
+
+begin;
+set local role authenticated;
+select set_config('request.jwt.claims',
+  '{"sub":"eeeeeeee-0000-0000-0000-000000000005","role":"authenticated"}', true);
+do $$
+declare n int;
+begin
+  select count(*) into n from public.joints;
+  assert n = 28, format('o pesquisador deveria ver as 28 articulações, viu %s', n);
+end $$;
+commit;
+
+-- ─────────────────────────────────────────────────────────────────────────────
+\echo '21. Ninguém escreve no catálogo pela aplicação, e o anon não o alcança'
+-- ─────────────────────────────────────────────────────────────────────────────
+-- Mudar o catálogo é migration, não clique. Se um id pudesse sumir por uma requisição,
+-- levaria junto a chave estrangeira do dado clínico que o referencia.
+begin;
+set local role authenticated;
+select set_config('request.jwt.claims',
+  '{"sub":"dddddddd-0000-0000-0000-000000000004","role":"authenticated"}', true);
+do $$
+begin
+  begin
+    insert into public.joints (id, label, side, joint_group)
+    values ('RLS_TEST_JOINT', 'Inventada', 'right', 'elbow');
+    raise exception 'FALHA: admin inseriu no catálogo de articulações';
+  exception when insufficient_privilege then
+    null;  -- o revoke, antes mesmo da policy
+  end;
+
+  begin
+    delete from public.joints where id = 'RIGHT_MCP_3';
+    raise exception 'FALHA: admin apagou uma articulação do catálogo';
+  exception when insufficient_privilege then
+    null;
+  end;
+end $$;
+commit;
+
+begin;
+set local role anon;
+do $$
+begin
+  begin
+    perform count(*) from public.joints;
+    raise exception 'FALHA: anon leu o catálogo de articulações';
+  exception when insufficient_privilege then
+    null;
+  end;
+end $$;
+commit;
+
+-- ─────────────────────────────────────────────────────────────────────────────
+\echo '22. A avaliação articular herda o isolamento da consulta'
+-- ─────────────────────────────────────────────────────────────────────────────
+-- Tabela nova, mesma prova de sempre: o dado clínico detalhado não pode vazar por ser
+-- filho. A posse desce da consulta pelo trigger, e as policies leem `owner_id`.
+begin;
+set local role authenticated;
+select set_config('request.jwt.claims',
+  '{"sub":"aaaaaaaa-0000-0000-0000-000000000001","role":"authenticated"}', true);
+
+insert into public.encounter_joint_evaluations (encounter_id, joint_id, pain, swelling)
+values ('22222222-aaaa-0000-0000-000000000001', 'RIGHT_MCP_3', true, true),
+       ('22222222-aaaa-0000-0000-000000000001', 'LEFT_KNEE',   false, false);
+
+do $$
+declare dono uuid;
+begin
+  select owner_id into dono from public.encounter_joint_evaluations
+   where encounter_id = '22222222-aaaa-0000-0000-000000000001' and joint_id = 'RIGHT_MCP_3';
+  assert dono = 'aaaaaaaa-0000-0000-0000-000000000001',
+    format('a posse deveria ter descido da consulta, veio %s', dono);
+end $$;
+commit;
+
+begin;
+set local role authenticated;
+select set_config('request.jwt.claims',
+  '{"sub":"bbbbbbbb-0000-0000-0000-000000000002","role":"authenticated"}', true);
+do $$
+declare n int;
+begin
+  select count(*) into n from public.encounter_joint_evaluations;
+  assert n = 0, format('B deveria ver 0 avaliações de A, viu %s', n);
+end $$;
+commit;
+
+-- ─────────────────────────────────────────────────────────────────────────────
+\echo '23. O catálogo recusa articulação que não existe'
+-- ─────────────────────────────────────────────────────────────────────────────
+-- A razão de o catálogo existir. `RIGHT_MCP_9` tem a forma de um id válido e passaria
+-- pelo regex da borda; o que ele não tem é linha em `public.joints`.
+begin;
+set local role authenticated;
+select set_config('request.jwt.claims',
+  '{"sub":"aaaaaaaa-0000-0000-0000-000000000001","role":"authenticated"}', true);
+do $$
+begin
+  begin
+    insert into public.encounter_joint_evaluations (encounter_id, joint_id, pain, swelling)
+    values ('22222222-aaaa-0000-0000-000000000001', 'RIGHT_MCP_9', true, true);
+    raise exception 'FALHA: gravou articulação fora do catálogo';
+  exception when foreign_key_violation then
+    null;  -- esperado
+  end;
+end $$;
+commit;
+
+-- ─────────────────────────────────────────────────────────────────────────────
+\echo '24. O par de pesquisa escreve avaliação no acervo, e não a apaga'
+-- ─────────────────────────────────────────────────────────────────────────────
+-- As mesmas quatro regras da consulta valem no detalhe dela: escrever é do dono e do
+-- par, apagar é do dono e do admin.
+begin;
+set local role authenticated;
+select set_config('request.jwt.claims',
+  '{"sub":"ffffffff-0000-0000-0000-000000000006","role":"authenticated"}', true);
+do $$
+declare n int;
+begin
+  insert into public.encounter_joint_evaluations (encounter_id, joint_id, pain, swelling)
+  values ('22222222-ffff-0000-0000-000000000006', 'RIGHT_WRIST', true, false);
+
+  select count(*) into n from public.encounter_joint_evaluations
+   where encounter_id = '22222222-ffff-0000-0000-000000000006';
+  assert n = 1, 'o par deveria conseguir gravar avaliação no acervo';
+
+  delete from public.encounter_joint_evaluations
+   where encounter_id = '22222222-ffff-0000-0000-000000000006';
+  select count(*) into n from public.encounter_joint_evaluations
+   where encounter_id = '22222222-ffff-0000-0000-000000000006';
+  assert n = 1, 'FALHA: o par apagou avaliação do acervo';
+end $$;
+commit;
+
+-- ─────────────────────────────────────────────────────────────────────────────
+\echo '25. O escore herda o isolamento, e a forma de cada índice é cobrada'
+-- ─────────────────────────────────────────────────────────────────────────────
+-- `escore_completo` é o que torna as colunas nulas intencionais: cada linha preenche
+-- exatamente as do seu índice. Sem ela, ninguém saberia se um campo vazio significa
+-- "não se aplica" ou "esqueceram".
+begin;
+set local role authenticated;
+select set_config('request.jwt.claims',
+  '{"sub":"aaaaaaaa-0000-0000-0000-000000000001","role":"authenticated"}', true);
+
+insert into public.encounter_scores
+  (encounter_id, index_type, score, level, tender_count, swollen_count,
+   patient_global, evaluator_global)
+values ('22222222-aaaa-0000-0000-000000000001', 'cdai', 12.5, 'moderate', 2, 1, 5, 4.5);
+
+do $$
+declare dono uuid;
+begin
+  select owner_id into dono from public.encounter_scores
+   where encounter_id = '22222222-aaaa-0000-0000-000000000001';
+  assert dono = 'aaaaaaaa-0000-0000-0000-000000000001',
+    format('a posse deveria ter descido da consulta, veio %s', dono);
+
+  -- CDAI com campo de DAS28: recusado.
+  begin
+    insert into public.encounter_scores
+      (encounter_id, index_type, score, level, tender_count, swollen_count,
+       patient_global, evaluator_global, acute_phase)
+    values ('22222222-aaaa-0000-0000-000000000001', 'das28', 4.2, 'moderate', 2, 1,
+            5, 4.5, 'esr');
+    raise exception 'FALHA: gravou escore misturando os dois índices';
+  exception when check_violation then
+    null;  -- escore_completo
+  end;
+
+  -- DAS28 sem o reagente de fase aguda: recusado.
+  begin
+    insert into public.encounter_scores
+      (encounter_id, index_type, score, level, tender_count, swollen_count,
+       patient_global_health)
+    values ('22222222-aaaa-0000-0000-000000000001', 'das28', 4.2, 'moderate', 2, 1, 40);
+    raise exception 'FALHA: gravou DAS28 sem reagente de fase aguda';
+  exception when check_violation then
+    null;
+  end;
+
+  -- DAS28 acima do teto do índice (10): recusado. O CDAI vai a 76, e é por isso que a
+  -- faixa é por tipo, e não uma só para a coluna.
+  begin
+    insert into public.encounter_scores
+      (encounter_id, index_type, score, level, tender_count, swollen_count,
+       acute_phase, acute_value, patient_global_health)
+    values ('22222222-aaaa-0000-0000-000000000001', 'das28', 40, 'high', 2, 1,
+            'esr', 25, 40);
+    raise exception 'FALHA: gravou DAS28 fora da faixa do índice';
+  exception when check_violation then
+    null;
+  end;
+end $$;
+commit;
+
+begin;
+set local role authenticated;
+select set_config('request.jwt.claims',
+  '{"sub":"bbbbbbbb-0000-0000-0000-000000000002","role":"authenticated"}', true);
+do $$
+declare n int;
+begin
+  select count(*) into n from public.encounter_scores;
+  assert n = 0, format('B deveria ver 0 escores de A, viu %s', n);
+end $$;
+commit;
+
+-- ─────────────────────────────────────────────────────────────────────────────
+\echo '26. A medição da ROI herda o isolamento, e usa o mesmo catálogo da avaliação'
+-- ─────────────────────────────────────────────────────────────────────────────
+-- É a razão da normalização inteira: a temperatura e o achado clínico passam a apontar
+-- para a MESMA linha de `public.joints`, e por isso podem ser cruzados.
+begin;
+set local role authenticated;
+select set_config('request.jwt.claims',
+  '{"sub":"aaaaaaaa-0000-0000-0000-000000000001","role":"authenticated"}', true);
+
+insert into public.analysis_captures (id, encounter_id, capture_index)
+values ('33333333-aaaa-0000-0000-000000000001',
+        '22222222-aaaa-0000-0000-000000000001', 0);
+
+insert into public.capture_measurements (capture_id, joint_id, t_mean, area, sample_count)
+values ('33333333-aaaa-0000-0000-000000000001', 'RIGHT_MCP_3', 34.8, 1438, 1400);
+
+do $$
+declare dono uuid; n int;
+begin
+  select owner_id into dono from public.capture_measurements
+   where capture_id = '33333333-aaaa-0000-0000-000000000001';
+  assert dono = 'aaaaaaaa-0000-0000-0000-000000000001',
+    format('a posse deveria ter descido da captura, veio %s', dono);
+
+  -- O cruzamento: a mesma articulação medida e avaliada, numa consulta só.
+  select count(*) into n
+    from public.capture_measurements m
+    join public.analysis_captures c on c.id = m.capture_id
+    join public.encounter_joint_evaluations a
+      on a.encounter_id = c.encounter_id and a.joint_id = m.joint_id
+   where a.swelling;
+  assert n = 1,
+    format('a medição deveria cruzar com o achado da mesma articulação, cruzou %s', n);
+
+  -- Articulação fora do catálogo: recusada aqui também.
+  begin
+    insert into public.capture_measurements (capture_id, joint_id, t_mean)
+    values ('33333333-aaaa-0000-0000-000000000001', 'RIGHT_MCP_9', 34.8);
+    raise exception 'FALHA: gravou medição de articulação fora do catálogo';
+  exception when foreign_key_violation then
+    null;
+  end;
+end $$;
+commit;
+
+begin;
+set local role authenticated;
+select set_config('request.jwt.claims',
+  '{"sub":"bbbbbbbb-0000-0000-0000-000000000002","role":"authenticated"}', true);
+do $$
+declare n int;
+begin
+  select count(*) into n from public.capture_measurements;
+  assert n = 0, format('B deveria ver 0 medições de A, viu %s', n);
+end $$;
+commit;
+
+-- ─────────────────────────────────────────────────────────────────────────────
+\echo '27. Diagnóstico é relação com catálogo, e grupo de estudo não é diagnóstico'
+-- ─────────────────────────────────────────────────────────────────────────────
+begin;
+set local role authenticated;
+select set_config('request.jwt.claims',
+  '{"sub":"aaaaaaaa-0000-0000-0000-000000000001","role":"authenticated"}', true);
+
+insert into public.patient_diagnoses (patient_id, diagnosis_code, is_primary)
+values ('11111111-aaaa-0000-0000-000000000001', 'M05', true),
+       ('11111111-aaaa-0000-0000-000000000001', 'M79.7', false);
+
+do $$
+declare dono uuid;
+begin
+  select owner_id into dono from public.patient_diagnoses
+   where patient_id = '11111111-aaaa-0000-0000-000000000001' and diagnosis_code = 'M05';
+  assert dono = 'aaaaaaaa-0000-0000-0000-000000000001',
+    format('a posse deveria ter descido do paciente, veio %s', dono);
+
+  -- Código fora do catálogo: 'AR' é abreviação, não CID.
+  begin
+    insert into public.patient_diagnoses (patient_id, diagnosis_code)
+    values ('11111111-aaaa-0000-0000-000000000001', 'AR');
+    raise exception 'FALHA: gravou diagnóstico fora do catálogo';
+  exception when foreign_key_violation then
+    null;
+  end;
+
+  -- Dois principais: "principal" só significa algo se houver no máximo um.
+  begin
+    insert into public.patient_diagnoses (patient_id, diagnosis_code, is_primary)
+    values ('11111111-aaaa-0000-0000-000000000001', 'M32', true);
+    raise exception 'FALHA: gravou dois diagnósticos principais';
+  exception when unique_violation then
+    null;
+  end;
+end $$;
+
+-- Grupo de estudo é coluna do paciente, e independe do diagnóstico: um controle com
+-- achado incidental continua sendo controle.
+update public.patients set study_group = 'controle'
+ where id = '11111111-aaaa-0000-0000-000000000001';
+
+do $$
+declare grupo text; n int;
+begin
+  select study_group into grupo from public.patients
+   where id = '11111111-aaaa-0000-0000-000000000001';
+  assert grupo = 'controle', format('o grupo deveria ser controle, veio %s', grupo);
+
+  select count(*) into n from public.patient_diagnoses
+   where patient_id = '11111111-aaaa-0000-0000-000000000001';
+  assert n = 2, format('o controle deveria manter os 2 diagnósticos, tem %s', n);
+
+  -- E o catálogo não aceita valor inventado de grupo.
+  begin
+    update public.patients set study_group = 'talvez'
+     where id = '11111111-aaaa-0000-0000-000000000001';
+    raise exception 'FALHA: gravou grupo de estudo inválido';
+  exception when check_violation then
+    null;
+  end;
+end $$;
+commit;
+
+begin;
+set local role authenticated;
+select set_config('request.jwt.claims',
+  '{"sub":"bbbbbbbb-0000-0000-0000-000000000002","role":"authenticated"}', true);
+do $$
+declare n int;
+begin
+  select count(*) into n from public.patient_diagnoses;
+  assert n = 0, format('B deveria ver 0 diagnósticos de A, viu %s', n);
+
+  select count(*) into n from public.diagnoses;
+  assert n >= 17, 'o catálogo de diagnósticos é de todos';
 end $$;
 commit;
 

@@ -165,7 +165,11 @@
             <span class="mb-1.5 block text-sm font-medium text-secondary">
               Diagnóstico principal
             </span>
-            <input class="auth-input" formControlName="primary_diagnosis" />
+            <select class="auth-input" formControlName="study_group">
+            <option value="">Não classificado</option>
+            <option value="caso">Caso</option>
+            <option value="controle">Controle</option>
+          </select>
           </label>
         </div>
 
@@ -187,7 +191,25 @@
         </div>
         <div class="sm:col-span-2">
           <dt class="text-sm font-medium text-secondary">Diagnóstico principal</dt>
-          <dd class="mt-1 text-base">{{ detail.primary_diagnosis || '—' }}</dd>
+          <dd class="mt-1 text-base">
+            @if (detail.diagnoses.length > 0) {
+              <ul class="flex flex-wrap gap-2">
+                @for (d of detail.diagnoses; track d.code) {
+                  <li
+                    class="inline-flex items-center gap-1.5 rounded-full bg-brand-50 px-3 py-1 text-sm text-secondary"
+                  >
+                    {{ d.label }}
+                    <span class="text-xs text-muted">{{ d.code }}</span>
+                    @if (d.is_primary) {
+                      <span class="text-xs font-semibold text-accent">principal</span>
+                    }
+                  </li>
+                }
+              </ul>
+            } @else {
+              —
+            }
+          </dd>
         </div>
       </dl>
     }

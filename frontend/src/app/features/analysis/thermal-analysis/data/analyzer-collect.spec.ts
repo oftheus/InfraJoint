@@ -140,13 +140,38 @@ describe('collectSequenceAnalysis', () => {
     expect(coletado.files.has(uploadKey(3, 'optical'))).toBe(true);
   });
 
-  it('as medições vêm prontas, não recalculadas', () => {
-    const rois = [{ key: 'Direita:0', label: 'Punho' }] as never;
+  it('as medições vêm prontas, só traduzidas', () => {
+    const rois = [
+      {
+        side: 'Direita',
+        landmarkId: 0,
+        label: 'Punho',
+        key: 'Direita:0',
+        rgb: { x: 10, y: 20 },
+        csv: { x: 1, y: 2 },
+        shape: 'ellipse',
+        rxCsv: 27,
+        ryCsv: 17,
+        stats: { mean: 34.75, median: 34.7, max: 35.4, min: 34, area: 1438, count: 1400 },
+        skinCoverage: 1,
+        edited: false,
+      },
+    ] as never;
     const coletado = collectSequenceAnalysis([captura(0, { jointRois: rois })])!;
 
-    // São as mesmas que a curva desenhou; recalcular abriria espaço para o
-    // prontuário mostrar número diferente do que o médico viu.
-    expect((coletado.payload.captures[0] as Record<string, unknown>)['measurements']).toBe(rois);
+    const medicoes = (coletado.payload.captures[0] as Record<string, unknown>)[
+      'measurements'
+    ] as readonly Record<string, unknown>[];
+
+    // Os valores são os mesmos que a curva desenhou; recalcular abriria espaço para o
+    // prontuário mostrar número diferente do que o médico viu. O que muda é só a
+    // identidade: lado + landmark do MediaPipe viram o id do body map, porque é ele que
+    // a API conhece e é ele que permite cruzar com a avaliação articular.
+    expect(medicoes).toHaveLength(1);
+    expect(medicoes[0]['joint_id']).toBe('RIGHT_WRIST');
+    expect(medicoes[0]['t_mean']).toBe(34.75);
+    expect(medicoes[0]['area']).toBe(1438);
+    expect(medicoes[0]['sample_count']).toBe(1400);
   });
 
   it('sequência vazia não vira análise', () => {
