@@ -1,12 +1,14 @@
 from __future__ import annotations
 
+import json
 from collections.abc import Mapping, Sequence
+from dataclasses import replace
 from typing import Any
 from uuid import UUID
 
 import asyncpg
 
-from app.domain.entities import NewPatient, Patient, Sex
+from app.domain.entities import Diagnosis, NewPatient, Patient, Sex, StudyGroup
 from app.domain.errors import ConflictError
 
 # O índice único da migration `patients_sem_duplicado`: (owner_id, nome normalizado,
@@ -19,8 +21,19 @@ _MENSAGEM_DUPLICATA = (
 
 _COLUMNS = """
     id, owner_id, full_name, birth_date, sex,
-    phone, primary_diagnosis, created_at, updated_at
+    phone, study_group, created_at, updated_at
 """
+
+# Os diagnósticos viraram relação (`diagnostico_e_grupo`) e voltam com o rótulo do
+# catálogo junto, para a tela não precisar de um segundo request só para traduzir código.
+# O principal vem primeiro; o resto em ordem de código, que é estável.
+_DIAGNOSTICOS = """
+    COALESCE((SELECT jsonb_agg(jsonb_build_object(
+                       'code', d.code, 'label', d.label, 'is_primary', pd.is_primary)
+                     ORDER BY pd.is_primary DESC, d.code)
+       FROM public.patient_diagnoses pd
+       JOIN public.diagnoses d ON d.code = pd.diagnosis_code
+      WHERE pd.patient_id = public.patients.id), '[]'::jsonb) AS diagnoses"""
 
 # Nas leituras vão junto o nome de quem é a linha, o de quem a editou por último e o
 # que este chamador pode fazer com ela.
@@ -34,7 +47,7 @@ _COLUMNS = """
 # daquela pessoa (admin ou par de pool), nunca nas linhas do próprio chamador — ver
 # `app.user_display_name()`. Para um médico comum os dois vêm NULL, que é o certo: ele
 # só enxerga os próprios pacientes, e o rótulo repetiria o nome dele em toda linha.
-_COLUMNS_DE_LEITURA = f"""{_COLUMNS.rstrip()},
+_COLUMNS_DE_LEITURA = f"""{_COLUMNS.rstrip()},{_DIAGNOSTICOS},
     app.owner_display_name(owner_id) AS owner_name,
     app.user_display_name(updated_by) AS editor_name,
     app.can_curate(owner_id)  AS can_edit,
@@ -49,9 +62,22 @@ _UPDATABLE = frozenset(
         "birth_date",
         "sex",
         "phone",
-        "primary_diagnosis",
+        "study_group",
     }
 )
+
+# `diagnoses` não é coluna: é a tabela de vínculo, tratada à parte no UPDATE.
+_RELACAO = "diagnoses"
+
+
+def _diagnosticos(bruto: Any) -> tuple[Diagnosis, ...]:
+    """O agregado do banco vira entidades. Ausente nos caminhos de escrita."""
+    if bruto is None:
+        return ()
+    linhas = json.loads(bruto) if isinstance(bruto, str) else bruto
+    return tuple(
+        Diagnosis(code=d["code"], is_primary=d["is_primary"], label=d.get("label")) for d in linhas
+    )
 
 
 def _to_entity(row: asyncpg.Record) -> Patient:
@@ -62,7 +88,8 @@ def _to_entity(row: asyncpg.Record) -> Patient:
         birth_date=row["birth_date"],
         sex=Sex(row["sex"]) if row["sex"] else None,
         phone=row["phone"],
-        primary_diagnosis=row["primary_diagnosis"],
+        study_group=StudyGroup(row["study_group"]) if row["study_group"] else None,
+        diagnoses=_diagnosticos(row.get("diagnoses")),
         created_at=row["created_at"],
         updated_at=row["updated_at"],
         # Ausentes nos caminhos de escrita, que não selecionam as colunas — e ali a
@@ -133,7 +160,7 @@ class PostgresPatientRepository:
             row = await self._connection.fetchrow(
                 f"""
                 INSERT INTO public.patients
-                    (full_name, birth_date, sex, phone, primary_diagnosis)
+                    (full_name, birth_date, sex, phone, study_group)
                 VALUES ($1, $2, $3, $4, $5)
                 RETURNING {_COLUMNS}
                 """,
@@ -141,11 +168,47 @@ class PostgresPatientRepository:
                 data.birth_date,
                 data.sex.value if data.sex else None,
                 data.phone,
-                data.primary_diagnosis,
+                data.study_group.value if data.study_group else None,
             )
         except asyncpg.UniqueViolationError as exc:
             raise _conflito(exc) from exc
-        return _to_entity(row)
+
+        await self._gravar_diagnosticos(row["id"], data.diagnoses)
+        return replace(_to_entity(row), diagnoses=tuple(data.diagnoses))
+
+    async def _gravar_diagnosticos(
+        self, patient_id: UUID, diagnosticos: Sequence[Diagnosis]
+    ) -> None:
+        """Substitui o conjunto de diagnósticos do paciente.
+
+        Apaga e reinsere em vez de casar linha a linha: são poucos por paciente, e
+        calcular a diferença aqui custaria mais código do que a operação inteira.
+
+        A chave estrangeira para o catálogo é a fronteira real. Um código inexistente
+        vira 409 com o código na mensagem, e não 500 com nome de constraint dentro.
+        """
+        await self._connection.execute(
+            "DELETE FROM public.patient_diagnoses WHERE patient_id = $1", patient_id
+        )
+        if not diagnosticos:
+            return
+
+        try:
+            await self._connection.execute(
+                """
+                INSERT INTO public.patient_diagnoses
+                    (patient_id, diagnosis_code, is_primary)
+                SELECT $1, d->>'code', (d->>'is_primary')::boolean
+                  FROM jsonb_array_elements($2::jsonb) AS d
+                """,
+                patient_id,
+                json.dumps([{"code": d.code, "is_primary": d.is_primary} for d in diagnosticos]),
+            )
+        except asyncpg.ForeignKeyViolationError as exc:
+            codigos = ", ".join(sorted({d.code for d in diagnosticos}))
+            raise ConflictError(f"há diagnóstico fora do catálogo: {codigos}") from exc
+        except asyncpg.UniqueViolationError as exc:
+            raise ConflictError("um paciente só pode ter um diagnóstico principal") from exc
 
     async def delete(self, patient_id: UUID) -> bool:
         # O ON DELETE CASCADE leva consultas, análises e capturas junto. O RETURNING
@@ -156,12 +219,23 @@ class PostgresPatientRepository:
         return deleted is not None
 
     async def update(self, patient_id: UUID, changes: Mapping[str, Any]) -> Patient | None:
-        unknown = set(changes) - _UPDATABLE
+        colunas = {k: v for k, v in changes.items() if k != _RELACAO}
+        unknown = set(colunas) - _UPDATABLE
         if unknown:
             raise ValueError(f"colunas não editáveis: {sorted(unknown)}")
 
-        assignments = ", ".join(f"{column} = ${i}" for i, column in enumerate(changes, start=2))
-        values = [value.value if isinstance(value, Sex) else value for value in changes.values()]
+        # Só os diagnósticos mudaram: não há SET a montar, e um UPDATE sem coluna é SQL
+        # inválido. A relação é gravada e a linha relida com o agregado novo.
+        if not colunas:
+            if _RELACAO in changes:
+                await self._gravar_diagnosticos(patient_id, changes[_RELACAO])
+            return await self.get(patient_id)
+
+        assignments = ", ".join(f"{column} = ${i}" for i, column in enumerate(colunas, start=2))
+        values = [
+            value.value if isinstance(value, (Sex, StudyGroup)) else value
+            for value in colunas.values()
+        ]
 
         # A edição também esbarra no índice: renomear um paciente para o nome e a data
         # de outro é a mesma duplicata, chegando pelo outro caminho.
@@ -182,7 +256,13 @@ class PostgresPatientRepository:
             )
         except asyncpg.UniqueViolationError as exc:
             raise _conflito(exc) from exc
-        return _to_entity(row) if row else None
+
+        if row is None:
+            return None
+        if _RELACAO in changes:
+            await self._gravar_diagnosticos(patient_id, changes[_RELACAO])
+            return await self.get(patient_id)
+        return _to_entity(row)
 
 
 def _conflito(exc: asyncpg.UniqueViolationError) -> Exception:

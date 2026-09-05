@@ -28,7 +28,8 @@ import { HandSide } from '../../analysis/image-analyzer/image-analyzer.model';
 import { JOINT_ROI_DEFS, JointRoi } from '../../analysis/image-analyzer/joint-rois';
 import { CurveFrame, buildRewarmingSeries } from '../../analysis/image-analyzer/rewarming-curve';
 import { formatSeconds } from '../../analysis/image-analyzer/sequence.model';
-import { CaptureDetail, EncounterDetail } from './patient.model';
+import { CaptureDetail, EncounterDetail, Patient } from './patient.model';
+import { toJointRois } from '../../analysis/joint-identity';
 
 // --- Paleta e medidas -------------------------------------------------------
 // Cinzas próprios, e não os tokens do Tailwind: o PDF não tem tema, não herda CSS
@@ -123,14 +124,15 @@ export function idadeNaConsulta(nascimento: string | null, consulta: string): nu
 // --- Leitura das capturas ---------------------------------------------------
 
 /**
- * As medições gravadas, relidas do `jsonb`.
+ * As medições gravadas, reconstruídas no formato do analisador.
  *
- * Mesmo cast que `encounter-viewer.ts` faz, e pela mesma razão: `measurements` é
- * gravado como `JointRoi[]` e volta sem validação. Os campos são lidos adiante com
- * tolerância a ausência, exatamente como em `algorithm-input.ts`.
+ * Mesma conversão que `encounter-viewer.ts` faz, e pela mesma razão: a API devolve a
+ * medição com a identidade clínica (`joint_id`) e os números em colunas, e o relatório
+ * desenha a partir da ROI. Os campos são lidos adiante com tolerância a ausência,
+ * exatamente como em `algorithm-input.ts`.
  */
 function medicoes(capture: CaptureDetail): readonly JointRoi[] {
-  return capture.measurements as unknown as readonly JointRoi[];
+  return toJointRois(capture.measurements);
 }
 
 /** A captura de referência: a basal da sequência, ou a única da avulsa. */
@@ -375,6 +377,19 @@ function identificacao(detail: EncounterDetail, recursos: RecursosDoRelatorio): 
 
   const ausente = 'não informado';
 
+  /**
+   * Os diagnósticos numa linha, o principal primeiro.
+   *
+   * O código vai junto do nome porque o relatório sai do sistema: quem o lê depois
+   * precisa do CID para reencontrar a coorte, e o nome sozinho não identifica.
+   */
+  function diagnosticos(p: Patient): string | null {
+    if (p.diagnoses.length === 0) {
+      return null;
+    }
+    return p.diagnoses.map((d) => `${d.label} (${d.code})`).join('; ');
+  }
+
   return {
     table: {
       widths: ['auto', '*', 'auto', '*'],
@@ -386,7 +401,7 @@ function identificacao(detail: EncounterDetail, recursos: RecursosDoRelatorio): 
           ...par('Emitido em', dataHora(recursos.emitidoEm.toISOString())),
         ],
         [
-          ...par('Diagnóstico', paciente.primary_diagnosis ?? ausente),
+          ...par('Diagnóstico', diagnosticos(paciente) ?? ausente),
           { text: '' },
           { text: '' },
         ],

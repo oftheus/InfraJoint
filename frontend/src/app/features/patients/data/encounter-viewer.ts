@@ -17,6 +17,7 @@ import { decodeThermalCsv, parseThermalCsv } from '../../analysis/image-analyzer
 import { ThermalMatrix } from '../../analysis/image-analyzer/image-analyzer.model';
 import { alignmentOf } from './encounter-reconstruct';
 import { CaptureDetail } from './patient.model';
+import { toJointRois } from '../../analysis/joint-identity';
 
 /** Mesma largura que o analisador usa ao processar uma sequência. */
 const THUMBNAIL_WIDTH = 96;
@@ -99,10 +100,12 @@ async function restaurarCaptura(detail: CaptureDetail): Promise<SequenceCapture 
     // não é "zero articulações": um array vazio tem precedência sobre os landmarks
     // e deixava "Detectar articulações" sem efeito nenhum na consulta reaberta,
     // justamente no caso em que ela é a única forma de ver ROI articular.
+    // Reconstruídas a partir das medições gravadas: a identidade (lado, landmark,
+    // rótulo) sai do catálogo de articulações, e os números das colunas. Antes isto era
+    // um cast do jsonb, que só funcionava porque o formato interno do analisador era
+    // gravado cru. Ver `analysis/joint-identity.ts`.
     restoredJoints:
-      detail.measurements.length > 0
-        ? (detail.measurements as unknown as readonly JointRoi[])
-        : null,
+      detail.measurements.length > 0 ? toJointRois(detail.measurements) : null,
   };
 }
 

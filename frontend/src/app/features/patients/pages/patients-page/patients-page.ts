@@ -8,10 +8,12 @@ import { LucideDynamicIcon } from '@lucide/angular';
 import { duplicatesFromError, messageFromError } from '../../data/api-error';
 import { Patient, PatientCreate, SEX_OPTIONS, Sex } from '../../data/patient.model';
 import { PatientsService } from '../../data/patients.service';
+import { DiagnosisPicker } from '../../components/diagnosis-picker/diagnosis-picker';
+import { DiagnosisCatalog, PatientDiagnosis, StudyGroup } from '../../data/patient.model';
 
 @Component({
   selector: 'app-patients-page',
-  imports: [DatePipe, ReactiveFormsModule, RouterLink, LucideDynamicIcon],
+  imports: [DiagnosisPicker, DatePipe, ReactiveFormsModule, RouterLink, LucideDynamicIcon],
   templateUrl: './patients-page.html',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
@@ -42,11 +44,23 @@ export class PatientsPage {
     birth_date: ['', [Validators.required]],
     sex: ['' as Sex | ''],
     phone: [''],
-    primary_diagnosis: [''],
+    study_group: ['' as StudyGroup | ''],
   });
+
+  /**
+   * Os diagnósticos ficam fora do `FormGroup`: viraram relação, e a tela os edita por
+   * adicionar e remover, não por digitar. Ver `DiagnosisPicker`.
+   */
+  protected readonly diagnoses = signal<readonly PatientDiagnosis[]>([]);
+  protected readonly catalog = signal<readonly DiagnosisCatalog[]>([]);
 
   constructor() {
     this.load();
+    // O catálogo é dado de referência e só muda por migration: uma busca por sessão de
+    // tela basta, e falhar nela não impede cadastrar sem diagnóstico.
+    this.patientsService.listDiagnoses().subscribe({
+      next: (catalogo) => this.catalog.set(catalogo),
+    });
     // Mudou o nome, mudou a pergunta: o aviso anterior falava de outra pessoa.
     this.form.controls.full_name.valueChanges
       .pipe(takeUntilDestroyed())
@@ -113,7 +127,8 @@ export class PatientsPage {
       birth_date: raw.birth_date,
       sex: raw.sex === '' ? null : raw.sex,
       phone: blankToNull(raw.phone),
-      primary_diagnosis: blankToNull(raw.primary_diagnosis),
+      study_group: raw.study_group === '' ? null : raw.study_group,
+      diagnoses: this.diagnoses().map((d) => ({ code: d.code, is_primary: d.is_primary })),
     };
   }
 }

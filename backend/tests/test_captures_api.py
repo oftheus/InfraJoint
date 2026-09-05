@@ -63,7 +63,29 @@ def _captura(indice: int | None) -> dict[str, Any]:
         "align_ty": 7.0,
         "alignment_method": "silhouette",
         "agreement": {"normalized": 0.87, "dice": 0.61, "ceiling": 0.70},
-        "measurements": [{"label": "Punho", "stats": {"mean": 33.2}}],
+        # A medição passou a ter colunas, e a identidade dela é o id do body map: a
+        # análise térmica traduz lado + landmark do MediaPipe ao montar o payload, e da
+        # borda para dentro existe uma nomenclatura só. Ver `medicoes_das_rois`.
+        "measurements": [
+            {
+                "joint_id": "RIGHT_WRIST",
+                "t_mean": 33.2,
+                "t_median": 33.1,
+                "t_min": 32.8,
+                "t_max": 33.9,
+                "area": 1438,
+                "sample_count": 1400,
+                "skin_coverage": 0.97,
+                "shape": "ellipse",
+                "rgb_x": 209.1,
+                "rgb_y": 269.8,
+                "csv_x": 106.6,
+                "csv_y": 133.9,
+                "rx_csv": 27.0,
+                "ry_csv": 17.0,
+                "edited": False,
+            }
+        ],
         # Os três, sempre: o schema recusa um subconjunto, porque uma captura sem a
         # matriz não tem medição e sem as duas imagens não tem o que alinhar.
         "files": {
@@ -453,7 +475,15 @@ async def test_reabrir_consulta_devolve_tudo_identico(client_com_storage: tuple)
     assert primeira["capture_index"] == 0
     # O que reconstrói a sobreposição: a afim e a largura da matriz.
     assert (primeira["align_a"], primeira["align_tx"]) == (0.5, 3.0)
-    assert primeira["measurements"] == [{"label": "Punho", "stats": {"mean": 33.2}}]
+    # As medições voltam reagrupadas da tabela, com os mesmos valores e a mesma
+    # identidade que foram gravados.
+    assert len(primeira["measurements"]) == 1
+    medicao = primeira["measurements"][0]
+    assert medicao["joint_id"] == "RIGHT_WRIST"
+    assert (medicao["t_mean"], medicao["t_max"]) == (33.2, 33.9)
+    assert (medicao["area"], medicao["sample_count"]) == (1438, 1400)
+    assert medicao["shape"] == "ellipse"
+    assert medicao["edited"] is False
     # O indicador continua acessível, dentro do JSON de onde a coluna o copiava.
     assert primeira["agreement"]["normalized"] == 0.87
     # URLs de leitura assinadas, uma por arquivo — os três, derivados do enum,

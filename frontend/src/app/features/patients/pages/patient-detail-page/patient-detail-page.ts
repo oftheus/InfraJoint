@@ -15,10 +15,12 @@ import {
 } from '../../data/encounter-summary';
 import { Encounter, Patient, SEX_OPTIONS, Sex } from '../../data/patient.model';
 import { PatientsService } from '../../data/patients.service';
+import { DiagnosisPicker } from '../../components/diagnosis-picker/diagnosis-picker';
+import { DiagnosisCatalog, PatientDiagnosis, StudyGroup } from '../../data/patient.model';
 
 @Component({
   selector: 'app-patient-detail-page',
-  imports: [DatePipe, ReactiveFormsModule, RouterLink, LucideDynamicIcon],
+  imports: [DiagnosisPicker, DatePipe, ReactiveFormsModule, RouterLink, LucideDynamicIcon],
   templateUrl: './patient-detail-page.html',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
@@ -53,8 +55,12 @@ export class PatientDetailPage {
     birth_date: ['', [Validators.required]],
     sex: ['' as Sex | ''],
     phone: [''],
-    primary_diagnosis: [''],
+    study_group: ['' as StudyGroup | ''],
   });
+
+  /** Fora do FormGroup, pelo mesmo motivo da página de cadastro: é relação. */
+  protected readonly diagnoses = signal<readonly PatientDiagnosis[]>([]);
+  protected readonly catalog = signal<readonly DiagnosisCatalog[]>([]);
 
   constructor() {
     // Não dá para carregar no construtor: signal input required só tem valor depois do
@@ -75,8 +81,9 @@ export class PatientDetailPage {
           birth_date: detail.birth_date,
           sex: detail.sex ?? '',
           phone: detail.phone ?? '',
-          primary_diagnosis: detail.primary_diagnosis ?? '',
+          study_group: detail.study_group ?? '',
         });
+        this.diagnoses.set(detail.diagnoses);
         this.loading.set(false);
       },
       error: (failure) => {
@@ -110,7 +117,8 @@ export class PatientDetailPage {
       birth_date: raw.birth_date,
       sex: raw.sex === '' ? null : raw.sex,
       phone: blankToNull(raw.phone),
-      primary_diagnosis: blankToNull(raw.primary_diagnosis),
+      study_group: raw.study_group === '' ? null : raw.study_group,
+      diagnoses: this.diagnoses().map((d) => ({ code: d.code, is_primary: d.is_primary })),
     };
 
     this.patientsService.update(this.id(), changes).subscribe({

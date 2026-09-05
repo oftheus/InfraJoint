@@ -6,6 +6,28 @@
  * uma camada de tradução sem nada para traduzir.
  */
 
+import { MeasurementDto } from '../../analysis/joint-identity';
+
+/** Caso ou controle. Nulo significa que ninguém classificou ainda. */
+export type StudyGroup = 'caso' | 'controle';
+
+/** Uma linha do catálogo de diagnósticos: código da CID-10 e nome. */
+export interface DiagnosisCatalog {
+  readonly code: string;
+  readonly label: string;
+}
+
+/** Um diagnóstico do paciente, com o rótulo já resolvido pela API. */
+export interface PatientDiagnosis extends DiagnosisCatalog {
+  readonly is_primary: boolean;
+}
+
+/** O que o formulário envia: o código, e qual é o principal. */
+export interface DiagnosisRef {
+  readonly code: string;
+  readonly is_primary?: boolean;
+}
+
 /** O que a API pode devolver. Inclui `'N'`, que registros antigos podem carregar. */
 export type Sex = 'F' | 'M' | 'O' | 'N';
 
@@ -32,7 +54,16 @@ export interface Patient {
   readonly birth_date: string;
   readonly sex: Sex | null;
   readonly phone: string | null;
-  readonly primary_diagnosis: string | null;
+  /** Uma linha do catálogo, como a API a devolve em `GET /diagnoses`. */
+  readonly diagnoses: readonly PatientDiagnosis[];
+  /**
+   * O papel no estudo: `'caso'`, `'controle'` ou `null` para não classificado.
+   *
+   * Fica separado do diagnóstico de propósito: ser controle é papel no estudo, não
+   * achado clínico, e um controle pode ter um diagnóstico incidental sem deixar de ser
+   * controle.
+   */
+  readonly study_group: StudyGroup | null;
   readonly created_at: string;
   readonly updated_at: string;
   /**
@@ -216,7 +247,14 @@ export interface CaptureDetail {
 
   readonly agreement: Record<string, unknown> | null;
   readonly fiducial_correction: Record<string, unknown> | null;
-  readonly measurements: readonly Record<string, unknown>[];
+  /**
+   * As medições das ROIs, uma por articulação, com a identidade do body map.
+   *
+   * Deixou de ser `JointRoi[]` gravado cru quando `measurements` virou tabela: a API
+   * devolve colunas, e `toJointRois` remonta a ROI a partir do catálogo. Ver
+   * `analysis/joint-identity.ts`.
+   */
+  readonly measurements: readonly MeasurementDto[];
   readonly issue: string | null;
   readonly files: Readonly<Record<string, CaptureFileDetail>>;
 }
@@ -238,7 +276,8 @@ export interface PatientCreate {
   birth_date: string;
   sex?: Sex | null;
   phone?: string | null;
-  primary_diagnosis?: string | null;
+  diagnoses?: readonly DiagnosisRef[];
+  study_group?: StudyGroup | null;
 }
 
 /** PATCH parcial: o backend grava só as chaves presentes. */

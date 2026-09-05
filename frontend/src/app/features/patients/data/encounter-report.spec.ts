@@ -18,6 +18,7 @@ import {
 } from './encounter-report';
 import { moduloPdfMake } from './encounter-report.service';
 import { CaptureDetail, EncounterDetail, Patient } from './patient.model';
+import { MeasurementDto, toMeasurements } from '../../analysis/joint-identity';
 
 // --- Fixtures ---------------------------------------------------------------
 
@@ -36,6 +37,16 @@ function roi(side: HandSide, landmarkId: number, mean: number, label = 'Punho'):
     skinCoverage: 0.9,
     edited: false,
   };
+}
+
+/**
+ * As medições como a API as devolve, a partir das ROIs da fixture.
+ *
+ * Passa pela tradução de verdade (`toMeasurements`) em vez de um cast: é ela que o
+ * relatório desfaz ao ler, então exercitá-la aqui cobre os dois sentidos.
+ */
+function medicoes(rois: readonly JointRoi[]): readonly MeasurementDto[] {
+  return toMeasurements(rois);
 }
 
 function captura(partial: Partial<CaptureDetail> = {}): CaptureDetail {
@@ -66,7 +77,8 @@ const paciente: Patient = {
   birth_date: '1980-06-15',
   sex: 'F',
   phone: null,
-  primary_diagnosis: 'Artrite reumatoide',
+  diagnoses: [{ code: 'M06.9', label: 'Artrite reumatoide', is_primary: true }],
+  study_group: 'caso',
   created_at: '2026-01-01T00:00:00Z',
   updated_at: '2026-01-01T00:00:00Z',
   can_edit: true,
@@ -181,7 +193,7 @@ describe('capturaReferencia e capturaFinal', () => {
 
 describe('linhasDeMedicao', () => {
   it('na avulsa, não há final nem variação', () => {
-    const ref = captura({ measurements: [roi('Esquerda', 0, 31)] as unknown as Record<string, unknown>[] });
+    const ref = captura({ measurements: medicoes([roi('Esquerda', 0, 31)]) });
     const linhas = linhasDeMedicao(ref, null);
 
     const punho = linhas.find((l) => l.side === 'Esquerda' && l.label === 'Punho');
@@ -195,11 +207,11 @@ describe('linhasDeMedicao', () => {
   it('na sequência, calcula a variação entre basal e final', () => {
     const ref = captura({
       capture_index: 0,
-      measurements: [roi('Esquerda', 0, 31)] as unknown as Record<string, unknown>[],
+      measurements: medicoes([roi('Esquerda', 0, 31)]),
     });
     const fim = captura({
       capture_index: 1,
-      measurements: [roi('Esquerda', 0, 33.5)] as unknown as Record<string, unknown>[],
+      measurements: medicoes([roi('Esquerda', 0, 33.5)]),
     });
     const punho = linhasDeMedicao(ref, fim).find((l) => l.label === 'Punho');
 
@@ -208,7 +220,7 @@ describe('linhasDeMedicao', () => {
   });
 
   it('articulação ausente na final vira NaN, e não zero', () => {
-    const ref = captura({ measurements: [roi('Esquerda', 0, 31)] as unknown as Record<string, unknown>[] });
+    const ref = captura({ measurements: medicoes([roi('Esquerda', 0, 31)]) });
     const fim = captura({ measurements: [] });
     const punho = linhasDeMedicao(ref, fim).find((l) => l.label === 'Punho');
 
@@ -217,7 +229,7 @@ describe('linhasDeMedicao', () => {
   });
 
   it('omite a mão que nunca apareceu, em vez de listar onze travessões', () => {
-    const ref = captura({ measurements: [roi('Esquerda', 0, 31)] as unknown as Record<string, unknown>[] });
+    const ref = captura({ measurements: medicoes([roi('Esquerda', 0, 31)]) });
     const linhas = linhasDeMedicao(ref, null);
 
     expect(linhas.every((l) => l.side === 'Esquerda')).toBe(true);
@@ -260,18 +272,18 @@ describe('curvasPorMao', () => {
       captura({
         capture_index: 0,
         elapsed_seconds: 0,
-        measurements: [
+        measurements: medicoes([
           roi('Esquerda', 0, 30),
           roi('Esquerda', 5, 32, 'MCP 2'),
-        ] as unknown as Record<string, unknown>[],
+        ]),
       }),
       captura({
         capture_index: 1,
         elapsed_seconds: 60,
-        measurements: [
+        measurements: medicoes([
           roi('Esquerda', 0, 32),
           roi('Esquerda', 5, 34, 'MCP 2'),
-        ] as unknown as Record<string, unknown>[],
+        ]),
       }),
     ]);
     const curvas = curvasPorMao(frames);
@@ -287,16 +299,16 @@ describe('curvasPorMao', () => {
       captura({
         capture_index: 0,
         elapsed_seconds: 0,
-        measurements: [
+        measurements: medicoes([
           roi('Esquerda', 0, 30),
           roi('Esquerda', 5, 32, 'MCP 2'),
-        ] as unknown as Record<string, unknown>[],
+        ]),
       }),
       captura({
         capture_index: 1,
         elapsed_seconds: 60,
         // O punho sumiu neste quadro: a média do instante é só do MCP 2.
-        measurements: [roi('Esquerda', 5, 34, 'MCP 2')] as unknown as Record<string, unknown>[],
+        measurements: medicoes([roi('Esquerda', 5, 34, 'MCP 2')]),
       }),
     ]);
 
@@ -506,14 +518,11 @@ describe('o pdfmake aceita a definição', () => {
   });
 
   it('na sequência, com imagens e gráfico', async () => {
-    const medicoes = [roi('Esquerda', 0, 31), roi('Direita', 0, 31.4)] as unknown as Record<
-      string,
-      unknown
-    >[];
+    const medidas = medicoes([roi('Esquerda', 0, 31), roi('Direita', 0, 31.4)]);
     const captures = [
-      captura({ id: 'b', capture_index: 0, elapsed_seconds: 0, measurements: medicoes }),
-      captura({ id: 'd1', capture_index: 1, elapsed_seconds: 300, measurements: medicoes }),
-      captura({ id: 'd2', capture_index: 2, elapsed_seconds: 600, measurements: medicoes }),
+      captura({ id: 'b', capture_index: 0, elapsed_seconds: 0, measurements: medidas }),
+      captura({ id: 'd1', capture_index: 1, elapsed_seconds: 300, measurements: medidas }),
+      captura({ id: 'd2', capture_index: 2, elapsed_seconds: 600, measurements: medidas }),
     ];
     const doc = montarRelatorio(
       { ...completa, captures, capture_count: 3 },
@@ -533,7 +542,7 @@ describe('o pdfmake aceita a definição', () => {
 
   it('na avulsa, sem imagem nem gráfico', async () => {
     const captures = [
-      captura({ measurements: [roi('Esquerda', 0, 31)] as unknown as Record<string, unknown>[] }),
+      captura({ measurements: medicoes([roi('Esquerda', 0, 31)]) }),
     ];
     const doc = montarRelatorio(
       { ...completa, captures, capture_count: 1 },

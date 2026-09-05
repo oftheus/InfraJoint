@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import date, datetime
 from enum import StrEnum
@@ -20,6 +20,36 @@ class UserRole(StrEnum):
     # nunca esta camada: aqui o papel só serve para recusar cedo, com mensagem.
     PESQUISADOR = "pesquisador"
     ADMIN = "admin"
+
+
+class StudyGroup(StrEnum):
+    """O papel da pessoa no estudo, e não um achado clínico.
+
+    Fica em coluna própria, e não como um diagnóstico do catálogo, porque uma linha
+    dizendo que alguém "tem" o diagnóstico Controle seria falsa num banco que outras
+    pessoas vão analisar — e obrigaria toda consulta de diagnóstico a excluir um código
+    mágico. Separado, um controle pode receber um diagnóstico incidental sem deixar de
+    ser controle.
+
+    Nulo na coluna significa "ainda não classificado", que é diferente de controle.
+    """
+
+    CASO = "caso"
+    CONTROLE = "controle"
+
+
+@dataclass(frozen=True, slots=True)
+class Diagnosis:
+    """Um diagnóstico do paciente, pelo código da CID-10.
+
+    `label` vem do catálogo e só é preenchido na leitura, mesmo padrão de
+    `Patient.owner_name`: nos caminhos de escrita o cliente enviou o código, e devolver
+    o rótulo exigiria uma ida a mais ao banco para dizer o que ele já sabe.
+    """
+
+    code: str
+    is_primary: bool = False
+    label: str | None = None
 
 
 class Sex(StrEnum):
@@ -60,7 +90,10 @@ class Patient:
     birth_date: date
     sex: Sex | None
     phone: str | None
-    primary_diagnosis: str | None
+    # Vários por paciente desde `diagnostico_e_grupo`: comorbidade em reumatologia é
+    # regra, não exceção, e o campo de texto anterior cabia um só.
+    diagnoses: Sequence[Diagnosis]
+    study_group: StudyGroup | None
     created_at: datetime
     updated_at: datetime
     # Nome do dono, e não o id: serve à tela, não à autorização. Vem preenchido para
@@ -87,7 +120,8 @@ class NewPatient:
     birth_date: date
     sex: Sex | None = None
     phone: str | None = None
-    primary_diagnosis: str | None = None
+    diagnoses: Sequence[Diagnosis] = ()
+    study_group: StudyGroup | None = None
 
 
 @dataclass(frozen=True, slots=True)

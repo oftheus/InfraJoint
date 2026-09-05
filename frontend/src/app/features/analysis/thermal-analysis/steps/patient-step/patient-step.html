@@ -148,9 +148,9 @@
                 <span class="block truncate text-sm font-semibold text-primary">
                   {{ patient.full_name }}
                 </span>
-                @if (patient.primary_diagnosis) {
+                @if (patient.diagnoses.length > 0) {
                   <span class="block truncate text-xs text-muted">
-                    {{ patient.primary_diagnosis }}
+                    {{ patient.diagnoses[0].label }}
                   </span>
                 }
               </span>

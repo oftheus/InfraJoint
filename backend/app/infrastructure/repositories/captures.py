@@ -8,6 +8,7 @@ from uuid import UUID
 import asyncpg
 
 from app.domain.entities import Capture, CaptureFile, FileKind
+from app.domain.errors import ConflictError
 
 # Ordem fixa das colunas do INSERT. Nenhum nome vem do cliente — o schema Pydantic do
 # router valida os campos, e esta lista é a única que o SQL conhece.
@@ -23,12 +24,52 @@ _INSERT_COLUMNS = (
     "alignment_method",
     "agreement",
     "fiducial_correction",
-    "measurements",
     "issue",
 )
 
-# Colunas jsonb: o asyncpg não converte dict/list sozinho, o SQL faz o cast.
-_JSON_COLUMNS = frozenset({"agreement", "fiducial_correction", "measurements"})
+# Colunas jsonb da própria captura: o asyncpg não converte dict/list sozinho, o SQL faz
+# o cast. `measurements` saiu daqui quando virou tabela (`medicoes_das_rois`); ele
+# continua entrando e saindo como array na borda, mas por fan-out e agregado.
+_JSON_COLUMNS = frozenset({"agreement", "fiducial_correction"})
+
+# As colunas da medição, na ordem do INSERT. O nome de cada uma é também a chave que a
+# borda valida em `CaptureMeasurementIn`, e é o que permite o fan-out ser genérico.
+_MEASUREMENT_COLUMNS = (
+    "joint_id",
+    "t_mean",
+    "t_median",
+    "t_min",
+    "t_max",
+    "area",
+    "sample_count",
+    "skin_coverage",
+    "shape",
+    "rgb_x",
+    "rgb_y",
+    "csv_x",
+    "csv_y",
+    "rx_csv",
+    "ry_csv",
+    "edited",
+)
+
+# Tipos que o cast de texto precisa saber, porque `jsonb_array_elements` devolve tudo
+# como jsonb e `->>` sempre entrega texto.
+_MEASUREMENT_CASTS = {
+    "joint_id": "text",
+    "shape": "text",
+    "area": "integer",
+    "sample_count": "integer",
+    "edited": "boolean",
+}
+
+# As medições de uma captura, reagrupadas na forma de array que o contrato sempre teve.
+# `to_jsonb(m)` devolve a linha inteira; tiram-se as duas colunas de escrituração.
+_MEDICOES = """
+    COALESCE((SELECT jsonb_agg(to_jsonb(m) - 'capture_id' - 'owner_id'
+                               ORDER BY m.joint_id)
+       FROM public.capture_measurements m
+      WHERE m.capture_id = public.analysis_captures.id), '[]'::jsonb) AS measurements"""
 
 
 def _to_entity(row: asyncpg.Record) -> Capture:
@@ -106,12 +147,59 @@ class PostgresCaptureRepository:
             """,
             *valores,
         )
+
+        await self._gravar_medicoes(rows, captures)
         return [_to_entity(row) for row in rows]
+
+    async def _gravar_medicoes(
+        self, rows: Sequence[asyncpg.Record], captures: Sequence[Mapping[str, Any]]
+    ) -> None:
+        """Distribui as medições das capturas em linhas de `capture_measurements`.
+
+        O casamento é por `capture_index`, e não pela ordem do RETURNING — mesma razão
+        pela qual as URLs assinadas já se casavam assim: depender da ordem do INSERT
+        gravaria a medição de uma captura sob o id de outra no dia em que ela mudasse.
+
+        Tudo numa instrução só. São 22 medições por captura e até 21 capturas: um INSERT
+        por medição seriam 462 idas ao banco.
+        """
+        por_indice = {row["capture_index"]: row["id"] for row in rows}
+
+        medicoes: list[dict[str, Any]] = []
+        for captura in captures:
+            id_captura = por_indice.get(captura.get("capture_index"))
+            if id_captura is None:
+                continue
+            for medicao in captura.get("measurements") or []:
+                medicoes.append({**dict(medicao), "capture_id": str(id_captura)})
+
+        if not medicoes:
+            return
+
+        seletores = ", ".join(
+            f"(m->>'{coluna}')::{_MEASUREMENT_CASTS.get(coluna, 'numeric')}"
+            for coluna in _MEASUREMENT_COLUMNS
+        )
+        try:
+            await self._connection.execute(
+                f"""
+                INSERT INTO public.capture_measurements
+                    (capture_id, {", ".join(_MEASUREMENT_COLUMNS)})
+                SELECT (m->>'capture_id')::uuid, {seletores}
+                  FROM jsonb_array_elements($1::jsonb) AS m
+                """,
+                json.dumps(medicoes),
+            )
+        except asyncpg.ForeignKeyViolationError as exc:
+            desconhecidas = sorted({str(m.get("joint_id")) for m in medicoes})
+            raise ConflictError(
+                f"há articulação fora do catálogo nas medições: {', '.join(desconhecidas)}"
+            ) from exc
 
     async def list_detail_for_encounter(self, encounter_id: UUID) -> Sequence[Mapping[str, Any]]:
         rows = await self._connection.fetch(
             f"""
-            SELECT id, owner_id, {", ".join(_INSERT_COLUMNS)}
+            SELECT id, owner_id, {", ".join(_INSERT_COLUMNS)}, {_MEDICOES}
               FROM public.analysis_captures
              WHERE encounter_id = $1
              ORDER BY capture_index
@@ -121,7 +209,7 @@ class PostgresCaptureRepository:
         capturas: list[Mapping[str, Any]] = []
         for row in rows:
             registro = dict(row)
-            for coluna in _JSON_COLUMNS:
+            for coluna in (*_JSON_COLUMNS, "measurements"):
                 bruto = registro.get(coluna)
                 if isinstance(bruto, str):
                     registro[coluna] = json.loads(bruto)

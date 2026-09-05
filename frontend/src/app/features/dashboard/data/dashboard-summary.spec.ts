@@ -14,7 +14,8 @@ function paciente(id: string, created_at: string, partial: Partial<Patient> = {}
     birth_date: '1970-01-01',
     sex: null,
     phone: null,
-    primary_diagnosis: null,
+    diagnoses: [],
+    study_group: null,
     created_at,
     updated_at: created_at,
     // O caso comum das fixtures: prontuário do próprio leitor, que pode tudo. Os

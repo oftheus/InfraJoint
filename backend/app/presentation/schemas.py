@@ -14,10 +14,38 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationInfo, field_validator
 
-from app.domain.entities import Encounter, Patient, Sex
+from app.domain.entities import Encounter, Patient, Sex, StudyGroup
 
 # Ex.: RIGHT_MCP_3, LEFT_KNEE. Formato dos ids do catálogo do frontend.
 _JOINT_ID = re.compile(r"[A-Z][A-Z0-9_]{2,39}")
+
+
+class DiagnosisIn(BaseModel):
+    """Um diagnóstico escolhido no cadastro, pelo código da CID-10.
+
+    O código é validado no formato aqui e conferido contra `public.diagnoses` pela chave
+    estrangeira, que é a fronteira real — mesma divisão de trabalho do id de articulação.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    code: str = Field(min_length=1, max_length=16)
+    is_primary: bool = False
+
+
+class DiagnosisOut(BaseModel):
+    """O diagnóstico como a tela o exibe: código e nome, sem um segundo request."""
+
+    code: str
+    label: str
+    is_primary: bool
+
+
+class DiagnosisCatalogOut(BaseModel):
+    """Uma linha do catálogo. Sem `is_primary`: isso é do vínculo, não do diagnóstico."""
+
+    code: str
+    label: str
 
 
 class PatientCreate(BaseModel):
@@ -29,7 +57,10 @@ class PatientCreate(BaseModel):
     birth_date: date
     sex: Sex | None = None
     phone: str | None = Field(default=None, max_length=40)
-    primary_diagnosis: str | None = Field(default=None, max_length=300)
+    # Vários por paciente: comorbidade é regra em reumatologia. O teto é generoso e
+    # existe só para um payload absurdo não ser gravado como veio.
+    diagnoses: list[DiagnosisIn] = Field(default_factory=list, max_length=20)
+    study_group: StudyGroup | None = None
 
 
 class PatientUpdate(BaseModel):
@@ -45,7 +76,8 @@ class PatientUpdate(BaseModel):
     birth_date: date | None = None
     sex: Sex | None = None
     phone: str | None = Field(default=None, max_length=40)
-    primary_diagnosis: str | None = Field(default=None, max_length=300)
+    diagnoses: list[DiagnosisIn] | None = Field(default=None, max_length=20)
+    study_group: StudyGroup | None = None
 
     @field_validator("full_name", "birth_date")
     @classmethod
@@ -71,7 +103,9 @@ class PatientOut(BaseModel):
     birth_date: date
     sex: Sex | None
     phone: str | None
-    primary_diagnosis: str | None
+    diagnoses: list[DiagnosisOut]
+    # 'caso' ou 'controle'. Nulo é "ainda não classificado", que é diferente de controle.
+    study_group: StudyGroup | None
     created_at: datetime
     updated_at: datetime
     # O nome de quem é a linha, nunca o `owner_id`: a tela precisa saber de quem é o
@@ -95,7 +129,11 @@ class PatientOut(BaseModel):
             birth_date=patient.birth_date,
             sex=patient.sex,
             phone=patient.phone,
-            primary_diagnosis=patient.primary_diagnosis,
+            diagnoses=[
+                DiagnosisOut(code=d.code, label=d.label or d.code, is_primary=d.is_primary)
+                for d in patient.diagnoses
+            ],
+            study_group=patient.study_group,
             created_at=patient.created_at,
             updated_at=patient.updated_at,
             owner_name=patient.owner_name,
@@ -248,6 +286,48 @@ class EncounterOut(BaseModel):
         )
 
 
+class CaptureMeasurementIn(BaseModel):
+    """A medição de uma articulação numa captura.
+
+    Deixou de ser dicionário opaco quando `measurements` virou tabela: agora cada campo
+    tem coluna, e o que a borda não validar chega no banco como cast de texto.
+
+    **A identidade é `joint_id`, o vocabulário do body map.** A análise térmica trabalha
+    internamente com lado mais índice do landmark do MediaPipe e traduz ao montar o
+    payload — da fronteira da API para dentro existe uma nomenclatura só, e é ela que
+    permite cruzar esta medição com a avaliação articular. Ver `medicoes_das_rois`.
+
+    Os campos numéricos são opcionais porque uma ROI pode não ter leitura válida: sem
+    pele suficiente ou fora da matriz, a captura registra a região e não a temperatura.
+    O que não pode faltar é a identidade.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    joint_id: str = Field(pattern=r"[A-Z][A-Z0-9_]{2,39}")
+
+    # Faixa larga de propósito: é temperatura de pele em graus Celsius, e apertar aqui
+    # recusaria uma medição estranha que o pesquisador precisa ver para investigar.
+    t_mean: float | None = Field(default=None, ge=0, le=100)
+    t_median: float | None = Field(default=None, ge=0, le=100)
+    t_min: float | None = Field(default=None, ge=0, le=100)
+    t_max: float | None = Field(default=None, ge=0, le=100)
+
+    area: int | None = Field(default=None, ge=0)
+    sample_count: int | None = Field(default=None, ge=0)
+    skin_coverage: float | None = Field(default=None, ge=0, le=1)
+
+    shape: Literal["circle", "ellipse"] | None = None
+    rgb_x: float | None = None
+    rgb_y: float | None = None
+    csv_x: float | None = None
+    csv_y: float | None = None
+    rx_csv: float | None = Field(default=None, ge=0)
+    ry_csv: float | None = Field(default=None, ge=0)
+
+    edited: bool = False
+
+
 MAX_FILE_BYTES = 64 * 1024 * 1024
 MAX_CAPTURES = 64
 
@@ -287,7 +367,7 @@ class CaptureIn(BaseModel):
 
     agreement: dict[str, Any] | None = None
     fiducial_correction: dict[str, Any] | None = None
-    measurements: list[dict[str, Any]] = Field(default_factory=list)
+    measurements: list[CaptureMeasurementIn] = Field(default_factory=list, max_length=64)
     # Problema de processamento desta captura — uma sequência de 21 pode ter uma
     # falha isolada, e perder esse registro esconderia por que ela não tem medição.
     issue: str | None = Field(default=None, max_length=300)

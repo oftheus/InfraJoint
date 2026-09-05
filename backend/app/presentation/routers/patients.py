@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Annotated
+from typing import Annotated, Any
 from uuid import UUID
 
 from fastapi import APIRouter, BackgroundTasks, Depends, Query, status
@@ -12,7 +12,7 @@ from app.application.use_cases.patients import (
     ListPatients,
     UpdatePatient,
 )
-from app.domain.entities import NewEncounter, NewPatient
+from app.domain.entities import Diagnosis, NewEncounter, NewPatient
 from app.presentation import deps
 from app.presentation.cleanup import schedule_orphan_cleanup
 from app.presentation.schemas import (
@@ -56,9 +56,9 @@ async def create_patient(
         ),
     ] = False,
 ) -> PatientOut:
-    patient = await use_case.execute(
-        user, NewPatient(**payload.model_dump()), allow_duplicate=allow_duplicate
-    )
+    dados = payload.model_dump()
+    dados["diagnoses"] = _diagnosticos(dados["diagnoses"])
+    patient = await use_case.execute(user, NewPatient(**dados), allow_duplicate=allow_duplicate)
     return PatientOut.from_entity(patient)
 
 
@@ -83,6 +83,9 @@ async def update_patient(
 ) -> PatientOut:
     # exclude_unset distingue "não enviei o campo" de "enviei null para limpar".
     changes = payload.model_dump(exclude_unset=True)
+    # `diagnoses` não é coluna: o repositório o trata como relação, e espera entidades.
+    if changes.get("diagnoses") is not None:
+        changes["diagnoses"] = _diagnosticos(changes["diagnoses"])
     patient = await use_case.execute(user, patient_id, changes)
     return PatientOut.from_entity(patient)
 
@@ -116,3 +119,13 @@ async def create_encounter(
 ) -> EncounterOut:
     encounter = await use_case.execute(user, patient_id, NewEncounter(**payload.model_dump()))
     return EncounterOut.from_entity(encounter)
+
+
+def _diagnosticos(brutos: list[dict[str, Any]]) -> list[Diagnosis]:
+    """Os dicionários do schema viram entidades antes de cruzar para o domínio.
+
+    `is_primary` sai com `get`, e não por índice: o PATCH usa `exclude_unset`, que também
+    poda os campos não enviados DENTRO de cada diagnóstico. Um item que só traz o código
+    chegaria aqui sem a chave, e o default do schema é o mesmo `False`.
+    """
+    return [Diagnosis(code=d["code"], is_primary=d.get("is_primary", False)) for d in brutos]

@@ -17,6 +17,7 @@ import { SilhouetteAgreement } from '../../image-analyzer/alignment-quality';
 import { FiducialCorrection } from '../../image-analyzer/fiducial-markers';
 import { JointRoi } from '../../image-analyzer/joint-rois';
 import { AnalysisCreate, CaptureFileKind } from '../../../patients/data/patient.model';
+import { toMeasurements } from '../../joint-identity';
 
 /** O que o fluxo lê do analisador. Espelha os signais públicos da página. */
 export interface AnalyzerReadout {
@@ -130,7 +131,10 @@ export function collectSequenceAnalysis(
 
       agreement: captura.agreement,
       fiducial_correction: captura.correction,
-      measurements: captura.jointRois,
+      // Traduzido aqui, na fronteira da persistência: as ROIs do analisador são
+      // identificadas por lado + landmark do MediaPipe, e a API só conhece o id do
+      // body map. Ver `analysis/joint-identity.ts`.
+      measurements: toMeasurements(captura.jointRois),
       issue: captura.issue,
       files: declarados,
     } as unknown as Record<string, unknown>;

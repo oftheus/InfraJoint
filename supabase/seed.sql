@@ -104,28 +104,60 @@ set local role authenticated;
 select set_config('request.jwt.claims',
   '{"sub":"55555555-0000-4000-8000-000000000005","role":"authenticated"}', true);
 
-insert into public.patients (full_name, birth_date, sex, phone, primary_diagnosis)
+insert into public.patients (full_name, birth_date, sex, phone, study_group)
 select novo.* from (values
-  ('Helena Duarte Ramos',  '1968-03-12'::date, 'F', '(21) 98811-2200', 'Artrite reumatoide'),
-  ('Otávio Bertoldo Lima', '1975-11-02'::date, 'M', '(21) 99640-1187', 'Artrite psoriásica')
-) as novo(full_name, birth_date, sex, phone, primary_diagnosis)
+  ('Helena Duarte Ramos',  '1968-03-12'::date, 'F', '(21) 98811-2200', 'caso'),
+  ('Otávio Bertoldo Lima', '1975-11-02'::date, 'M', '(21) 99640-1187', 'caso')
+) as novo(full_name, birth_date, sex, phone, study_group)
 where not exists (
   select 1 from public.patients p where p.full_name = novo.full_name
 );
 
+-- Diagnóstico agora é relação, pelo código da CID-10. Ver `diagnostico_e_grupo`.
+insert into public.patient_diagnoses (patient_id, diagnosis_code, is_primary)
+select p.id, d.code, true
+  from public.patients p
+  join (values
+    ('Helena Duarte Ramos',  'M06.9'),
+    ('Otávio Bertoldo Lima', 'M07')
+  ) as d(nome, code) on d.nome = p.full_name
+ where not exists (
+   select 1 from public.patient_diagnoses pd where pd.patient_id = p.id);
+
 -- A consulta que ela mesma registra: body map e CDAI em atividade moderada
 -- (3 dolorosas + 2 edemaciadas + 4 PGA + 3 EGA = 12, faixa 10 a 22).
-insert into public.encounters (patient_id, occurred_at, reason, joint_evaluations, scores)
-select p.id, now() - interval '9 days', 'Avaliação inicial da coorte',
-  '{"RIGHT_WRIST":{"pain":true,"swelling":true},
-    "LEFT_WRIST":{"pain":true,"swelling":false},
-    "RIGHT_MCP_3":{"pain":true,"swelling":true},
-    "LEFT_KNEE":{"pain":false,"swelling":false}}'::jsonb,
-  '{"cdai":{"score":12,"level":"moderate","tender_count":3,"swollen_count":2,
-            "patient_global":4,"evaluator_global":3}}'::jsonb
+insert into public.encounters (patient_id, occurred_at, reason)
+select p.id, now() - interval '9 days', 'Avaliação inicial da coorte'
   from public.patients p
  where p.full_name = 'Helena Duarte Ramos'
    and not exists (select 1 from public.encounters e where e.patient_id = p.id);
+
+-- CDAI em atividade moderada: 3 dolorosas + 2 edemaciadas + 4 PGA + 3 EGA = 12, faixa
+-- de 10 a 22. Escore agora é linha, não documento. Ver `escores_clinicos`.
+insert into public.encounter_scores
+  (encounter_id, index_type, score, level, tender_count, swollen_count,
+   patient_global, evaluator_global)
+select e.id, 'cdai', 12, 'moderate', 3, 2, 4, 3
+  from public.encounters e
+  join public.patients p on p.id = e.patient_id
+ where p.full_name = 'Helena Duarte Ramos'
+   and not exists (select 1 from public.encounter_scores s where s.encounter_id = e.id);
+
+-- O body map agora é tabela: uma linha por articulação avaliada, e os ids conferidos
+-- contra o catálogo. Ver a migration `avaliacao_articular`.
+insert into public.encounter_joint_evaluations (encounter_id, joint_id, pain, swelling)
+select e.id, achado.joint_id, achado.pain, achado.swelling
+  from public.encounters e
+  join public.patients p on p.id = e.patient_id,
+  (values
+    ('RIGHT_WRIST', true,  true),
+    ('LEFT_WRIST',  true,  false),
+    ('RIGHT_MCP_3', true,  true),
+    ('LEFT_KNEE',   false, false)
+  ) as achado(joint_id, pain, swelling)
+ where p.full_name = 'Helena Duarte Ramos'
+   and not exists (
+     select 1 from public.encounter_joint_evaluations a where a.encounter_id = e.id);
 commit;
 
 -- ── Dr. Davi Pesquisa (pesq-2) cadastra os dele
@@ -134,24 +166,54 @@ set local role authenticated;
 select set_config('request.jwt.claims',
   '{"sub":"66666666-0000-4000-8000-000000000006","role":"authenticated"}', true);
 
-insert into public.patients (full_name, birth_date, sex, phone, primary_diagnosis)
+-- O Rui entra como CONTROLE, e mesmo assim tem um diagnóstico. É o caso que motivou o
+-- grupo de estudo a ficar em coluna própria em vez de virar uma linha no catálogo: um
+-- controle com achado incidental continua sendo controle.
+insert into public.patients (full_name, birth_date, sex, phone, study_group)
 select novo.* from (values
-  ('Marina Sales Cavalcanti', '1982-07-25'::date, 'F', '(21) 98120-7744', 'Artrite reumatoide'),
-  ('Rui Andrade Prado',       '1959-01-30'::date, 'M', null,              'Osteoartrite de mãos')
-) as novo(full_name, birth_date, sex, phone, primary_diagnosis)
+  ('Marina Sales Cavalcanti', '1982-07-25'::date, 'F', '(21) 98120-7744', 'caso'),
+  ('Rui Andrade Prado',       '1959-01-30'::date, 'M', null,              'controle')
+) as novo(full_name, birth_date, sex, phone, study_group)
 where not exists (
   select 1 from public.patients p where p.full_name = novo.full_name
 );
 
-insert into public.encounters (patient_id, occurred_at, reason, joint_evaluations, scores)
-select p.id, now() - interval '5 days', 'Retorno de 3 meses',
-  '{"LEFT_MCP_2":{"pain":true,"swelling":false},
-    "RIGHT_PIP_3":{"pain":true,"swelling":true}}'::jsonb,
-  '{"das28":{"score":3.1,"level":"low","tender_count":2,"swollen_count":1,
-             "acute_phase":"esr","acute_value":22,"patient_global_health":35}}'::jsonb
+insert into public.patient_diagnoses (patient_id, diagnosis_code, is_primary)
+select p.id, d.code, true
+  from public.patients p
+  join (values
+    ('Marina Sales Cavalcanti', 'M06.9'),
+    ('Rui Andrade Prado',       'M18')
+  ) as d(nome, code) on d.nome = p.full_name
+ where not exists (
+   select 1 from public.patient_diagnoses pd where pd.patient_id = p.id);
+
+insert into public.encounters (patient_id, occurred_at, reason)
+select p.id, now() - interval '5 days', 'Retorno de 3 meses'
   from public.patients p
  where p.full_name = 'Marina Sales Cavalcanti'
    and not exists (select 1 from public.encounters e where e.patient_id = p.id);
+
+insert into public.encounter_scores
+  (encounter_id, index_type, score, level, tender_count, swollen_count,
+   acute_phase, acute_value, patient_global_health)
+select e.id, 'das28', 3.1, 'low', 2, 1, 'esr', 22, 35
+  from public.encounters e
+  join public.patients p on p.id = e.patient_id
+ where p.full_name = 'Marina Sales Cavalcanti'
+   and not exists (select 1 from public.encounter_scores s where s.encounter_id = e.id);
+
+insert into public.encounter_joint_evaluations (encounter_id, joint_id, pain, swelling)
+select e.id, achado.joint_id, achado.pain, achado.swelling
+  from public.encounters e
+  join public.patients p on p.id = e.patient_id,
+  (values
+    ('LEFT_MCP_2',  true, false),
+    ('RIGHT_PIP_3', true, true)
+  ) as achado(joint_id, pain, swelling)
+ where p.full_name = 'Marina Sales Cavalcanti'
+   and not exists (
+     select 1 from public.encounter_joint_evaluations a where a.encounter_id = e.id);
 
 -- ── E aqui o caso que só o acervo permite: ele escreve no paciente DELA.
 --
@@ -176,11 +238,36 @@ set local role authenticated;
 select set_config('request.jwt.claims',
   '{"sub":"11111111-0000-4000-8000-000000000001","role":"authenticated"}', true);
 
-insert into public.patients (full_name, birth_date, sex, primary_diagnosis)
+insert into public.patients (full_name, birth_date, sex, study_group)
 select novo.* from (values
-  ('Zuleica Portela Nunes', '1970-05-20'::date, 'F', 'Artrite reumatoide')
-) as novo(full_name, birth_date, sex, primary_diagnosis)
+  ('Zuleica Portela Nunes', '1970-05-20'::date, 'F', 'caso')
+) as novo(full_name, birth_date, sex, study_group)
 where not exists (
   select 1 from public.patients p where p.full_name = novo.full_name
 );
+
+insert into public.patient_diagnoses (patient_id, diagnosis_code, is_primary)
+select p.id, 'M06.9', true
+  from public.patients p
+ where p.full_name = 'Zuleica Portela Nunes'
+   and not exists (
+     select 1 from public.patient_diagnoses pd where pd.patient_id = p.id);
+commit;
+
+-- ── O grupo de estudo, para quem já existia
+--
+-- Os `insert` acima são guardados por `not exists`, então num banco que já tem estes
+-- pacientes eles não rodam e a coluna nova ficaria nula. Sem este update, rodar o seed
+-- do zero e re-rodá-lo dariam estados diferentes, que é o tipo de divergência que faz
+-- alguém depurar a aplicação por causa do ambiente.
+begin;
+update public.patients p set study_group = g.grupo
+  from (values
+    ('Helena Duarte Ramos',     'caso'),
+    ('Otávio Bertoldo Lima',    'caso'),
+    ('Marina Sales Cavalcanti', 'caso'),
+    ('Rui Andrade Prado',       'controle'),
+    ('Zuleica Portela Nunes',   'caso')
+  ) as g(nome, grupo)
+ where p.full_name = g.nome and p.study_group is null;
 commit;
