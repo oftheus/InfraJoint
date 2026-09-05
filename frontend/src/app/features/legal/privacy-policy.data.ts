@@ -2,10 +2,10 @@ import { LEGAL_CONTACT_EMAIL } from './legal-contact';
 import { LegalSection } from './legal-document.model';
 
 /** Machine-readable date for the `<time>` element. */
-export const PRIVACY_POLICY_LAST_UPDATED_ISO = '2026-09-03';
+export const PRIVACY_POLICY_LAST_UPDATED_ISO = '2026-09-05';
 
 /** Human-readable date shown to the user. */
-export const PRIVACY_POLICY_LAST_UPDATED = '3 de setembro de 2026';
+export const PRIVACY_POLICY_LAST_UPDATED = '5 de setembro de 2026';
 
 /**
  * Content of the privacy policy, kept as data so the page, the table of
@@ -87,12 +87,12 @@ export const PRIVACY_POLICY_SECTIONS: LegalSection[] = [
     blocks: [
       {
         kind: 'paragraph',
-        text: 'Profissionais de saúde e pesquisadores autorizados podem cadastrar pacientes e registrar consultas na plataforma. Esses registros descrevem terceiros, e não você, e por isso recebem tratamento à parte nesta política.',
+        text: 'Profissionais de saúde e pesquisadores autorizados podem cadastrar pacientes e registrar consultas. Esses registros descrevem terceiros, e não você, e por isso recebem tratamento à parte nesta política.',
       },
       {
         kind: 'note',
         title: 'Você é o controlador desses dados',
-        text: 'Em relação aos dados dos pacientes que você cadastra, a plataforma atua como operadora: armazenamos e disponibilizamos as informações seguindo as suas instruções. A decisão sobre coletar, usar e por quanto tempo manter esses dados é sua, assim como a responsabilidade de garantir a base legal, o consentimento dos participantes e a aprovação do comitê de ética quando aplicável.',
+        text: 'Sobre os pacientes que você cadastra, a plataforma atua como operadora: guardamos e disponibilizamos as informações seguindo as suas instruções. A decisão de coletar, usar e por quanto tempo manter é sua, e com ela a responsabilidade pela base legal, pelo consentimento dos participantes e pela aprovação do comitê de ética.',
       },
       {
         kind: 'paragraph',
@@ -103,47 +103,43 @@ export const PRIVACY_POLICY_SECTIONS: LegalSection[] = [
         items: [
           {
             label: 'Cadastro do paciente',
-            text: 'nome completo, data de nascimento, sexo, telefone e diagnóstico principal. Apenas o nome é obrigatório; os demais campos você preenche se quiser.',
+            text: 'nome completo, data de nascimento, sexo, telefone, os diagnósticos (pelo código da CID-10, podendo ser mais de um) e o grupo no estudo (caso ou controle). Nome e data de nascimento são obrigatórios: juntos, distinguem dois pacientes de mesmo nome.',
           },
           {
             label: 'Consulta',
-            text: 'data do atendimento, motivo, anotações clínicas, a avaliação de dor e edema das articulações e os escores de atividade da doença calculados a partir dela, como CDAI e DAS28.',
+            text: 'data do atendimento, motivo, a avaliação de dor e edema de cada articulação e os escores de atividade da doença calculados a partir dela, como CDAI e DAS28.',
           },
           {
-            label: 'Análise de imagem da consulta',
-            text: 'os arquivos das capturas, descritos na seção seguinte, junto com os resultados calculados sobre eles, como as temperaturas das regiões de interesse e os parâmetros de alinhamento.',
+            label: 'Análise de imagem',
+            text: 'os arquivos das capturas, tratados na seção seguinte, e os resultados calculados sobre eles: a temperatura de cada articulação da mão e os parâmetros de alinhamento.',
           },
         ],
       },
       {
         kind: 'paragraph',
-        text: 'Anotações clínicas e diagnóstico são dados pessoais sensíveis de saúde, protegidos pelo art. 11 da LGPD. A plataforma não exige identificadores diretos além do nome: sempre que a finalidade da pesquisa permitir, recomendamos usar códigos de participante no lugar do nome real.',
-      },
-      {
-        kind: 'note',
-        title: 'Antes de cadastrar em uma conta de pesquisador',
-        text: 'No perfil de pesquisador, cadastrar um paciente significa disponibilizá-lo a toda a equipe de pesquisa da plataforma, e não apenas a você. Cabe a você garantir que a base legal, o consentimento do participante e a aprovação do comitê de ética cubram esse compartilhamento antes de registrar os dados. Se o participante não consentiu com o acesso da equipe, use códigos no lugar do nome ou não registre o caso na plataforma.',
+        text: 'Diagnóstico, avaliação articular e medições de temperatura são dados sensíveis de saúde, protegidos pelo art. 11 da LGPD. Nome e data de nascimento, que a plataforma exige, identificam uma pessoa com facilidade: sempre que a pesquisa permitir, use códigos de participante no lugar do nome real.',
       },
       {
         kind: 'list',
         items: [
           {
-            label: 'Visibilidade',
-            text: 'a regra depende do seu perfil de acesso. Para o perfil de médico, cada registro clínico é visível apenas para quem o criou. Para o perfil de pesquisador, os registros são compartilhados com os demais pesquisadores da plataforma, conforme descrito no item seguinte. Contas administrativas têm acesso de leitura ao conteúdo da plataforma para supervisão e suporte, mas não podem registrar nem alterar consultas em nome de outro profissional.',
-          },
-          {
-            label: 'Acervo compartilhado de pesquisa',
-            text: 'contas com perfil de pesquisador formam um acervo comum: cada pesquisador vê e pode editar os pacientes, as consultas e as análises cadastrados pelos demais pesquisadores, incluindo nome, telefone e diagnóstico. Excluir registros continua restrito a quem os criou. Toda edição fica registrada com a identificação de quem a realizou, e a tela indica de quem é cada prontuário. Esse compartilhamento não alcança contas com perfil de médico, cujos registros permanecem visíveis apenas a elas.',
+            label: 'Quem enxerga',
+            text: 'no perfil de médico, cada registro é visível apenas para quem o criou. No perfil de pesquisador, os registros formam um acervo comum: os demais pesquisadores veem e podem editar os pacientes, as consultas e as análises, incluindo nome, telefone, diagnósticos e grupo no estudo. Excluir continua restrito a quem criou, toda edição fica assinada e a tela indica de quem é cada prontuário. Esse compartilhamento não alcança contas de médico. Contas administrativas têm leitura para supervisão, sem poder registrar nem alterar consulta em nome de outro profissional.',
           },
           {
             label: 'Exclusão',
-            text: 'você pode excluir uma consulta ou um paciente a qualquer momento. Apagar um paciente remove também todo o histórico dele: consultas, escores, análises e os arquivos de imagem no bucket.',
+            text: 'você pode excluir uma consulta ou um paciente a qualquer momento. Apagar um paciente remove todo o histórico dele: consultas, escores, análises e os arquivos de imagem no bucket.',
           },
           {
             label: 'Exportação',
-            text: 'o relatório da consulta em PDF é montado dentro do seu navegador e baixado direto para o seu computador, sem passar pelos nossos servidores.',
+            text: 'o relatório da consulta em PDF é montado no seu navegador e baixado direto para o seu computador, sem passar pelos nossos servidores.',
           },
         ],
+      },
+      {
+        kind: 'note',
+        title: 'Antes de cadastrar em uma conta de pesquisador',
+        text: 'Cadastrar um paciente ali significa disponibilizá-lo a toda a equipe de pesquisa, e não apenas a você. Garanta que o consentimento do participante e a aprovação do comitê cubram esse compartilhamento antes de registrar. Se não cobrirem, use códigos no lugar do nome ou não registre o caso na plataforma.',
       },
     ],
   },
@@ -154,45 +150,29 @@ export const PRIVACY_POLICY_SECTIONS: LegalSection[] = [
       {
         kind: 'note',
         title: 'O processamento acontece no seu navegador',
-        text: 'Todo o processamento das análises (leitura dos arquivos, alinhamento das imagens, segmentação da pele, cálculo das regiões de interesse e das curvas de reaquecimento) acontece localmente, dentro do seu navegador. Os arquivos nunca são processados nos nossos servidores.',
-      },
-      {
-        kind: 'paragraph',
-        text: 'O que acontece com os arquivos depois da análise depende de onde ela é feita:',
+        text: 'Ler os arquivos, alinhar as imagens, segmentar a pele e calcular as temperaturas acontece tudo dentro do seu navegador. Os arquivos nunca são processados nos nossos servidores.',
       },
       {
         kind: 'list',
         items: [
           {
-            label: 'Analisador de imagens avulso',
-            text: 'quando você usa o analisador fora de uma consulta, as imagens térmicas, as fotografias visíveis e os arquivos CSV de temperatura permanecem apenas na memória do navegador durante a sessão e são descartados quando você fecha ou recarrega a página. Nada é enviado para os nossos servidores e nada é preservado.',
+            label: 'Analisador avulso',
+            text: 'nada é enviado nem guardado. As imagens e os arquivos de temperatura ficam só na memória do navegador e somem quando você fecha a página.',
           },
           {
-            label: 'Análise vinculada a uma consulta',
-            text: 'ao registrar uma análise térmica dentro da consulta de um paciente, os arquivos daquela sequência de capturas são armazenados em um bucket privado da Cloudflare (R2), para que a consulta possa ser reaberta e revisada depois. Esse envio só acontece quando você registra a análise na consulta.',
+            label: 'Análise registrada em uma consulta',
+            text: 'os arquivos daquela sequência são guardados em um bucket privado da Cloudflare R2, hospedado na América do Norte, para que a consulta possa ser reaberta depois.',
           },
         ],
       },
       {
         kind: 'paragraph',
-        text: 'O envio vai direto do seu navegador para o bucket, por meio de URLs temporárias assinadas pela nossa API: os arquivos não trafegam pelos nossos servidores de aplicação. O bucket não é público: cada arquivo só pode ser lido através de uma URL assinada de curta duração, emitida apenas a quem tem acesso àquela consulta, ou seja, a pessoa dona do registro e, no acervo de pesquisa, os demais pesquisadores.',
+        text: 'O envio vai do seu navegador direto para o bucket: os arquivos não passam pelos nossos servidores em nenhum dos dois sentidos. O bucket não tem endereço público, e cada leitura depende de um link temporário de quinze minutos, gerado pela nossa API apenas para quem já tem acesso àquela consulta. O nome de cada arquivo é formado por códigos internos do sistema, então nenhum dado do paciente aparece nele. Ao excluir uma consulta ou um paciente, os arquivos correspondentes são apagados junto.',
       },
       {
-        kind: 'paragraph',
-        text: 'Os arquivos ficam organizados por usuário e por consulta. Ao excluir uma consulta ou um paciente, os arquivos de imagem correspondentes são apagados do bucket junto com os demais dados daquele registro.',
-      },
-      {
-        kind: 'list',
-        items: [
-          {
-            label: 'Responsabilidade do pesquisador',
-            text: 'imagens de pacientes podem constituir dados pessoais sensíveis de saúde. Cabe a você, como pesquisador ou profissional de saúde, garantir a base legal adequada, o consentimento dos participantes e a anonimização dos arquivos antes de utilizá-los na plataforma.',
-          },
-          {
-            label: 'Identificação nos arquivos',
-            text: 'os arquivos enviados não recebem identificadores do paciente: o endereço de cada objeto no bucket é derivado de identificadores internos da plataforma. Uma análise vinculada a uma consulta, porém, fica associada ao cadastro de paciente que você mesmo criou na plataforma.',
-          },
-        ],
+        kind: 'note',
+        title: 'O que cabe a você, como pesquisador',
+        text: 'Imagens de pacientes são dados sensíveis de saúde. Cabe a você garantir a base legal, o consentimento do participante e a anonimização dos arquivos. E como o bucket fica fora do Brasil, o armazenamento caracteriza transferência internacional de dados (arts. 33 a 36 da LGPD): informe isso ao participante de forma destacada no termo de consentimento do estudo.',
       },
     ],
   },
@@ -339,7 +319,7 @@ export const PRIVACY_POLICY_SECTIONS: LegalSection[] = [
         items: [
           {
             label: 'Isolamento por usuário',
-            text: 'as regras de segurança do banco de dados garantem que cada pessoa só consiga ler e alterar o seu próprio perfil e os pacientes, consultas e análises que ela mesma registrou. O perfil de acesso não é modificável pelo usuário, e contas administrativas têm leitura para supervisão, sem poder assinar registros clínicos em nome de outro profissional.',
+            text: 'as regras de segurança do banco de dados são aplicadas linha a linha, e não apenas na interface. Para o perfil de médico, cada pessoa só lê e altera o próprio perfil e os registros que ela mesma criou. Para o perfil de pesquisador, os registros são compartilhados com os demais pesquisadores, conforme descrito na seção sobre dados de pacientes. O perfil de acesso não é modificável pelo usuário, e contas administrativas têm leitura para supervisão, sem poder assinar registros clínicos em nome de outro profissional.',
           },
           {
             label: 'Arquivos protegidos',
@@ -347,7 +327,7 @@ export const PRIVACY_POLICY_SECTIONS: LegalSection[] = [
           },
           {
             label: 'Bucket privado e URLs temporárias',
-            text: 'os arquivos das análises não são acessíveis por endereço público. O envio e a leitura dependem de URLs assinadas pela nossa API, com validade curta, emitidas somente para a pessoa dona da consulta.',
+            text: 'os arquivos das análises não têm endereço público e só abrem por link temporário, como descrito na seção sobre imagens.',
           },
           {
             label: 'Transmissão criptografada',
@@ -361,7 +341,7 @@ export const PRIVACY_POLICY_SECTIONS: LegalSection[] = [
       },
       {
         kind: 'paragraph',
-        text: 'Os provedores utilizados podem manter servidores fora do Brasil. Nesses casos, a transferência internacional de dados observa os requisitos dos arts. 33 e seguintes da LGPD.',
+        text: 'Parte dos provedores mantém servidores fora do Brasil. Em particular, as imagens e os arquivos de temperatura das análises ficam em um bucket da Cloudflare R2 hospedado na América do Norte, sem restrição de jurisdição configurada. Essas transferências internacionais observam os requisitos dos arts. 33 a 36 da LGPD, e para os dados de pacientes a base que as autoriza é definida por você, na condição de controlador, conforme descrito na seção sobre imagens.',
       },
       {
         kind: 'paragraph',
