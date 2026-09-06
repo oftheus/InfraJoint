@@ -14,6 +14,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationInfo, field_validator
 
+from app.domain.algorithms import AlgorithmResult
 from app.domain.entities import Encounter, Patient, Sex, StudyGroup
 
 # Ex.: RIGHT_MCP_3, LEFT_KNEE. Formato dos ids do catálogo do frontend.
@@ -497,3 +498,63 @@ class PatientDetailOut(PatientOut):
     """
 
     encounters: list[EncounterOut]
+
+
+# --- Algoritmos -------------------------------------------------------------
+
+
+class AlgorithmOut(BaseModel):
+    """Um algoritmo disponível, como a tela o lista.
+
+    `scope` é o que diz à tela o que perguntar antes de executar: uma consulta, ou um
+    recorte de pacientes. É o único campo que distingue os dois tipos na borda, e ele
+    vem da lista em que o algoritmo está registrado, não de uma declaração dele.
+    """
+
+    slug: str
+    title: str
+    description: str
+    scope: Literal["analysis", "cohort"]
+
+
+class AlgorithmValueOut(BaseModel):
+    """Um número com nome. `unit` ausente quando o número não tem unidade."""
+
+    label: str
+    value: float
+    unit: str | None = None
+
+
+class AlgorithmResultOut(BaseModel):
+    """O resultado, igual para os dois tipos de algoritmo.
+
+    `status` não é redundante com `summary`: sem ele a tela teria que interpretar o
+    texto para saber se mostra um achado ou a razão de não haver achado.
+    """
+
+    status: Literal["ok", "insufficient-data"]
+    summary: str
+    values: list[AlgorithmValueOut]
+
+    @classmethod
+    def from_result(cls, result: AlgorithmResult) -> AlgorithmResultOut:
+        return cls(
+            status=result.status.value,
+            summary=result.summary,
+            values=[
+                AlgorithmValueOut(label=v.label, value=v.value, unit=v.unit) for v in result.values
+            ],
+        )
+
+
+class RunAlgorithmIn(BaseModel):
+    """Sobre o que rodar.
+
+    Hoje só `encounter_id`, porque só existe algoritmo de análise. O recorte de coorte
+    entra aqui como campo próprio quando o primeiro algoritmo de coorte for escrito, e
+    `scope` já diz à tela qual dos dois preencher.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    encounter_id: UUID

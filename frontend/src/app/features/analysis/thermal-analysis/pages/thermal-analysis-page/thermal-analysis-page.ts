@@ -18,9 +18,6 @@ import { Patient } from '../../../../patients/data/patient.model';
 import { PatientsService } from '../../../../patients/data/patients.service';
 import { messageFromError } from '../../../../patients/data/api-error';
 import { AssessedIndex, toEncounterCreate } from '../../thermal-analysis.model';
-import { toAlgorithmInput } from '../../../algorithms/algorithm-input';
-import { AlgorithmInput } from '../../../algorithms/algorithm.model';
-import { AlgorithmPanel } from '../../../algorithms/components/algorithm-panel/algorithm-panel';
 import { ImageAnalyzerPage } from '../../../pages/image-analyzer-page/image-analyzer-page';
 import {
   CollectedAnalysis,
@@ -35,7 +32,7 @@ import { PatientStep } from '../../steps/patient-step/patient-step';
 import { environment } from '../../../../../../environments/environment';
 
 /** Etapas do fluxo, na ordem em que acontecem. */
-type Step = 'patient' | 'body-map' | 'analyzer' | 'algorithms';
+type Step = 'patient' | 'body-map' | 'analyzer';
 
 /**
  * Fluxo de Análise Térmica: paciente → mapa corporal → analisador → gravar.
@@ -55,7 +52,7 @@ type Step = 'patient' | 'body-map' | 'analyzer' | 'algorithms';
  */
 @Component({
   selector: 'app-thermal-analysis-page',
-  imports: [PatientStep, BodyMapStep, ImageAnalyzerPage, AlgorithmPanel, DecimalPipe],
+  imports: [PatientStep, BodyMapStep, ImageAnalyzerPage, DecimalPipe],
   providers: [JointAssessmentService],
   templateUrl: './thermal-analysis-page.html',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -112,18 +109,6 @@ export class ThermalAnalysisPage {
       assessmentType: config.assessmentType,
       outcome: this.store.scoreFor(config.assessmentType),
     })).filter((index): index is AssessedIndex => index.outcome.score !== null);
-  });
-
-  /**
-   * Entrada dos algoritmos.
-   *
-   * Idêntica à da tela solta, e é de propósito: a conversão é a mesma função, e o
-   * fluxo não acrescenta nada. Já acrescentou paciente e body map — saíram porque
-   * nenhum algoritmo os lia.
-   */
-  protected readonly algorithmInput = computed<AlgorithmInput | null>(() => {
-    const frames = this.analyzer()?.algorithmFrames() ?? [];
-    return frames.length === 0 ? null : toAlgorithmInput(frames);
   });
 
   /** Sequência carregada. O fluxo ainda só grava a análise avulsa. */

@@ -45,26 +45,6 @@ describe('ImageAnalyzerPage', () => {
     expect(raiz.getAttribute('role')).toBeNull();
   });
 
-  it('mantém o painel de algoritmos quando a rota zera o input', () => {
-    // Regressão: como componente de rota, `withComponentInputBinding()` chama
-    // `setInput('showAlgorithms', undefined)` — a rota não fornece o valor. Sem o
-    // `transform`, isso sobrescrevia o padrão `true` e o painel sumia da tela solta,
-    // continuando visível nas telas que embutem a página. É o caminho da rota que
-    // este teste reproduz, e não uma chamada que algum template faça.
-    const fixture = TestBed.createComponent(ImageAnalyzerPage);
-    fixture.componentRef.setInput('showAlgorithms', undefined);
-
-    expect(fixture.componentInstance.showAlgorithms()).toBe(true);
-  });
-
-  it('respeita o desligamento explícito do painel', () => {
-    // O fluxo de Análise Térmica desliga de propósito: lá o painel é a etapa 4.
-    const fixture = TestBed.createComponent(ImageAnalyzerPage);
-    fixture.componentRef.setInput('showAlgorithms', false);
-
-    expect(fixture.componentInstance.showAlgorithms()).toBe(false);
-  });
-
   it('começa sem arquivo de origem retido', () => {
     const fixture = TestBed.createComponent(ImageAnalyzerPage);
     const page = fixture.componentInstance;

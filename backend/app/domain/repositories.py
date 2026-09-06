@@ -14,6 +14,7 @@ from collections.abc import Mapping, Sequence
 from typing import Any, Protocol
 from uuid import UUID
 
+from app.domain.algorithms import AnalysisCapture
 from app.domain.entities import (
     Capture,
     CaptureFile,
@@ -91,6 +92,26 @@ class CaptureRepository(Protocol):
 
     async def list_files_for_encounter(self, encounter_id: UUID) -> Sequence[CaptureFile]:
         """O mesmo, no recorte de uma consulta. Também antes do DELETE."""
+        ...
+
+
+class AlgorithmDataRepository(Protocol):
+    """De onde os algoritmos tiram dado. Eles mesmos nunca consultam o banco.
+
+    A separação não é cerimônia: é ela que deixa um algoritmo ser testado com objetos
+    literais, e que impede que a regra de pesquisa e o SQL se misturem num arquivo só.
+
+    Um método por tipo de algoritmo, e não uma consulta única com todas as colunas
+    possíveis. Quando existir o primeiro algoritmo de coorte, ele traz o método dele,
+    com as colunas que a pergunta de pesquisa pedir.
+    """
+
+    async def analysis_captures(self, encounter_id: UUID) -> Sequence[AnalysisCapture]:
+        """As capturas da consulta com as medições das ROIs, ordenadas por tempo.
+
+        Vazio quando a consulta não tem análise, e também quando ela não é visível pela
+        RLS. Quem distingue os dois casos é o caso de uso, resolvendo a consulta antes.
+        """
         ...
 
 

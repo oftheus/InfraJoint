@@ -11,10 +11,6 @@ import {
 } from '@angular/core';
 import { LucideDynamicIcon } from '@lucide/angular';
 
-import { ReadoutFrame, toAlgorithmInput } from '../../algorithms/algorithm-input';
-import { AlgorithmInput } from '../../algorithms/algorithm.model';
-import { AlgorithmPanel } from '../../algorithms/components/algorithm-panel/algorithm-panel';
-
 import {
   applyAffine,
   composeAffine,
@@ -141,7 +137,6 @@ const MIN_SKIN_COVERAGE = 0.35;
 @Component({
   selector: 'app-image-analyzer-page',
   imports: [
-    AlgorithmPanel,
     LucideDynamicIcon,
     MarkerPicker,
     OverlayCanvas,
@@ -173,28 +168,6 @@ export class ImageAnalyzerPage {
    * dentro do `<main>` do fluxo é HTML inválido e atrapalha leitor de tela.
    */
   readonly embedded = input(false);
-
-  /**
-   * Mostrar o painel de algoritmos.
-   *
-   * Separado de `embedded` de propósito: as duas telas que embutem esta página não
-   * querem a mesma coisa. O fluxo de Análise Térmica tem o painel na etapa 4 e
-   * desliga este para não repetir; a consulta reaberta não tem etapa nenhuma, e sem
-   * ele ficaria sem algoritmos.
-   *
-   * **O `transform` não é enfeite.** Esta página é componente de rota, e o
-   * `withComponentInputBinding()` do router percorre *todos* os inputs declarados
-   * chamando `setInput(nome, data[nome])` — passando `undefined` para os que a rota
-   * não fornece. Como `/analise/analisador-de-imagens` não fornece nenhum, o padrão
-   * `true` era sobrescrito por `undefined` e o painel sumia justamente na tela solta,
-   * enquanto continuava aparecendo onde a página é embutida e os inputs vêm do
-   * template. `embedded` e `fromSaved` escapam por acaso: o padrão deles é `false`, e
-   * `undefined` é falso do mesmo jeito. Um input de padrão verdadeiro aqui precisa
-   * disto.
-   */
-  readonly showAlgorithms = input(true, {
-    transform: (mostrar: boolean | undefined) => mostrar ?? true,
-  });
 
   /**
    * A página está mostrando uma consulta **gravada**, não uma sessão nova.
@@ -486,60 +459,6 @@ export class ImageAnalyzerPage {
       overrides: capture.jointOverrides,
     });
   }
-
-  /**
-   * As capturas desta análise no formato que os algoritmos consomem.
-   *
-   * Duas pontas, uma saída. `curveFrames()` cobre a sequência ao vivo **e toda
-   * consulta reaberta** — `restoreAnalysis()` sempre entra em modo sequência, mesmo
-   * para uma captura avulsa gravada. A análise avulsa ao vivo é o único caso que ele
-   * não cobre (devolve `[]`), e é o que o segundo ramo monta a partir de `jointRois()`.
-   *
-   * Público porque o fluxo de Análise Térmica precisa dos mesmos frames, com o
-   * paciente que só ele conhece.
-   */
-  readonly algorithmFrames = computed<readonly ReadoutFrame[]>(() => {
-    if (this.sequenceActive()) {
-      const capturas = this.sequenceService.captures();
-      return this.curveFrames().map((frame, i) => {
-        const captura = capturas[i];
-        return {
-          captureIndex: captura?.index ?? i,
-          phase: frame.kind,
-          timeSeconds: frame.timeSeconds,
-          alignmentMethod: captura?.autoMethod ?? null,
-          agreementNormalized: captura?.agreement?.normalized ?? null,
-          issue: captura?.issue ?? null,
-          jointRois: frame.rois as readonly JointRoi[],
-        };
-      });
-    }
-
-    const rois = this.jointRois();
-    if (rois.length === 0) {
-      return [];
-    }
-    return [
-      {
-        captureIndex: 0,
-        // Nulos porque uma captura avulsa não tem posição na sequência: marcá-la
-        // como basal seria dado fabricado, a mesma razão pela qual o banco a deixa
-        // nula.
-        phase: null,
-        timeSeconds: null,
-        alignmentMethod: this.mode() === 'manual' ? 'manual' : this.autoMethod(),
-        agreementNormalized: this.agreement()?.normalized ?? null,
-        issue: null,
-        jointRois: rois,
-      },
-    ];
-  });
-
-  /** Entrada dos algoritmos, montada a partir dos frames desta análise. */
-  readonly algorithmInput = computed<AlgorithmInput | null>(() => {
-    const frames = this.algorithmFrames();
-    return frames.length === 0 ? null : toAlgorithmInput(frames);
-  });
 
   protected readonly rewarmingSeries = computed(() =>
     buildRewarmingSeries(this.curveFrames(), this.curveJointIds(), this.curveStatistic()),

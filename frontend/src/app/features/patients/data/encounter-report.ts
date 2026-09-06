@@ -3,9 +3,9 @@
  *
  * Módulo **puro**: recebe a consulta e os recursos já resolvidos (imagens e gráfico
  * como data URL) e devolve a definição. Nada aqui busca rede, toca DOM ou conhece
- * componente — é o que permite testá-lo com um objeto literal, como já fazem
- * `analysis-payload.ts` e `algorithm-input.ts`. Quem resolve os recursos e chama o
- * pdfmake é `encounter-report.service.ts`.
+ * componente — é o que permite testá-lo com um objeto literal, como já faz
+ * `analysis-payload.ts`. Quem resolve os recursos e chama o pdfmake é
+ * `encounter-report.service.ts`.
  *
  * **Avulsa e sequência não são dois relatórios.** A diferença é a cardinalidade das
  * capturas, como já é no banco e no payload de escrita: uma avulsa não tem curva, não
@@ -129,7 +129,7 @@ export function idadeNaConsulta(nascimento: string | null, consulta: string): nu
  * Mesma conversão que `encounter-viewer.ts` faz, e pela mesma razão: a API devolve a
  * medição com a identidade clínica (`joint_id`) e os números em colunas, e o relatório
  * desenha a partir da ROI. Os campos são lidos adiante com tolerância a ausência,
- * exatamente como em `algorithm-input.ts`.
+ * porque uma medição restaurada de uma consulta antiga pode não tê-los todos.
  */
 function medicoes(capture: CaptureDetail): readonly JointRoi[] {
   return toJointRois(capture.measurements);
