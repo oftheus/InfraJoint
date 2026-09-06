@@ -121,6 +121,14 @@ export class AuthShell {
           route: '/analise/analise-termica',
           requiredRoles: ['medico', 'pesquisador', 'admin'],
         },
+        {
+          // Roda sobre consulta gravada, então também é prontuário.
+          kind: 'link',
+          label: 'Algoritmos',
+          icon: 'workflow',
+          route: '/analise/algoritmos',
+          requiredRoles: ['medico', 'pesquisador', 'admin'],
+        },
       ],
     },
   ];

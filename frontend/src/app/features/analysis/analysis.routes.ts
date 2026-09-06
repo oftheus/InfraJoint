@@ -14,6 +14,15 @@ export const analysisRoutes: Routes = [
       import('./pages/image-analyzer-page/image-analyzer-page').then((m) => m.ImageAnalyzerPage),
   },
   {
+    // Prontuário: lista pacientes e roda sobre consulta gravada, então segue a
+    // mesma regra de /pacientes. O guard é UX — a RLS continua sendo a recusa real.
+    path: 'algoritmos',
+    canActivate: [roleGuard],
+    data: { roles: ['medico', 'pesquisador', 'admin'] },
+    loadComponent: () =>
+      import('./algorithms/pages/algorithms-page/algorithms-page').then((m) => m.AlgorithmsPage),
+  },
+  {
     path: 'mapa-corporal',
     loadChildren: () => import('./body-map/body-map.routes').then((m) => m.bodyMapRoutes),
   },

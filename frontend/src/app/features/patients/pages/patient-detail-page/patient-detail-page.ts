@@ -67,6 +67,13 @@ export class PatientDetailPage {
     // binding, e ler antes disso levanta NG0950. O effect roda quando `id` está pronto —
     // e roda de novo se a rota mudar para outro paciente sem recriar o componente.
     effect(() => this.load(this.id()));
+
+    // O catálogo é dado de referência e não depende do paciente: uma busca só, fora do
+    // effect, para não refazer a cada troca de rota. Falhar aqui não impede editar o
+    // resto do cadastro, só deixa a lista de escolha vazia.
+    this.patientsService.listDiagnoses().subscribe({
+      next: (catalogo) => this.catalog.set(catalogo),
+    });
   }
 
   private load(patientId: string): void {

@@ -21,7 +21,8 @@ const DETALHE = {
   birth_date: '1978-04-02',
   sex: 'F',
   phone: null,
-  primary_diagnosis: null,
+  diagnoses: [],
+  study_group: null,
   created_at: '2026-08-09T12:00:00Z',
   updated_at: '2026-08-09T12:00:00Z',
   encounters: [],
@@ -46,7 +47,13 @@ function montar(patientId: string): {
   fixture.componentRef.setInput('id', patientId);
   fixture.detectChanges();
 
-  return { fixture, controller: TestBed.inject(HttpTestingController) };
+  const controller = TestBed.inject(HttpTestingController);
+  // O catálogo de diagnósticos é buscado uma vez, no construtor, para montar a lista de
+  // escolha do formulário. Respondê-lo aqui evita que cada teste precise saber disso
+  // para o `verify()` passar.
+  controller.expectOne(`${environment.apiBaseUrl}/diagnoses`).flush([]);
+
+  return { fixture, controller };
 }
 
 describe('PatientDetailPage', () => {

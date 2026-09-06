@@ -105,6 +105,10 @@ export class PatientsPage {
       next: (created) => {
         this.patients.update((current) => [created, ...current]);
         this.form.reset();
+        // Os diagnósticos vivem fora do FormGroup, então `reset()` não os alcança. Sem
+        // esta linha, o próximo paciente cadastrado nasceria com os diagnósticos do
+        // anterior já marcados, e quem não reparasse gravaria dado clínico errado.
+        this.diagnoses.set([]);
         this.duplicates.set([]);
         this.formOpen.set(false);
         this.saving.set(false);

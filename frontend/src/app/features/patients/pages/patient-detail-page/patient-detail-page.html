@@ -162,15 +162,19 @@
           </label>
 
           <label>
-            <span class="mb-1.5 block text-sm font-medium text-secondary">
-              Diagnóstico principal
-            </span>
+            <span class="mb-1.5 block text-sm font-medium text-secondary">Grupo no estudo</span>
             <select class="auth-input" formControlName="study_group">
-            <option value="">Não classificado</option>
-            <option value="caso">Caso</option>
-            <option value="controle">Controle</option>
-          </select>
+              <option value="">Não classificado</option>
+              <option value="caso">Caso</option>
+              <option value="controle">Controle</option>
+            </select>
           </label>
+
+          <app-diagnosis-picker
+            class="sm:col-span-2"
+            [catalog]="catalog()"
+            [(selected)]="diagnoses"
+          />
         </div>
 
         <div class="mt-6 flex justify-end">

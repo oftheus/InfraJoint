@@ -15,6 +15,7 @@ import asyncpg
 from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
+from app.application.use_cases.algorithms import RunAnalysisAlgorithm
 from app.application.use_cases.captures import (
     CreateCaptures,
     GetEncounterDetail,
@@ -33,6 +34,7 @@ from app.application.use_cases.patients import (
 )
 from app.domain.entities import AuthenticatedUser, UserRole
 from app.domain.repositories import (
+    AlgorithmDataRepository,
     CaptureRepository,
     EncounterRepository,
     ObjectStorage,
@@ -40,6 +42,7 @@ from app.domain.repositories import (
 )
 from app.infrastructure.auth import InvalidTokenError, JwtVerifier
 from app.infrastructure.database import Database
+from app.infrastructure.repositories.algorithms import PostgresAlgorithmDataRepository
 from app.infrastructure.repositories.captures import PostgresCaptureRepository
 from app.infrastructure.repositories.catalogs import PostgresCatalogRepository
 from app.infrastructure.repositories.encounters import PostgresEncounterRepository
@@ -137,6 +140,12 @@ def get_catalog_repository(
     return PostgresCatalogRepository(connection)
 
 
+def get_algorithm_data_repository(
+    connection: Annotated[asyncpg.Connection, Depends(get_connection)],
+) -> AlgorithmDataRepository:
+    return PostgresAlgorithmDataRepository(connection)
+
+
 def get_capture_repository(
     connection: Annotated[asyncpg.Connection, Depends(get_connection)],
 ) -> CaptureRepository:
@@ -158,6 +167,7 @@ def get_encounter_repository(
 PatientRepo = Annotated[PatientRepository, Depends(get_patient_repository)]
 EncounterRepo = Annotated[EncounterRepository, Depends(get_encounter_repository)]
 CaptureRepo = Annotated[CaptureRepository, Depends(get_capture_repository)]
+AlgorithmDataRepo = Annotated[AlgorithmDataRepository, Depends(get_algorithm_data_repository)]
 Storage = Annotated[ObjectStorage, Depends(get_storage)]
 StorageOptional = Annotated[ObjectStorage | None, Depends(get_storage_optional)]
 CurrentUser = Annotated[AuthenticatedUser, Depends(get_current_user)]
@@ -211,3 +221,9 @@ def get_encounter_detail(
 ) -> GetEncounterDetail:
     """Storage opcional: sem R2 a consulta abre igual, só sem as imagens."""
     return GetEncounterDetail(encounters, patients, captures, storage)
+
+
+def run_analysis_algorithm(
+    encounters: EncounterRepo, data: AlgorithmDataRepo
+) -> RunAnalysisAlgorithm:
+    return RunAnalysisAlgorithm(encounters, data)

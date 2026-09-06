@@ -18,7 +18,7 @@ from app.domain.errors import (
 from app.infrastructure.auth import JwtVerifier
 from app.infrastructure.database import Database
 from app.infrastructure.storage import R2Storage
-from app.presentation.routers import catalogs, encounters, patients
+from app.presentation.routers import algorithms, catalogs, encounters, patients
 from app.presentation.schemas import PatientOut
 
 logger = logging.getLogger(__name__)
@@ -150,6 +150,7 @@ def create_app() -> FastAPI:
     async def health() -> dict[str, str]:
         return {"status": "ok"}
 
+    app.include_router(algorithms.router)
     app.include_router(catalogs.router)
     app.include_router(patients.router)
     app.include_router(encounters.router)
