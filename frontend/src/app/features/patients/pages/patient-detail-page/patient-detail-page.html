@@ -165,8 +165,9 @@
             <span class="mb-1.5 block text-sm font-medium text-secondary">Grupo no estudo</span>
             <select class="auth-input" formControlName="study_group">
               <option value="">Não classificado</option>
-              <option value="caso">Caso</option>
-              <option value="controle">Controle</option>
+              @for (option of studyGroupOptions; track option.value) {
+                <option [value]="option.value">{{ option.label }}</option>
+              }
             </select>
           </label>
 
@@ -192,6 +193,14 @@
         <div>
           <dt class="text-sm font-medium text-secondary">Sexo</dt>
           <dd class="mt-1 text-base">{{ sexLabel(detail.sex) || '—' }}</dd>
+        </div>
+        <div class="sm:col-span-2">
+          <dt class="text-sm font-medium text-secondary">Grupo no estudo</dt>
+          <!-- "Não classificado" por extenso, e não o traço dos campos acima: aqui o
+               nulo é uma decisão que ainda não foi tomada, não um dado que faltou. -->
+          <dd class="mt-1 text-base">
+            {{ studyGroupLabel(detail.study_group) || 'Não classificado' }}
+          </dd>
         </div>
         <div class="sm:col-span-2">
           <dt class="text-sm font-medium text-secondary">Diagnóstico principal</dt>

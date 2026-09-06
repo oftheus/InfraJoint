@@ -6,7 +6,14 @@ import { RouterLink } from '@angular/router';
 import { LucideDynamicIcon } from '@lucide/angular';
 
 import { duplicatesFromError, messageFromError } from '../../data/api-error';
-import { Patient, PatientCreate, SEX_OPTIONS, Sex } from '../../data/patient.model';
+import {
+  Patient,
+  PatientCreate,
+  SEX_OPTIONS,
+  STUDY_GROUP_OPTIONS,
+  Sex,
+  studyGroupLabel,
+} from '../../data/patient.model';
 import { PatientsService } from '../../data/patients.service';
 import { DiagnosisPicker } from '../../components/diagnosis-picker/diagnosis-picker';
 import { DiagnosisCatalog, PatientDiagnosis, StudyGroup } from '../../data/patient.model';
@@ -36,6 +43,8 @@ export class PatientsPage {
   protected readonly duplicates = signal<readonly Patient[]>([]);
 
   protected readonly sexOptions = SEX_OPTIONS;
+  protected readonly studyGroupOptions = STUDY_GROUP_OPTIONS;
+  protected readonly studyGroupLabel = studyGroupLabel;
 
   protected readonly form = this.formBuilder.group({
     full_name: ['', [Validators.required, Validators.maxLength(200)]],

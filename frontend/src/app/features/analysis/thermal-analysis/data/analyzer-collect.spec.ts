@@ -72,6 +72,37 @@ describe('collectSingleAnalysis', () => {
     expect(collectSingleAnalysis(readout({ matrix: null }))).toBeNull();
   });
 
+  it('traduz as medições, como o caminho da sequência', () => {
+    // A regressão: os demais testes desta suíte usam `jointRois: []`, e com a lista
+    // vazia o payload passa. Era exatamente por isso que ninguém via a avulsa mandar
+    // `JointRoi[]` cru e o backend recusar com 422 — o caso da lista cheia, que é o
+    // único útil, não era exercido em lugar nenhum.
+    const rois = [
+      {
+        side: 'Direita',
+        landmarkId: 9,
+        label: 'MCP 3',
+        key: 'Direita:9',
+        rgb: { x: 10, y: 20 },
+        csv: { x: 1, y: 2 },
+        shape: 'circle',
+        rxCsv: 10,
+        ryCsv: 10,
+        stats: { mean: 34.2, median: 34.1, max: 35, min: 33.5, area: 314, count: 300 },
+        skinCoverage: 0.95,
+        edited: false,
+      },
+    ] as never;
+
+    const captura = collectSingleAnalysis(readout({ jointRois: rois }))!.payload
+      .captures[0] as Record<string, unknown>;
+    const medicoes = captura['measurements'] as readonly Record<string, unknown>[];
+
+    expect(medicoes).toHaveLength(1);
+    expect(medicoes[0]['joint_id']).toBe('RIGHT_MCP_3');
+    expect(medicoes[0]['t_mean']).toBe(34.2);
+    expect(medicoes[0]).not.toHaveProperty('landmarkId');
+  });
 
   it('a captura avulsa não tem posição na sequência', () => {
     const captura = collectSingleAnalysis(readout())!.payload.captures[0] as Record<

@@ -67,13 +67,6 @@ export class PatientsService {
     return this.http.post<Encounter>(`${this.baseUrl}/${patientId}/encounters`, payload);
   }
 
-  /**
-   * Cria a análise de imagem da consulta e recebe os PUTs assinados.
-   *
-   * **Nunca repita esta chamada.** A segunda recebe 409: criaria um segundo jogo de
-   * capturas sob a mesma consulta, e as URLs da primeira ficariam órfãs. Se o upload
-   * falhar, retome com as URLs que já estão em mãos.
-   */
   /** Reabre a consulta: paciente, body map, escores e capturas numa chamada. */
   getEncounter(encounterId: string): Observable<EncounterDetail> {
     return this.http.get<EncounterDetail>(`${this.encountersUrl}/${encounterId}`);
@@ -89,6 +82,13 @@ export class PatientsService {
     return this.http.delete<void>(`${this.encountersUrl}/${encounterId}`);
   }
 
+  /**
+   * Cria a análise de imagem da consulta e recebe os PUTs assinados.
+   *
+   * **Nunca repita esta chamada.** A segunda recebe 409: criaria um segundo jogo de
+   * capturas sob a mesma consulta, e as URLs da primeira ficariam órfãs. Se o upload
+   * falhar, retome com as URLs que já estão em mãos.
+   */
   createCaptures(encounterId: string, payload: AnalysisCreate): Observable<AnalysisCreated> {
     return this.http.post<AnalysisCreated>(
       `${this.encountersUrl}/${encounterId}/captures`,
@@ -99,7 +99,10 @@ export class PatientsService {
   /**
    * Fecha a análise em `ready`.
    *
-   * O backend confere cada objeto no bucket antes de aceitar; 409 lista o que falta.
+   * **O backend não confere o bucket.** Quem sabe que os arquivos chegaram é este
+   * lado, que viu a resposta de cada PUT — então só chame isto depois de `uploadAll`
+   * não devolver nenhuma falha. Chamar antes deixa a consulta em `ready` com objeto
+   * faltando, e o buraco só aparece na reabertura.
    */
   markAnalysisReady(encounterId: string): Observable<void> {
     return this.http.patch<void>(`${this.encountersUrl}/${encounterId}/analysis-status`, {});

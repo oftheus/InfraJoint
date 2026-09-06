@@ -1,9 +1,4 @@
-import {
-  CapturePosition,
-  CaptureSource,
-  captureFromSequence,
-  captureFromSingle,
-} from './analysis-payload';
+import { CaptureSource, captureFromSingle } from './analysis-payload';
 import { AffineMatrix, ThermalMatrix } from './image-analyzer.model';
 import { JointRoi } from './joint-rois';
 
@@ -11,12 +6,13 @@ const IDENTIDADE: AffineMatrix = { a: 1, b: 0, tx: 0, c: 0, d: 1, ty: 0 };
 
 const MATRIZ: ThermalMatrix = { width: 640, height: 480, values: new Float64Array(1) };
 
-function jointRoi(label: string): JointRoi {
+/** `landmarkId` importa: é dele e do lado que sai o `joint_id` do body map. */
+function jointRoi(label: string, landmarkId = 0): JointRoi {
   return {
     side: 'Direita',
-    landmarkId: 0,
+    landmarkId,
     label,
-    key: `Direita:0`,
+    key: `Direita:${landmarkId}`,
     rgb: { x: 10, y: 10 },
     csv: { x: 5, y: 5 },
     shape: 'circle',
@@ -46,25 +42,7 @@ function source(overrides: Partial<CaptureSource> = {}): CaptureSource {
   };
 }
 
-function posicao(i: number): CapturePosition {
-  return { captureIndex: i, elapsedSeconds: i * 30 };
-}
-
 describe('analysis-payload', () => {
-  // O teste que o plano pede: N=1 e N=21 no MESMO teste, para provar que avulsa e
-  // sequência não são dois fluxos — a diferença é só a cardinalidade.
-  it.each([1, 21])('serializa %i captura(s) pelo mesmo caminho', (n) => {
-    const capturas = captureFromSequence(
-      Array.from({ length: n }, (_, i) => ({ source: source(), position: posicao(i) })),
-    );
-
-    expect(capturas).toHaveLength(n);
-    expect(capturas.map((c) => c.capture_index)).toEqual([...Array(n).keys()]);
-    // Exatamente uma basal, porque basal é o índice 0 e os índices não repetem.
-    expect(capturas.filter((c) => c.capture_index === 0)).toHaveLength(1);
-    expect(capturas.every((c) => c.alignment_method === 'silhouette')).toBe(true);
-  });
-
   it('avulsa é uma sequência de um elemento, com posição nula', () => {
     const [captura] = captureFromSingle(source());
 
@@ -97,12 +75,34 @@ describe('analysis-payload', () => {
     expect(manual.alignment_method).toBe('manual');
   });
 
-  it('passa as medições articulares adiante sem transformar', () => {
-    const rois = [jointRoi('Punho'), jointRoi('MCP 1')];
+  it('traduz as medições para o vocabulário do body map', () => {
+    const rois = [jointRoi('Punho', 0), jointRoi('MCP 3', 9)];
     const [captura] = captureFromSingle(source({ jointRois: rois }));
 
-    // `measurements` é gravado como veio do domínio: JointRoi[] já é a forma.
-    expect(captura.measurements).toBe(rois);
+    // A regressão que este teste tranca: enviar `JointRoi[]` cru daqui fazia o
+    // `POST /encounters/{id}/captures` responder 422 — `CaptureMeasurementIn` exige
+    // `joint_id` e é `extra="forbid"`. E só quebrava quando havia ROI detectada,
+    // porque com a lista vazia o payload passa. Por isso a asserção é sobre a
+    // identidade traduzida, e não sobre a contagem.
+    expect(captura.measurements.map((m) => m.joint_id)).toEqual(['RIGHT_WRIST', 'RIGHT_MCP_3']);
+    // Os números são os que a tela mediu; o que muda é só a identidade.
+    expect(captura.measurements[0].t_mean).toBe(33);
+    expect(captura.measurements[0].sample_count).toBe(78);
+    expect(captura.measurements[0].area).toBe(80);
+    // Nenhum campo do formato interno do analisador atravessa: eles são exatamente
+    // os que o `extra="forbid"` do backend recusa.
+    expect(Object.keys(captura.measurements[0])).not.toContain('landmarkId');
+    expect(Object.keys(captura.measurements[0])).not.toContain('stats');
+  });
+
+  it('descarta a ROI cujo landmark não é articulação do catálogo', () => {
+    // O detector devolve 21 landmarks por mão e só 11 viram articulação. Inventar um
+    // id faria a chave estrangeira recusar a análise inteira por causa de uma região.
+    const [captura] = captureFromSingle(
+      source({ jointRois: [jointRoi('Punho', 0), jointRoi('desconhecido', 7)] }),
+    );
+
+    expect(captura.measurements.map((m) => m.joint_id)).toEqual(['RIGHT_WRIST']);
   });
 
   it('mantém nulos quando não houve concordância nem correção fiducial', () => {

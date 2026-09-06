@@ -68,8 +68,9 @@
           <span class="mb-1.5 block text-sm font-medium text-secondary">Grupo no estudo</span>
           <select class="auth-input" formControlName="study_group">
             <option value="">Não classificado</option>
-            <option value="caso">Caso</option>
-            <option value="controle">Controle</option>
+            @for (option of studyGroupOptions; track option.value) {
+              <option [value]="option.value">{{ option.label }}</option>
+            }
           </select>
         </label>
 
@@ -175,9 +176,24 @@
                  médico; para o pesquisador, o dos pares do acervo. Ver `owner_name` em
                  patient.model.ts. -->
             @if (patient.owner_name) {
-              <p class="mt-2 inline-flex items-center gap-1.5 rounded-full bg-brand-50 px-2.5 py-1 text-xs font-medium text-secondary">
+              <p
+                class="mt-2 inline-flex items-center gap-1.5 rounded-full bg-brand-50 px-2.5 py-1 text-xs font-medium text-secondary"
+              >
                 <svg [lucideIcon]="'stethoscope'" class="h-3.5 w-3.5" aria-hidden="true"></svg>
                 {{ patient.owner_name }}
+              </p>
+            }
+            <!-- O grupo no estudo era gravado e não aparecia em lugar nenhum: quem
+                 cadastrava um controle só voltava a vê-lo abrindo o formulário de
+                 edição. Fica ao lado do diagnóstico, e não junto dele, porque é papel
+                 no estudo e não achado clínico: um controle pode ter diagnóstico
+                 incidental sem deixar de ser controle. -->
+            @if (studyGroupLabel(patient.study_group); as grupo) {
+              <p
+                class="mt-2 inline-flex items-center gap-1.5 rounded-full border border-gray-200 px-2.5 py-1 text-xs font-medium text-secondary"
+              >
+                <svg [lucideIcon]="'flask-conical'" class="h-3.5 w-3.5" aria-hidden="true"></svg>
+                {{ grupo }}
               </p>
             }
             @if (patient.diagnoses.length > 0) {

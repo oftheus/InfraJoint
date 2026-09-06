@@ -72,7 +72,7 @@ export interface SequenceCapture {
   readonly timeSeconds: number;
   readonly optical: File;
   readonly thermal: File;
-  /** CSV de origem, retido para o upload da Fase 5. */
+  /** CSV de origem, retido para o upload das capturas. */
   readonly matrixFile: File;
   /** Parsed temperature matrix (kept in memory; ≈2.4 MB per capture). */
   readonly matrix: ThermalMatrix;

@@ -128,20 +128,20 @@ export const TERMS_OF_USE_SECTIONS: LegalSection[] = [
       {
         kind: 'list',
         items: [
-          { text: 'tentar acessar contas, dados ou áreas restritas que não sejam suas;' },
+          { text: 'tentar acessar contas, dados ou áreas restritas que não sejam suas' },
           {
-            text: 'burlar, desativar ou testar os mecanismos de autenticação e de controle de acesso sem autorização;',
+            text: 'burlar, desativar ou testar os mecanismos de autenticação e de controle de acesso sem autorização',
           },
           {
-            text: 'realizar engenharia reversa, copiar ou redistribuir a plataforma sem autorização;',
+            text: 'realizar engenharia reversa, copiar ou redistribuir a plataforma sem autorização',
           },
           {
-            text: 'utilizar robôs, scripts ou automações que sobrecarreguem ou prejudiquem o funcionamento do serviço;',
+            text: 'utilizar robôs, scripts ou automações que sobrecarreguem ou prejudiquem o funcionamento do serviço',
           },
-          { text: 'carregar conteúdo ilícito, ofensivo ou que viole direitos de terceiros;' },
-          { text: 'compartilhar as suas credenciais de acesso com outras pessoas;' },
+          { text: 'carregar conteúdo ilícito, ofensivo ou que viole direitos de terceiros' },
+          { text: 'compartilhar as suas credenciais de acesso com outras pessoas' },
           {
-            text: 'extrair, copiar ou reutilizar os registros clínicos do acervo de pesquisa para finalidades alheias ao projeto, inclusive para compor conjuntos de dados ou treinar modelos de inteligência artificial;',
+            text: 'extrair, copiar ou reutilizar os registros clínicos do acervo de pesquisa para finalidades alheias ao projeto, inclusive para compor conjuntos de dados ou treinar modelos de inteligência artificial',
           },
           {
             text: 'divulgar a terceiros dados de pacientes cadastrados por outro pesquisador sem a autorização dele e sem a base legal exigida pela LGPD.',

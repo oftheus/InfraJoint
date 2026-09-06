@@ -144,7 +144,13 @@ class MarkAnalysisReady:
         if not await self.captures.list_for_encounter(encounter_id):
             raise NotFoundError("esta consulta não tem análise de imagem")
 
-        await self.encounters.set_analysis_status(encounter_id, AnalysisStatus.READY.value)
+        # O retorno é conferido: `set_analysis_status` devolve `False` quando o UPDATE
+        # não alcança linha nenhuma, e responder 204 nesse caso afirmaria que a análise
+        # foi fechada quando ela não foi. Só chega aqui quem passou pelo `get` acima,
+        # então isto é a consulta apagada entre as duas leituras — raro, e a resposta
+        # certa para ele é a mesma de qualquer consulta que não existe mais.
+        if not await self.encounters.set_analysis_status(encounter_id, AnalysisStatus.READY.value):
+            raise NotFoundError("consulta não encontrada")
 
 
 @dataclass(frozen=True, slots=True)

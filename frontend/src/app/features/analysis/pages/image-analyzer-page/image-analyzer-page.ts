@@ -179,7 +179,7 @@ export class ImageAnalyzerPage {
   readonly fromSaved = input(false);
 
   /**
-   * Arquivos de origem, retidos para o upload da Fase 5.
+   * Arquivos de origem, retidos para o upload das capturas.
    *
    * A tela solta nunca os envia — quem envia é o fluxo de Análise Térmica.
    * Retê-los aqui é só não jogar fora o que já foi lido do disco.
@@ -885,7 +885,6 @@ export class ImageAnalyzerPage {
     this.curveStatistic.set(statistic);
   }
 
-  /** Loads one capture's assets into the viewer signals (the "active frame"). */
   /**
    * Hidrata a página com uma análise **gravada**, em vez de arquivos recém-lidos.
    *
@@ -914,6 +913,7 @@ export class ImageAnalyzerPage {
     await this.enterSequenceAnalysis();
   }
 
+  /** Loads one capture's assets into the viewer signals (the "active frame"). */
   private async activateCapture(index: number): Promise<void> {
     const capture = this.sequenceService.captures()[index];
     if (!capture) {

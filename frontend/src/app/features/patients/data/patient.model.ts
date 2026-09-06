@@ -44,6 +44,27 @@ export const SEX_OPTIONS: readonly { readonly value: Sex; readonly label: string
   { value: 'O', label: 'Outro' },
 ];
 
+/**
+ * Os grupos que o formulário oferece. A opção vazia do seletor é "não classificado",
+ * que é o nulo da coluna, e por isso não está aqui.
+ *
+ * A lista existe porque quatro lugares precisam do mesmo par código/rótulo: os dois
+ * seletores e as duas telas que exibem o grupo. Repetir 'Controle' em cada um deles
+ * era como o rótulo saía errado num lugar só.
+ */
+export const STUDY_GROUP_OPTIONS: readonly {
+  readonly value: StudyGroup;
+  readonly label: string;
+}[] = [
+  { value: 'caso', label: 'Caso' },
+  { value: 'controle', label: 'Controle' },
+];
+
+/** O rótulo do grupo, ou `null` quando ninguém classificou o paciente ainda. */
+export function studyGroupLabel(group: StudyGroup | null): string | null {
+  return STUDY_GROUP_OPTIONS.find((option) => option.value === group)?.label ?? null;
+}
+
 export interface Patient {
   readonly id: string;
   readonly full_name: string;
@@ -144,8 +165,10 @@ export interface Encounter {
   readonly joint_evaluations: Readonly<Record<string, JointEvaluationDto>> | null;
   readonly scores: EncounterScores;
   /**
-   * `null` = consulta sem análise de imagem; `'uploading'` = capturas gravadas mas
-   * arquivos ainda não confirmados no bucket; `'ready'` = tudo conferido.
+   * `null` = consulta sem análise de imagem, `'uploading'` = capturas gravadas e o
+   * envio ainda não confirmado, `'ready'` = o cliente confirmou que os arquivos
+   * subiram. Quem confere é este lado, que viu a resposta de cada PUT: o backend
+   * não olha o bucket.
    */
   readonly analysis_status: 'uploading' | 'ready' | null;
   /**
@@ -198,7 +221,8 @@ export interface AnalysisCreate {
 /** Uma URL assinada, casada com a captura e o arquivo a que pertence. */
 export interface SignedUpload {
   readonly capture_id: string;
-  readonly capture_index: number;
+  /** `null` na avulsa, como o backend a gravou. É por ele que a URL reencontra o arquivo. */
+  readonly capture_index: number | null;
   readonly kind: CaptureFileKind;
   readonly url: string;
 }
