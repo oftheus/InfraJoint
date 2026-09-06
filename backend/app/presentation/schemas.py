@@ -256,8 +256,9 @@ class EncounterOut(BaseModel):
     # mesmos dados. As chaves de `scores` saem minúsculas, como foram gravadas.
     joint_evaluations: dict[str, JointEvaluationIn] | None
     scores: dict[str, Any]
-    # `null` = consulta sem análise de imagem; 'uploading' = linhas gravadas mas
-    # bytes ainda não confirmados no bucket; 'ready' = tudo conferido por HEAD.
+    # `null` = consulta sem análise de imagem; 'uploading' = linhas gravadas e o
+    # cliente ainda não confirmou o envio; 'ready' = ele confirmou. Quem confere os
+    # objetos é o cliente, que viu a resposta de cada PUT — ver `MarkAnalysisReady`.
     analysis_status: Literal["uploading", "ready"] | None
     capture_count: int
     created_at: datetime
@@ -335,8 +336,9 @@ MAX_CAPTURES = 64
 class CaptureFileIn(BaseModel):
     """Declaração do arquivo — tamanho e tipo, não conteúdo.
 
-    Ela NÃO prova que o upload aconteceu; quem prova é o HEAD feito ao fechar a
-    análise em `ready`.
+    Ela NÃO prova que o upload aconteceu, e nada no servidor prova: quem confere é
+    o cliente, que viu a resposta de cada PUT, e é ele que fecha a análise em
+    `ready`. O preço dessa escolha está registrado em `MarkAnalysisReady`.
     """
 
     model_config = ConfigDict(extra="forbid")

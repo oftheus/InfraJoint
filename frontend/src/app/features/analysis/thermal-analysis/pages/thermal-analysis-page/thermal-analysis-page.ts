@@ -111,9 +111,6 @@ export class ThermalAnalysisPage {
     })).filter((index): index is AssessedIndex => index.outcome.score !== null);
   });
 
-  /** Sequência carregada. O fluxo ainda só grava a análise avulsa. */
-  protected readonly isSequence = computed(() => this.analyzer()?.sequenceActive() ?? false);
-
   /**
    * O analisador tem resultado gravável?
    *

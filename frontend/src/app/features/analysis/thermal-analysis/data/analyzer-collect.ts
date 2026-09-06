@@ -1,9 +1,9 @@
 /**
- * Lê o estado do analisador e produz o que a Fase 5 precisa: o corpo do POST e os
+ * Lê o estado do analisador e produz o que a gravação precisa: o corpo do POST e os
  * arquivos a subir, casados por captura e tipo.
  *
- * Recebe uma leitura estrutural, não o componente — assim é testável sem montar as
- * 1251 linhas da página, e a página não precisa saber que isto existe.
+ * Recebe uma leitura estrutural, não o componente: assim é testável sem montar a
+ * página inteira, e a página não precisa saber que isto existe.
  */
 
 import {
@@ -94,9 +94,11 @@ export interface SequenceReadout {
 /**
  * Monta a análise em sequência.
  *
- * Não é um segundo fluxo: cada captura vira o mesmo `CapturePayload` da avulsa, só
- * que com posição preenchida. É a mesma decisão do banco, que não tem discriminador
- * `single`/`sequence` — a cardinalidade É a diferença.
+ * O payload é montado aqui, e não por `captureFrom`: a sequência precisa de duas
+ * coisas que `CapturePayload` não expressa, alinhamento nulo e `issue`, que juntas
+ * são como uma captura que falhou no processamento continua sendo gravada. O que as
+ * duas montagens compartilham é `declararTres`, que é onde estaria o erro de declarar
+ * um subconjunto de arquivos.
  *
  * Uma captura que falhou no processamento entra assim mesmo, com `issue` preenchido e
  * medições vazias. Descartá-la esconderia por que a curva tem um buraco.

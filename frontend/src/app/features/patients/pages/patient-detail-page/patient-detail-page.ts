@@ -13,7 +13,14 @@ import {
   jointSummaryOf,
   scoresOf,
 } from '../../data/encounter-summary';
-import { Encounter, Patient, SEX_OPTIONS, Sex } from '../../data/patient.model';
+import {
+  Encounter,
+  Patient,
+  SEX_OPTIONS,
+  STUDY_GROUP_OPTIONS,
+  Sex,
+  studyGroupLabel,
+} from '../../data/patient.model';
 import { PatientsService } from '../../data/patients.service';
 import { DiagnosisPicker } from '../../components/diagnosis-picker/diagnosis-picker';
 import { DiagnosisCatalog, PatientDiagnosis, StudyGroup } from '../../data/patient.model';
@@ -49,6 +56,8 @@ export class PatientDetailPage {
   protected readonly deleting = signal(false);
 
   protected readonly sexOptions = SEX_OPTIONS;
+  protected readonly studyGroupOptions = STUDY_GROUP_OPTIONS;
+  protected readonly studyGroupLabel = studyGroupLabel;
 
   protected readonly patientForm = this.formBuilder.group({
     full_name: ['', [Validators.required, Validators.maxLength(200)]],

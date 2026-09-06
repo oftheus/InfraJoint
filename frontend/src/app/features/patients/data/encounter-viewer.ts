@@ -11,7 +11,6 @@
  */
 
 import { imageToThumbnail, loadImage } from '../../analysis/image-analyzer/dom-images';
-import { JointRoi } from '../../analysis/image-analyzer/joint-rois';
 import { SequenceCapture } from '../../analysis/image-analyzer/sequence.model';
 import { decodeThermalCsv, parseThermalCsv } from '../../analysis/image-analyzer/thermal-csv';
 import { ThermalMatrix } from '../../analysis/image-analyzer/image-analyzer.model';
@@ -104,8 +103,7 @@ async function restaurarCaptura(detail: CaptureDetail): Promise<SequenceCapture 
     // rótulo) sai do catálogo de articulações, e os números das colunas. Antes isto era
     // um cast do jsonb, que só funcionava porque o formato interno do analisador era
     // gravado cru. Ver `analysis/joint-identity.ts`.
-    restoredJoints:
-      detail.measurements.length > 0 ? toJointRois(detail.measurements) : null,
+    restoredJoints: detail.measurements.length > 0 ? toJointRois(detail.measurements) : null,
   };
 }
 

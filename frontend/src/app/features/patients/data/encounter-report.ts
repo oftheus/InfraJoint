@@ -467,7 +467,7 @@ function resumoClinico(detail: EncounterDetail): Content[] {
     blocos.push(
       paragrafo(
         `Imagem térmica: ${detail.capture_count} capturas gravadas, com envio de imagens ` +
-          'incompleto; as medições não podem ser apresentadas.',
+          'incompleto: as medições não podem ser apresentadas.',
       ),
     );
   } else if (detail.captures.length > 0) {

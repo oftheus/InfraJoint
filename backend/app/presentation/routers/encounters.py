@@ -62,7 +62,7 @@ async def create_captures(
 @router.patch(
     "/{encounter_id}/analysis-status",
     status_code=status.HTTP_204_NO_CONTENT,
-    summary="Fecha a análise em 'ready' após conferir cada objeto no bucket.",
+    summary="Fecha a análise em 'ready'. Quem confere que os arquivos subiram é o cliente.",
 )
 async def mark_ready(
     encounter_id: UUID,

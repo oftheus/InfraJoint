@@ -27,6 +27,7 @@
 --  18. O escore cobra a forma do índice que declara ser
 --  19. Medição e avaliação cruzam pela mesma articulação
 --  20. Diagnóstico é relação com catálogo, e grupo de estudo é coluna à parte
+--  21. O avatar de cada um está na pasta dele, e ninguém escreve na pasta alheia
 
 \set ON_ERROR_STOP on
 \set QUIET on
@@ -995,6 +996,44 @@ begin
   assert n >= 17, 'o catálogo de diagnósticos é de todos';
 end $$;
 commit;
+
+-- ─────────────────────────────────────────────────────────────────────────────
+\echo ''
+\echo '28. O avatar é da pasta do dono, e a pasta alheia é intocável'
+-- O único bucket do sistema, e a única regra de autorização que vivia fora do
+-- repositório até `bucket_de_avatares`. O recorte é a primeira pasta do caminho:
+-- sem ele, `bucket_id = 'avatars'` deixaria qualquer autenticado sobrescrever a
+-- foto de qualquer outro, porque o bucket é um só.
+begin;
+set local role authenticated;
+select set_config('request.jwt.claims',
+  '{"sub":"aaaaaaaa-0000-0000-0000-000000000001","role":"authenticated"}', true);
+
+-- Na própria pasta, passa.
+insert into storage.objects (bucket_id, name, owner)
+values ('avatars', 'aaaaaaaa-0000-0000-0000-000000000001/avatar', auth.uid());
+
+do $$
+declare n int;
+begin
+  -- Na pasta de outro, não.
+  begin
+    insert into storage.objects (bucket_id, name)
+    values ('avatars', 'bbbbbbbb-0000-0000-0000-000000000002/avatar');
+    raise exception 'FALHA: escreveu no avatar de outro usuário';
+  exception when insufficient_privilege then
+    null;
+  end;
+
+  -- E o UPDATE não alcança a pasta alheia, que é o outro meio de sobrescrever:
+  -- o `upsert` do SDK cai nele quando o objeto já existe.
+  update storage.objects set name = name
+   where bucket_id = 'avatars'
+     and (storage.foldername(name))[1] <> auth.uid()::text;
+  get diagnostics n = row_count;
+  assert n = 0, format('FALHA: UPDATE alcançou %s objeto(s) de outro dono', n);
+end $$;
+rollback;
 
 -- ─────────────────────────────────────────────────────────────────────────────
 begin;

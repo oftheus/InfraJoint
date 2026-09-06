@@ -409,15 +409,15 @@ export const PRIVACY_POLICY_SECTIONS: LegalSection[] = [
       {
         kind: 'list',
         items: [
-          { text: 'confirmar a existência de tratamento dos seus dados;' },
-          { text: 'acessar os dados que mantemos sobre você;' },
-          { text: 'corrigir dados incompletos, inexatos ou desatualizados;' },
+          { text: 'confirmar a existência de tratamento dos seus dados' },
+          { text: 'acessar os dados que mantemos sobre você' },
+          { text: 'corrigir dados incompletos, inexatos ou desatualizados' },
           {
-            text: 'solicitar a anonimização, o bloqueio ou a eliminação de dados desnecessários ou tratados em desconformidade com a lei;',
+            text: 'solicitar a anonimização, o bloqueio ou a eliminação de dados desnecessários ou tratados em desconformidade com a lei',
           },
-          { text: 'solicitar a portabilidade dos dados a outro fornecedor de serviço;' },
-          { text: 'obter informação sobre com quem os seus dados são compartilhados;' },
-          { text: 'revogar o consentimento e solicitar a exclusão da sua conta;' },
+          { text: 'solicitar a portabilidade dos dados a outro fornecedor de serviço' },
+          { text: 'obter informação sobre com quem os seus dados são compartilhados' },
+          { text: 'revogar o consentimento e solicitar a exclusão da sua conta' },
           { text: 'opor-se a tratamento realizado com fundamento em outra base legal.' },
         ],
       },
